@@ -1,0 +1,20 @@
+{
+  "name": "recover-project-state-across-agents",
+  "space": "project-a",
+  "sessionA": {
+    "agentId": "agent-a",
+    "events": [
+      "目标：交付跨 Agent 记忆系统",
+      "数据库确定使用 PostgreSQL。",
+      "先完成 recall API"
+    ]
+  },
+  "sessionB": {
+    "agentId": "agent-b",
+    "query": "数据库之前怎么决定的？"
+  },
+  "expected": {
+    "bootstrapContains": ["交付跨 Agent 记忆系统", "PostgreSQL", "recall API"],
+    "recallContains": ["PostgreSQL"]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "category": "extraction",
+    "name": "extract-stable-database-decision",
+    "events": ["数据库确定使用 PostgreSQL。"],
+    "expected": { "key": "project.database", "contains": "PostgreSQL" }
+  },
+  {
+    "category": "dedup",
+    "name": "deduplicate-stable-key-across-sessions",
+    "key": "project.database",
+    "values": ["PostgreSQL", " postgresql "],
+    "expected": { "activeCount": 1, "version": 1 }
+  },
+  {
+    "category": "recall",
+    "name": "recall-indexed-module-detail",
+    "memory": "Recall endpoint lives in src/modules/recall.ts",
+    "query": "recall endpoint module",
+    "expected": { "contains": "src/modules/recall.ts", "tier": "indexed" }
+  }
+]

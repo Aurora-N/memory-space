@@ -1,0 +1,25 @@
+{
+  "name": "memory-space",
+  "version": "0.1.0",
+  "description": "Agent-independent, cross-session durable memory layer",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.5.0",
+    "pnpm": ">=11 <12"
+  },
+  "exports": "./src/index.ts",
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
+    "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

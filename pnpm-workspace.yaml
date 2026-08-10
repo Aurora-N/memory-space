@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tools/*"
+
+sharedWorkspaceLockfile: true
+linkWorkspacePackages: true
+preferWorkspacePackages: true
+strictPeerDependencies: true
+autoInstallPeers: false
+
+catalog:
+  "@types/node": "^22.0.0"
+  "typescript": "^5.9.0"
