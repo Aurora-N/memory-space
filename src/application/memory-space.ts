@@ -224,7 +224,7 @@ export class MemorySpace {
       sourceEventIds: input.sourceEventIds ?? [], operation: validated.key ? "update" : "create",
       reason: "explicit remember"
     }, "explicit"));
-    await this.#invalidate(space.id);
+    await this.#safeInvalidate(space.id);
     return memory;
   }
 
@@ -253,7 +253,7 @@ export class MemorySpace {
     const result = await this.store.transaction(() =>
       this.#changeTier(memory, "core", options.reason ?? "user requested promotion")
     );
-    await this.#invalidate(memory.spaceId);
+    await this.#safeInvalidate(memory.spaceId);
     return result;
   }
 
@@ -263,7 +263,7 @@ export class MemorySpace {
     const result = await this.store.transaction(() =>
       this.#changeTier(memory, "indexed", options.reason ?? "explicit demotion")
     );
-    await this.#invalidate(memory.spaceId);
+    await this.#safeInvalidate(memory.spaceId);
     return result;
   }
 
@@ -277,7 +277,7 @@ export class MemorySpace {
       await this.store.updateMemory(updated);
       await this.#history(updated.id, "status", memory, updated, options.reason);
     });
-    await this.#invalidate(memory.spaceId);
+    await this.#safeInvalidate(memory.spaceId);
     return updated;
   }
 
@@ -411,12 +411,13 @@ export class MemorySpace {
     }
 
     let candidates: unknown[] = [];
+    let completed: Checkpoint;
     try {
       candidates = await this.extractor.extract(events, { session, checkpointId: checkpoint.id });
       if (!Array.isArray(candidates)) throw new ValidationError("Extractor must return a MemoryCandidate array");
       const eventIds = new Set(events.map((event) => event.id));
       const normalized = candidates.map((candidate, index) => this.#validateCandidate(candidate, index, eventIds));
-      const completed = await this.store.transaction(async () => {
+      completed = await this.store.transaction(async () => {
         const currentSession = await this.getSession(session.id);
         if (currentSession.lastCheckpointEventId !== session.lastCheckpointEventId) {
           throw new ConflictError("Checkpoint boundary changed while processing", "STALE_CHECKPOINT_BOUNDARY");
@@ -446,8 +447,6 @@ export class MemorySpace {
         });
         return done;
       });
-      await this.#invalidate(session.spaceId);
-      return completed;
     } catch (error) {
       const failed: Checkpoint = {
         ...checkpoint, status: "failed", error: error instanceof Error ? error.message : String(error)
@@ -458,6 +457,8 @@ export class MemorySpace {
       })));
       throw error;
     }
+    await this.#safeInvalidate(session.spaceId);
+    return completed;
   }
 
   #assertCheckpointIdentity(requestedToEventId: string | undefined, checkpoint: Checkpoint): void {
@@ -661,6 +662,10 @@ export class MemorySpace {
     const resolvedTasks = await this.store.listMemories({
       spaceId: session.spaceId, types: ["task"], statuses: ["resolved"]
     });
+    const completedTasks: Memory[] = [];
+    for (const memory of resolvedTasks) {
+      if (await this.#wasEverCore(memory.id)) completedTasks.push(memory);
+    }
     const tasks = activeCore.filter((memory) => memory.type === "task").map((memory) => memory.content);
     const explicitNext = activeCore.flatMap((memory) => {
       const value = memory.data?.nextStep ?? memory.data?.nextSteps;
@@ -670,7 +675,7 @@ export class MemorySpace {
     return {
       id: randomUUID(), spaceId: session.spaceId, sessionId: session.id, checkpointId,
       goal: activeCore.filter((memory) => memory.type === "goal").at(-1)?.content,
-      completed: unique(resolvedTasks.map((memory) => memory.content)),
+      completed: unique(completedTasks.map((memory) => memory.content)),
       activeTasks: unique(tasks),
       decisions: unique(activeCore.filter((memory) => memory.type === "decision").map((memory) => memory.content)),
       blockers: unique(activeCore.filter((memory) => memory.type === "blocker").map((memory) => memory.content)),
@@ -679,5 +684,16 @@ export class MemorySpace {
     };
   }
 
-  async #invalidate(spaceId: string): Promise<void> { await this.cache.delete(`bootstrap:${spaceId}`); }
+  async #wasEverCore(memoryId: string): Promise<boolean> {
+    const history = await this.store.listMemoryHistory(memoryId);
+    return history.some((entry) => entry.before?.tier === "core" || entry.after?.tier === "core");
+  }
+
+  async #safeInvalidate(spaceId: string): Promise<void> {
+    try {
+      await this.cache.delete(`bootstrap:${spaceId}`);
+    } catch {
+      // Cache is best-effort derived state and cannot change durable operation success.
+    }
+  }
 }

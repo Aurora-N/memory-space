@@ -53,6 +53,8 @@ Implementation choices are recorded in [`docs/adr/0001-zero-dependency-modular-m
 
 The MVP uses Node's built-in test runner; the decision and Vitest adoption triggers are recorded in [`docs/adr/0002-use-node-test-for-mvp.md`](docs/adr/0002-use-node-test-for-mvp.md).
 
+The MVP's single-active-process checkpoint assumption and future Provider-to-candidate trust boundary are frozen in [`docs/adr/0003-mvp-execution-and-candidate-trust-boundaries.md`](docs/adr/0003-mvp-execution-and-candidate-trust-boundaries.md).
+
 ## Specs
 
 - [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — product goals, MVP scope, behaviors, success criteria, non-goals
