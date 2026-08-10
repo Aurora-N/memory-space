@@ -63,6 +63,8 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 ## Status
 
+**MVP status: frozen after CR-PHASE2 hardening.**
+
 **Domain contract: MVP v1 frozen.**
 
 **Implementation status: MVP capability surface complete and covered by automated tests/eval.**

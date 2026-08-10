@@ -317,7 +317,7 @@ export class MemorySpace {
 
   async bootstrap(spaceId: string): Promise<BootstrapResult> {
     const cacheKey = `bootstrap:${spaceId}`;
-    const cached = await this.cache.get<BootstrapResult>(cacheKey);
+    const cached = await this.#safeCacheGet<BootstrapResult>(cacheKey);
     if (cached) return cached;
     const space = await this.getSpace(spaceId);
     const coreMemories = (await this.store.listMemories({
@@ -339,7 +339,7 @@ export class MemorySpace {
     ].filter(Boolean) : [];
     lines.push("", "## Latest Handoff", list(handoff));
     const result = { space, coreMemories, handoffSnapshot, context: lines.join("\n") };
-    await this.cache.set(cacheKey, result, 60);
+    await this.#safeCacheSet(cacheKey, result, 60);
     return result;
   }
 
@@ -687,6 +687,22 @@ export class MemorySpace {
   async #wasEverCore(memoryId: string): Promise<boolean> {
     const history = await this.store.listMemoryHistory(memoryId);
     return history.some((entry) => entry.before?.tier === "core" || entry.after?.tier === "core");
+  }
+
+  async #safeCacheGet<T>(key: string): Promise<T | undefined> {
+    try {
+      return await this.cache.get<T>(key);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async #safeCacheSet<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    try {
+      await this.cache.set(key, value, ttlSeconds);
+    } catch {
+      // Cache is best-effort derived state; Store-built results remain authoritative.
+    }
   }
 
   async #safeInvalidate(spaceId: string): Promise<void> {
