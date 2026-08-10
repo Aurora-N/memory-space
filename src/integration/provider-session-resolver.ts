@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { MemorySpace } from "../application/memory-space.ts";
 import { ValidationError } from "../domain/errors.ts";
 import type { Session } from "../domain/types.ts";
@@ -39,12 +38,9 @@ export class ProviderSessionResolver {
       return this.memorySpace.createSession({ spaceId, provider, agentId });
     }
 
-    const now = new Date().toISOString();
-    const candidate: Session = {
-      id: randomUUID(), spaceId, provider, externalSessionId, agentId,
-      createdAt: now, updatedAt: now
-    };
-    const { session } = await this.memorySpace.store.getOrCreateProviderSession(candidate);
+    const session = await this.memorySpace.getOrCreateProviderSession({
+      spaceId, provider, externalSessionId, agentId
+    });
     if (session.spaceId !== spaceId) {
       throw new SpaceBindingConflictError(provider, externalSessionId, spaceId, session.spaceId);
     }
@@ -54,7 +50,7 @@ export class ProviderSessionResolver {
   async find(providerInput: string, externalSessionIdInput: string): Promise<Session> {
     const provider = requiredString(providerInput, "provider");
     const externalSessionId = requiredString(externalSessionIdInput, "externalSessionId");
-    const session = await this.memorySpace.store.findSessionByProviderIdentity(provider, externalSessionId);
+    const session = await this.memorySpace.findProviderSession(provider, externalSessionId);
     if (!session) throw new ProviderSessionNotFoundError(provider, externalSessionId);
     return session;
   }

@@ -117,7 +117,11 @@ export class LifecycleHandler {
           message: known ? error.message : "Memory service unavailable"
         }
       };
-      this.onWarning?.({ event, error, warning });
+      try {
+        this.onWarning?.({ event, error, warning });
+      } catch {
+        // Diagnostics are non-authoritative and must not break fail-open lifecycle behavior.
+      }
       return warning;
     }
   }
@@ -146,11 +150,10 @@ export class LifecycleHandler {
     if (!session) {
       throw new ValidationError("Provider lifecycle event requires externalSessionId or internal sessionId");
     }
-    if (session.provider && session.provider !== event.provider) {
+    if (session.provider !== event.provider) {
       throw new ValidationError("Provider lifecycle event does not match Session.provider");
     }
-    if (event.externalSessionId && session.externalSessionId
-      && event.externalSessionId !== session.externalSessionId) {
+    if (event.externalSessionId !== undefined && event.externalSessionId !== session.externalSessionId) {
       throw new ValidationError("Provider lifecycle event does not match Session.externalSessionId");
     }
     return session;

@@ -1,6 +1,7 @@
 # Provider Integration v1 — Implementation Plan
 
 **Status:** Ready for Coding Agent  
+**P0 status:** Frozen after CR-PHASE3
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 **Target branch:** `agent/provider-integration-v1`  
 **Delivery model:** Incremental phases with code review between phases
@@ -235,10 +236,13 @@ Recommended input:
 Stable provider identity should resolve atomically by:
 
 ```text
-spaceId + provider + externalSessionId
+(provider, externalSessionId)
+→ one Memory Session with a frozen Session.spaceId
 ```
 
 Add/verify a durable uniqueness constraint sufficient to prevent duplicate Memory Sessions when duplicate `session_start` events race.
+
+If a Provider exposes Session IDs that are scoped to a workspace or another namespace, its adapter must canonicalize that namespace into `externalSessionId` before calling the common integration layer.
 
 Do not implement this as an unsafe application-level:
 

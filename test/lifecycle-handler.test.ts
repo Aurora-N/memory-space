@@ -51,20 +51,20 @@ test("LifecycleHandler binds once, captures ordered conversation-lite events, an
 
     await handler.handle({
       type: "user_prompt", provider: "fake", externalSessionId: "native-1",
-      cwd: nested, content: "Implement P0",
+      cwd: nested, content: "\n  Implement P0\n",
       transcriptRef: { provider: "fake", locator: "opaque://native-1" }
     });
     await handler.handle({
       type: "assistant_turn", provider: "fake", externalSessionId: "native-1",
-      cwd: nested, content: "P0 implemented"
+      cwd: nested, content: "```ts\n  const done = true;\n```\n"
     });
     const events = await memorySpace.listEvents(started.session.id);
     assert.deepEqual(events.map((event) => event.payload), [
       {
-        role: "user", content: "Implement P0", contentMode: "full",
+        role: "user", content: "\n  Implement P0\n", contentMode: "full",
         transcriptRef: { provider: "fake", locator: "opaque://native-1" }
       },
-      { role: "assistant", content: "P0 implemented", contentMode: "full" }
+      { role: "assistant", content: "```ts\n  const done = true;\n```\n", contentMode: "full" }
     ]);
     assert.equal((await memorySpace.getSession(started.session.id)).spaceId, "space-root");
 
@@ -103,6 +103,56 @@ test("LifecycleHandler supports opaque internal Session handles when provider id
     { sessionId: started.session.id }
   );
   assert.equal(turn.session.id, started.session.id);
+  await memorySpace.close();
+});
+
+test("internal Session handles enforce the frozen provider identity tuple", async () => {
+  const memorySpace = createDefaultMemorySpace({ extractor: new NoopExtractor() });
+  const space = await memorySpace.createSpace({ name: "strict provider identity" });
+  const resolver = new ProviderSessionResolver(memorySpace);
+  const handler = new LifecycleHandler({
+    memorySpace,
+    spaceResolver: { async resolve() { return { spaceId: space.id, source: "explicit" }; } },
+    sessionResolver: resolver,
+    checkpointPolicy: new CheckpointPolicy(memorySpace)
+  });
+  const anonymous = await resolver.resolve({ provider: "fake", spaceId: space.id });
+  await assert.rejects(
+    handler.handle(
+      { type: "user_prompt", provider: "fake", externalSessionId: "native-new", content: "x" },
+      { sessionId: anonymous.id }
+    ),
+    /does not match Session.externalSessionId/u
+  );
+  const generic = await memorySpace.createSession({ spaceId: space.id });
+  await assert.rejects(
+    handler.handle({ type: "user_prompt", provider: "fake", content: "x" }, { sessionId: generic.id }),
+    /does not match Session.provider/u
+  );
+  const identified = await resolver.resolve({
+    provider: "fake", externalSessionId: "native-1", spaceId: space.id
+  });
+  const matching = await handler.handle(
+    { type: "user_prompt", provider: "fake", externalSessionId: "native-1", content: "matching" },
+    { sessionId: identified.id }
+  );
+  assert.equal(matching.session.id, identified.id);
+  const omitted = await handler.handle(
+    { type: "assistant_turn", provider: "fake", content: "omitted external ID" },
+    { sessionId: identified.id }
+  );
+  assert.equal(omitted.session.id, identified.id);
+  await assert.rejects(
+    handler.handle({ type: "user_prompt", provider: "other", content: "x" }, { sessionId: identified.id }),
+    /does not match Session.provider/u
+  );
+  await assert.rejects(
+    handler.handle(
+      { type: "user_prompt", provider: "fake", externalSessionId: "native-2", content: "x" },
+      { sessionId: identified.id }
+    ),
+    /does not match Session.externalSessionId/u
+  );
   await memorySpace.close();
 });
 
@@ -145,5 +195,24 @@ test("lifecycle fail-open wrapper returns a non-blocking warning", async () => {
     error: { code: "MEMORY_SERVICE_UNAVAILABLE", message: "Memory service unavailable" }
   });
   assert.equal(diagnostics.length, 1);
+  await memorySpace.close();
+});
+
+test("throwing diagnostic sink cannot make lifecycle fail closed", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const handler = new LifecycleHandler({
+    memorySpace,
+    spaceResolver: { async resolve() { throw new Error("memory service offline"); } },
+    sessionResolver: new ProviderSessionResolver(memorySpace),
+    checkpointPolicy: new CheckpointPolicy(memorySpace),
+    onWarning() { throw new Error("diagnostic sink unavailable"); }
+  });
+  const result = await handler.handleFailOpen({
+    type: "session_start", provider: "fake", externalSessionId: "native-fail", cwd: process.cwd()
+  });
+  assert.deepEqual(result, {
+    status: "warning", nonBlocking: true, type: "session_start", sessionId: undefined,
+    error: { code: "MEMORY_SERVICE_UNAVAILABLE", message: "Memory service unavailable" }
+  });
   await memorySpace.close();
 });

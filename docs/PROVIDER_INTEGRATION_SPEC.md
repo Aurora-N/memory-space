@@ -372,18 +372,24 @@ Provider native session IDs are external identifiers, not primary Memory Space I
 When a stable provider native session ID is available:
 
 ```text
-spaceId + provider + externalSessionId
-              ↓
-        one Memory Session
+(provider, externalSessionId)
+             ↓
+      one Memory Session
+
+Memory Session.spaceId
+             ↓
+frozen for that provider-native identity
 ```
 
-Recommended durable uniqueness invariant:
+Durable uniqueness invariant:
 
 ```text
-UNIQUE(space_id, provider, external_session_id)
+UNIQUE(provider, external_session_id)
 ```
 
 Resolution must be atomic/get-or-create safe against duplicate session-start delivery.
+
+If a Provider's native Session IDs are only unique inside another namespace or workspace, its adapter must canonicalize the external ID before normalization, for example `workspace-x:session-123`. The common integration layer does not weaken identity or create multiple Memory Sessions for the same canonical provider-native identity across Spaces.
 
 When the provider has no stable external session ID, integration may create an internal Memory Space Session and surface the opaque internal `sessionId` to the agent/provider integration context.
 

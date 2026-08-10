@@ -8,6 +8,7 @@ export type {
   ContextResult,
   CreateSessionInput,
   CreateSpaceInput,
+  ProviderSessionInput,
   RememberInput
 } from "./application/memory-space.ts";
 export { RuleBasedExtractor, NoopExtractor } from "./adapters/rule-based-extractor.ts";

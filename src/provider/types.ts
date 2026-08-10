@@ -70,6 +70,13 @@ function optionalString(value: unknown, label: string): string | undefined {
   return value === undefined ? undefined : requiredString(value, label);
 }
 
+function requiredContent(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ValidationError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
 function transcriptRef(value: unknown): TranscriptRef | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -95,15 +102,23 @@ export function validateProviderLifecycleEvent(value: unknown): ProviderLifecycl
   if (occurredAt && Number.isNaN(Date.parse(occurredAt))) {
     throw new ValidationError("providerEvent.occurredAt must be a valid date-time");
   }
+  const ref = transcriptRef(input.transcriptRef);
   const base: ProviderEventBase = {
     provider: requiredString(input.provider, "providerEvent.provider"),
     externalSessionId: optionalString(input.externalSessionId, "providerEvent.externalSessionId"),
     cwd: optionalString(input.cwd, "providerEvent.cwd"),
     occurredAt,
-    transcriptRef: transcriptRef(input.transcriptRef)
+    transcriptRef: ref
   };
+  if (ref?.provider !== undefined && ref.provider !== base.provider) {
+    throw new ValidationError("transcriptRef.provider must match providerEvent.provider");
+  }
+  if (ref?.externalSessionId !== undefined && base.externalSessionId !== undefined
+    && ref.externalSessionId !== base.externalSessionId) {
+    throw new ValidationError("transcriptRef.externalSessionId must match providerEvent.externalSessionId");
+  }
   if (type === "user_prompt" || type === "assistant_turn") {
-    return { ...base, type, content: requiredString(input.content, "providerEvent.content") };
+    return { ...base, type, content: requiredContent(input.content, "providerEvent.content") };
   }
   if (type === "session_start" || type === "pre_compact" || type === "session_end") {
     return { ...base, type };

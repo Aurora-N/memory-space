@@ -117,18 +117,27 @@ export class SqliteMemoryStore implements MemoryStore {
     let release!: () => void;
     this.#barrier = new Promise((resolveBarrier) => { release = resolveBarrier; });
     await previous;
-    this.database.exec("BEGIN IMMEDIATE");
+    let began = false;
     try {
+      this.beginTransaction();
+      began = true;
       const result = await this.#transactionContext.run(true, operation);
-      this.database.exec("COMMIT");
+      this.commitTransaction();
       return result;
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      if (began) {
+        try { this.rollbackTransaction(); }
+        catch { /* Preserve the original transaction error. */ }
+      }
       throw error;
     } finally {
       release();
     }
   }
+
+  protected beginTransaction(): void { this.database.exec("BEGIN IMMEDIATE"); }
+  protected commitTransaction(): void { this.database.exec("COMMIT"); }
+  protected rollbackTransaction(): void { this.database.exec("ROLLBACK"); }
 
   async insertSpace(space: Space): Promise<void> {
     await this.#ready();

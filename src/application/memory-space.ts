@@ -40,6 +40,9 @@ export interface CreateSessionInput {
   id?: string; spaceId: string; agentId?: string; provider?: string;
   externalSessionId?: string; summary?: string;
 }
+export interface ProviderSessionInput {
+  id?: string; spaceId: string; provider: string; externalSessionId: string; agentId?: string;
+}
 export interface AppendEventInput {
   id?: string; sessionId: string; type: SessionEventType;
   payload: Record<string, unknown>; createdAt?: string;
@@ -183,6 +186,30 @@ export class MemorySpace {
     return value;
   }
 
+  async getOrCreateProviderSession(input: ProviderSessionInput): Promise<Session> {
+    const space = await this.getSpace(input.spaceId);
+    const provider = requiredString(input.provider, "provider");
+    const externalSessionId = requiredString(input.externalSessionId, "externalSessionId");
+    const now = timestamp();
+    const candidate: Session = {
+      id: optionalString(input.id, "session.id") ?? randomUUID(),
+      spaceId: space.id,
+      provider,
+      externalSessionId,
+      agentId: optionalString(input.agentId, "session.agentId"),
+      createdAt: now,
+      updatedAt: now
+    };
+    return (await this.store.getOrCreateProviderSession(candidate)).session;
+  }
+
+  async findProviderSession(provider: string, externalSessionId: string): Promise<Session | undefined> {
+    return this.store.findSessionByProviderIdentity(
+      requiredString(provider, "provider"),
+      requiredString(externalSessionId, "externalSessionId")
+    );
+  }
+
   async appendEvent(input: AppendEventInput): Promise<SessionEvent> {
     const session = await this.getSession(input.sessionId);
     if (!eventTypes.has(input.type)) throw new ValidationError(`Unsupported event.type: ${input.type}`);
@@ -201,6 +228,11 @@ export class MemorySpace {
   async listEvents(sessionId: string): Promise<SessionEvent[]> {
     await this.getSession(sessionId);
     return this.store.listEvents(sessionId);
+  }
+
+  async getLatestSessionEvent(sessionId: string): Promise<SessionEvent | undefined> {
+    const session = await this.getSession(sessionId);
+    return this.store.findLatestEvent(session.id);
   }
 
   async remember(input: RememberInput): Promise<Memory> {

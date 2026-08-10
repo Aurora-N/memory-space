@@ -30,7 +30,7 @@ export class CheckpointPolicy implements CheckpointCoordinator {
       throw new ValidationError(`Unsupported checkpoint trigger: ${String(input.trigger)}`);
     }
     const session = await this.memorySpace.getSession(input.sessionId);
-    const latestEvent = await this.memorySpace.store.findLatestEvent(session.id);
+    const latestEvent = await this.memorySpace.getLatestSessionEvent(session.id);
     if (!latestEvent || latestEvent.id === session.lastCheckpointEventId) {
       return {
         status: "noop", reason: "no_uncommitted_events",

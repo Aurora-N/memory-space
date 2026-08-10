@@ -78,6 +78,50 @@ test("malformed normalized Provider events are rejected", () => {
   );
 });
 
+test("normalized Provider message content is preserved exactly", () => {
+  const content = "\n  hello\n\n";
+  const event = validateProviderLifecycleEvent({ type: "user_prompt", provider: "fake", content });
+  assert.equal(event.type, "user_prompt");
+  if (event.type !== "user_prompt") throw new Error("Expected user_prompt event");
+  assert.equal(event.content, content);
+  for (const empty of ["", "   ", "\n\t"]) {
+    assert.throws(
+      () => validateProviderLifecycleEvent({ type: "assistant_turn", provider: "fake", content: empty }),
+      (error: unknown) => error instanceof ValidationError
+    );
+  }
+});
+
+test("TranscriptRef provenance must match its carrying lifecycle event", () => {
+  assert.throws(
+    () => validateProviderLifecycleEvent({
+      type: "user_prompt", provider: "codex", externalSessionId: "codex-session", content: "x",
+      transcriptRef: { provider: "claude-code", externalSessionId: "codex-session", locator: "opaque" }
+    }),
+    /transcriptRef.provider/u
+  );
+  assert.throws(
+    () => validateProviderLifecycleEvent({
+      type: "user_prompt", provider: "codex", externalSessionId: "codex-session", content: "x",
+      transcriptRef: { provider: "codex", externalSessionId: "other-session", locator: "opaque" }
+    }),
+    /transcriptRef.externalSessionId/u
+  );
+  const matching = validateProviderLifecycleEvent({
+    type: "user_prompt", provider: "codex", externalSessionId: "codex-session", content: "x",
+    transcriptRef: { provider: "codex", externalSessionId: "codex-session", locator: "opaque" }
+  });
+  assert.deepEqual(matching.transcriptRef, {
+    provider: "codex", externalSessionId: "codex-session", locator: "opaque",
+    cursor: undefined, updatedAt: undefined
+  });
+  const omitted = validateProviderLifecycleEvent({
+    type: "assistant_turn", provider: "codex", externalSessionId: "codex-session", content: "x",
+    transcriptRef: { provider: "codex", locator: "opaque" }
+  });
+  assert.equal(omitted.transcriptRef?.externalSessionId, undefined);
+});
+
 test("TranscriptReader remains a provider-neutral bounded-read port", async () => {
   const reads: Array<{ ref: TranscriptRef; limit?: number }> = [];
   const reader: TranscriptReader = {
