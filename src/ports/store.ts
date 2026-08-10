@@ -59,6 +59,7 @@ export interface MemoryStore {
   listMemoryHistory(memoryId: string): Promise<MemoryHistoryRecord[]>;
 
   insertCheckpoint(checkpoint: Checkpoint): Promise<void>;
+  getOrCreateCheckpoint(checkpoint: Checkpoint): Promise<{ checkpoint: Checkpoint; created: boolean }>;
   updateCheckpoint(checkpoint: Checkpoint): Promise<void>;
   findCheckpoint(id: string): Promise<Checkpoint | undefined>;
   findCheckpointByIdempotency(sessionId: string, key: string): Promise<Checkpoint | undefined>;

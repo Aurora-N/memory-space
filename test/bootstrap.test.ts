@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ConflictError, MemorySpace } from "../src/index.ts";
+import { ConflictError, createDefaultMemorySpace } from "../src/index.ts";
 
 test("promotion and demotion control deterministic Core bootstrap", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const space = await memorySpace.createSpace({ name: "bootstrap" });
   const goal = await memorySpace.remember({
     spaceId: space.id, family: "state", type: "goal",
@@ -30,7 +30,7 @@ test("promotion and demotion control deterministic Core bootstrap", async () => 
 });
 
 test("inactive Core Memory is automatically demoted and Core capacity is deterministic", async () => {
-  const memorySpace = new MemorySpace({ coreLimit: 1 });
+  const memorySpace = createDefaultMemorySpace({ coreLimit: 1 });
   const space = await memorySpace.createSpace({ name: "capacity" });
   const first = await memorySpace.remember({
     spaceId: space.id, family: "state", type: "goal", content: "Goal one"

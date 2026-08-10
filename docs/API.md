@@ -35,6 +35,8 @@ The default server listens on `127.0.0.1:4310` and accepts JSON. Error responses
 
 Search supports comma-separated `families`, `types`, `tiers`, and `statuses`, plus a `limit` from 1 to 100. Omitted statuses default to `active`.
 
+`memory.remember` always creates new Memory as Indexed; callers must use the promotion endpoint afterward. Supplying `tier` to the HTTP remember endpoint is rejected. The HTTP promotion endpoint accepts only `reason`; its actor is fixed to `agent` because the MVP has no authenticated user boundary. Trusted application callers may still request user-authoritative promotion directly.
+
 ## Checkpoint event input
 
 The deterministic MVP extractor recognizes normalized `memory` events and conservative message forms such as:

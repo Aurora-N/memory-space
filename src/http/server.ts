@@ -8,6 +8,7 @@ import {
   type CreateSpaceInput,
   type RememberInput
 } from "../application/memory-space.ts";
+import { createDefaultMemorySpace } from "../composition.ts";
 import { MemorySpaceError, NotFoundError, ValidationError } from "../domain/errors.ts";
 import type { MemorySearchInput, MemoryStatus } from "../domain/types.ts";
 
@@ -106,7 +107,12 @@ export function createRequestHandler(memorySpace: MemorySpace) {
         result = await memorySpace.getMemory(params.memoryId);
       } else if ((params = route("POST", "/memories/:memoryId/promote"))) {
         const body = await readBody(request);
-        result = await memorySpace.promote(params.memoryId, body as { reason?: string; actor?: "user" | "agent" });
+        if ("actor" in body) {
+          throw new ValidationError("promotion actor is determined by the trusted adapter and cannot be provided");
+        }
+        result = await memorySpace.promote(params.memoryId, {
+          actor: "agent", reason: body.reason as string | undefined
+        });
       } else if ((params = route("POST", "/memories/:memoryId/demote"))) {
         result = await memorySpace.demote(params.memoryId, await readBody(request) as { reason?: string });
       } else if ((params = route("POST", "/memories/:memoryId/status"))) {
@@ -157,7 +163,7 @@ export function startServer(options: {
   const host = options.host ?? process.env.MEMORY_SPACE_HOST ?? "127.0.0.1";
   const port = options.port ?? Number(process.env.MEMORY_SPACE_PORT ?? 4310);
   const coreLimit = options.coreLimit ?? Number(process.env.MEMORY_SPACE_CORE_LIMIT ?? 64);
-  const memorySpace = new MemorySpace({ databasePath, coreLimit });
+  const memorySpace = createDefaultMemorySpace({ databasePath, coreLimit });
   const server = createServer(createRequestHandler(memorySpace));
   server.listen(port, host, () => {
     const address = server.address() as AddressInfo;

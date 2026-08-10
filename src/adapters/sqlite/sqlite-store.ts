@@ -311,6 +311,25 @@ export class SqliteMemoryStore implements MemoryStore {
     );
   }
 
+  async getOrCreateCheckpoint(checkpoint: Checkpoint): Promise<{ checkpoint: Checkpoint; created: boolean }> {
+    await this.#ready();
+    const result = this.database.prepare(`
+      INSERT INTO checkpoints (
+        id, space_id, session_id, from_event_id, to_event_id, idempotency_key, status,
+        handoff_snapshot_id, error, created_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id, idempotency_key) DO NOTHING
+    `).run(
+      checkpoint.id, checkpoint.spaceId, checkpoint.sessionId, checkpoint.fromEventId ?? null,
+      checkpoint.toEventId, checkpoint.idempotencyKey, checkpoint.status,
+      checkpoint.handoffSnapshotId ?? null, checkpoint.error ?? null,
+      checkpoint.createdAt, checkpoint.completedAt ?? null
+    );
+    const persisted = await this.findCheckpointByIdempotency(checkpoint.sessionId, checkpoint.idempotencyKey);
+    if (!persisted) throw new Error("Checkpoint get-or-create did not return a persisted checkpoint");
+    return { checkpoint: persisted, created: Number(result.changes) === 1 };
+  }
+
   async updateCheckpoint(checkpoint: Checkpoint): Promise<void> {
     await this.#ready();
     this.database.prepare(`

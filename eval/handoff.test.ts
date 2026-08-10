@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { MemorySpace } from "../src/index.ts";
+import { createDefaultMemorySpace } from "../src/index.ts";
 
 interface Scenario {
   name: string;
@@ -16,7 +16,7 @@ const scenario = JSON.parse(readFileSync(
 )) as Scenario;
 
 test(`eval: ${scenario.name}`, async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const space = await memorySpace.createSpace({ id: scenario.space, name: scenario.space });
   const sessionA = await memorySpace.createSession({ spaceId: space.id, agentId: scenario.sessionA.agentId });
   let lastEventId = "";

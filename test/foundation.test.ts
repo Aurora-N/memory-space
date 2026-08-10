@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { MemorySpace, ValidationError } from "../src/index.ts";
+import { createDefaultMemorySpace, ValidationError } from "../src/index.ts";
 
 test("Space, Session and explicit Indexed Memory persist", async () => {
   const directory = mkdtempSync(join(tmpdir(), "memory-space-test-"));
   const databasePath = join(directory, "memory.db");
   try {
-    const first = new MemorySpace({ databasePath });
+    const first = createDefaultMemorySpace({ databasePath });
     const space = await first.createSpace({ name: "Project A" });
     const session = await first.createSession({ spaceId: space.id, agentId: "codex" });
     const memory = await first.remember({
@@ -21,7 +21,7 @@ test("Space, Session and explicit Indexed Memory persist", async () => {
     assert.equal(memory.spaceId, space.id);
     await first.close();
 
-    const reloaded = new MemorySpace({ databasePath });
+    const reloaded = createDefaultMemorySpace({ databasePath });
     assert.equal((await reloaded.getMemory(memory.id)).content, "Use SQLite for the MVP");
     assert.equal((await reloaded.getSession(session.id)).spaceId, space.id);
     await reloaded.close();
@@ -31,7 +31,7 @@ test("Space, Session and explicit Indexed Memory persist", async () => {
 });
 
 test("invalid Space and cross-Space Session references fail clearly", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   await assert.rejects(
     memorySpace.createSession({ spaceId: "missing" }),
     /Space not found/

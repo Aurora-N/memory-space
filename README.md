@@ -18,7 +18,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 
 ## Run locally
 
-Requires Node.js 22.5 or newer.
+Requires Node.js 22.13 or newer.
 
 ```bash
 corepack enable

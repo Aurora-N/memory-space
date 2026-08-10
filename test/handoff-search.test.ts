@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MemorySpace } from "../src/index.ts";
+import { createDefaultMemorySpace } from "../src/index.ts";
 
 test("Session B recovers Core + latest handoff and recalls Indexed detail", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const space = await memorySpace.createSpace({ name: "Cross-agent Project" });
   const sessionA = await memorySpace.createSession({ spaceId: space.id, agentId: "agent-a", provider: "codex" });
   const detail = await memorySpace.remember({
@@ -38,7 +38,7 @@ test("Session B recovers Core + latest handoff and recalls Indexed detail", asyn
 });
 
 test("search is Space-scoped and status/filter aware, including Chinese lexical recall", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const one = await memorySpace.createSpace({ name: "one" });
   const two = await memorySpace.createSpace({ name: "two" });
   const decision = await memorySpace.remember({

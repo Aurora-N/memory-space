@@ -1,4 +1,6 @@
 export { MemorySpace } from "./application/memory-space.ts";
+export { createDefaultMemorySpace } from "./composition.ts";
+export type { DefaultMemorySpaceOptions } from "./composition.ts";
 export type {
   AppendEventInput,
   BootstrapResult,

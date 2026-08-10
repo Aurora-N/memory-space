@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { RuleBasedExtractor } from "../adapters/rule-based-extractor.ts";
-import { SqliteMemoryStore } from "../adapters/sqlite/sqlite-store.ts";
 import { ConflictError, NotFoundError, ValidationError } from "../domain/errors.ts";
 import type {
   CandidateOperation,
@@ -18,7 +16,7 @@ import type {
   SessionEventType,
   Space
 } from "../domain/types.ts";
-import { NoopCache, type CachePort } from "../ports/cache.ts";
+import type { CachePort } from "../ports/cache.ts";
 import type { MemoryExtractor } from "../ports/extractor.ts";
 import type { MemoryHistoryRecord, MemoryStore } from "../ports/store.ts";
 
@@ -48,7 +46,7 @@ export interface AppendEventInput {
 }
 export interface RememberInput {
   spaceId: string; family: MemoryFamily; type: string; key?: string; content: string;
-  data?: Record<string, unknown>; tier?: MemoryTier; status?: MemoryStatus;
+  data?: Record<string, unknown>; status?: MemoryStatus;
   importance?: number; confidence?: number; sourceSessionId?: string;
   sourceAgentId?: string; sourceEventIds?: string[];
 }
@@ -128,14 +126,14 @@ export class MemorySpace {
   readonly extractor: MemoryExtractor;
   readonly cache: CachePort;
   readonly coreLimit: number;
+  readonly #inFlightCheckpoints = new Map<string, Promise<Checkpoint>>();
 
   constructor(options: {
-    store?: MemoryStore; databasePath?: string; extractor?: MemoryExtractor;
-    cache?: CachePort; coreLimit?: number;
-  } = {}) {
-    this.store = options.store ?? new SqliteMemoryStore(options.databasePath);
-    this.extractor = options.extractor ?? new RuleBasedExtractor();
-    this.cache = options.cache ?? new NoopCache();
+    store: MemoryStore; extractor: MemoryExtractor; cache: CachePort; coreLimit?: number;
+  }) {
+    this.store = options.store;
+    this.extractor = options.extractor;
+    this.cache = options.cache;
     this.coreLimit = options.coreLimit ?? 64;
     if (!Number.isInteger(this.coreLimit) || this.coreLimit < 1) {
       throw new ValidationError("coreLimit must be a positive integer");
@@ -206,6 +204,9 @@ export class MemorySpace {
   }
 
   async remember(input: RememberInput): Promise<Memory> {
+    if ("tier" in input) {
+      throw new ValidationError("memory.remember does not accept tier; use promote() after remember()");
+    }
     const space = await this.getSpace(input.spaceId);
     const validated = this.#validateMemory(input);
     let session: Session | undefined;
@@ -345,32 +346,46 @@ export class MemorySpace {
   async checkpoint(input: CheckpointInput): Promise<Checkpoint> {
     const session = await this.getSession(input.sessionId);
     const idempotencyKey = requiredString(input.idempotencyKey, "idempotencyKey");
-    const existing = await this.store.findCheckpointByIdempotency(session.id, idempotencyKey);
-    if (existing?.status === "processing") {
-      if (input.toEventId && input.toEventId !== existing.toEventId) {
-        throw new ConflictError("idempotencyKey was already used with a different toEventId", "IDEMPOTENCY_MISMATCH");
-      }
-      return existing;
+    const operationKey = `${session.id}:${idempotencyKey}`;
+    const activeOperation = this.#inFlightCheckpoints.get(operationKey);
+    if (activeOperation) {
+      const result = await activeOperation;
+      this.#assertCheckpointIdentity(input.toEventId, result);
+      return result;
     }
-    if (existing?.status === "completed") {
-      if (input.toEventId && input.toEventId !== existing.toEventId) {
-        throw new ConflictError("idempotencyKey was already used with a different toEventId", "IDEMPOTENCY_MISMATCH");
+    const operation = this.#executeCheckpoint(session, input, idempotencyKey);
+    this.#inFlightCheckpoints.set(operationKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.#inFlightCheckpoints.get(operationKey) === operation) {
+        this.#inFlightCheckpoints.delete(operationKey);
       }
+    }
+  }
+
+  async #executeCheckpoint(
+    session: Session,
+    input: CheckpointInput,
+    idempotencyKey: string
+  ): Promise<Checkpoint> {
+    let existing = await this.store.findCheckpointByIdempotency(session.id, idempotencyKey);
+    if (existing?.status === "completed") {
+      this.#assertCheckpointIdentity(input.toEventId, existing);
       return existing;
     }
     const fromEvent = session.lastCheckpointEventId
       ? await this.#sessionEvent(session.id, session.lastCheckpointEventId) : undefined;
-    const toEvent = input.toEventId
-      ? await this.#sessionEvent(session.id, input.toEventId) : await this.store.findLatestEvent(session.id);
+    if (existing) this.#assertCheckpointIdentity(input.toEventId, existing);
+    const resolvedToEventId = input.toEventId ?? existing?.toEventId;
+    const toEvent = resolvedToEventId
+      ? await this.#sessionEvent(session.id, resolvedToEventId) : await this.store.findLatestEvent(session.id);
     if (!toEvent) throw new ValidationError("Cannot checkpoint a session with no events");
     if (toEvent.sequence <= (fromEvent?.sequence ?? 0)) {
       throw new ValidationError("toEventId must be after the previous successful checkpoint boundary");
     }
-    if (existing && existing.toEventId !== toEvent.id) {
-      throw new ConflictError("idempotencyKey was already used with a different toEventId", "IDEMPOTENCY_MISMATCH");
-    }
     const events = await this.store.listEvents(session.id, fromEvent?.sequence ?? 0, toEvent.sequence);
-    const checkpoint: Checkpoint = existing ? {
+    let checkpoint: Checkpoint = existing ? {
       ...existing, fromEventId: session.lastCheckpointEventId, toEventId: toEvent.id,
       status: "processing", handoffSnapshotId: undefined, error: undefined, completedAt: undefined
     } : {
@@ -378,8 +393,22 @@ export class MemorySpace {
       fromEventId: session.lastCheckpointEventId, toEventId: toEvent.id,
       idempotencyKey, status: "processing", createdAt: timestamp()
     };
-    if (existing) await this.store.updateCheckpoint(checkpoint);
-    else await this.store.insertCheckpoint(checkpoint);
+    if (existing) {
+      await this.store.updateCheckpoint(checkpoint);
+    } else {
+      const claimed = await this.store.getOrCreateCheckpoint(checkpoint);
+      checkpoint = claimed.checkpoint;
+      if (!claimed.created) {
+        existing = claimed.checkpoint;
+        this.#assertCheckpointIdentity(input.toEventId ?? toEvent.id, existing);
+        if (existing.status === "completed") return existing;
+        checkpoint = {
+          ...existing, fromEventId: session.lastCheckpointEventId, status: "processing",
+          handoffSnapshotId: undefined, error: undefined, completedAt: undefined
+        };
+        await this.store.updateCheckpoint(checkpoint);
+      }
+    }
 
     let candidates: unknown[] = [];
     try {
@@ -428,6 +457,15 @@ export class MemorySpace {
         candidate, accepted: false, rejectionReason: failed.error
       })));
       throw error;
+    }
+  }
+
+  #assertCheckpointIdentity(requestedToEventId: string | undefined, checkpoint: Checkpoint): void {
+    if (requestedToEventId && requestedToEventId !== checkpoint.toEventId) {
+      throw new ConflictError(
+        "idempotencyKey was already used with a different toEventId",
+        "IDEMPOTENCY_MISMATCH"
+      );
     }
   }
 
@@ -536,6 +574,12 @@ export class MemorySpace {
       ? await this.getMemory(input.targetMemoryId)
       : input.key ? await this.store.findActiveMemoryByKey(input.spaceId, input.key) : undefined;
     if (existing && existing.spaceId !== input.spaceId) throw new ValidationError("targetMemoryId belongs to another Space");
+    if (existing?.key && (existing.family !== input.family || existing.type !== input.type)) {
+      throw new ConflictError(
+        `Memory key ${existing.key} is already bound to ${existing.family}/${existing.type}`,
+        "MEMORY_KEY_SCHEMA_CONFLICT"
+      );
+    }
     if (input.operation === "supersede" && existing) {
       const superseded: Memory = {
         ...existing, status: "superseded", tier: "indexed",
@@ -611,26 +655,26 @@ export class MemorySpace {
   }
 
   async #buildSnapshot(session: Session, checkpointId: string): Promise<HandoffSnapshot> {
-    const memories = await this.store.listMemories({ spaceId: session.spaceId });
-    const active = memories.filter((memory) => memory.status === "active");
-    const resolved = memories.filter((memory) => memory.status === "resolved");
-    const tasks = active.filter((memory) => memory.type === "task").map((memory) => memory.content);
-    const explicitNext = active.flatMap((memory) => {
+    const activeCore = await this.store.listMemories({
+      spaceId: session.spaceId, tiers: ["core"], statuses: ["active"]
+    });
+    const resolvedTasks = await this.store.listMemories({
+      spaceId: session.spaceId, types: ["task"], statuses: ["resolved"]
+    });
+    const tasks = activeCore.filter((memory) => memory.type === "task").map((memory) => memory.content);
+    const explicitNext = activeCore.flatMap((memory) => {
       const value = memory.data?.nextStep ?? memory.data?.nextSteps;
       return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string")
         : typeof value === "string" ? [value] : [];
     });
     return {
       id: randomUUID(), spaceId: session.spaceId, sessionId: session.id, checkpointId,
-      goal: active.filter((memory) => memory.type === "goal").at(-1)?.content,
-      completed: unique([
-        ...active.filter((memory) => memory.type === "progress").map((memory) => memory.content),
-        ...resolved.filter((memory) => memory.type === "task").map((memory) => memory.content)
-      ]),
+      goal: activeCore.filter((memory) => memory.type === "goal").at(-1)?.content,
+      completed: unique(resolvedTasks.map((memory) => memory.content)),
       activeTasks: unique(tasks),
-      decisions: unique(active.filter((memory) => memory.type === "decision").map((memory) => memory.content)),
-      blockers: unique(active.filter((memory) => memory.type === "blocker").map((memory) => memory.content)),
-      openQuestions: unique(active.filter((memory) => memory.type === "question").map((memory) => memory.content)),
+      decisions: unique(activeCore.filter((memory) => memory.type === "decision").map((memory) => memory.content)),
+      blockers: unique(activeCore.filter((memory) => memory.type === "blocker").map((memory) => memory.content)),
+      openQuestions: unique(activeCore.filter((memory) => memory.type === "question").map((memory) => memory.content)),
       nextSteps: unique([...explicitNext, ...tasks]), createdAt: timestamp()
     };
   }

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import test from "node:test";
-import { MemorySpace } from "../src/index.ts";
+import type { MemorySpace } from "../src/index.ts";
+import { createDefaultMemorySpace } from "../src/index.ts";
 import { createRequestHandler } from "../src/http/server.ts";
 
 interface HttpResult {
@@ -29,7 +30,7 @@ function createClient(memorySpace: MemorySpace) {
 }
 
 test("HTTP adapter exposes the Space/Session/Memory path", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const request = createClient(memorySpace);
   try {
     assert.equal((await request("GET", "/health")).status, 200);
@@ -50,7 +51,7 @@ test("HTTP adapter exposes the Space/Session/Memory path", async () => {
 });
 
 test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async () => {
-  const memorySpace = new MemorySpace();
+  const memorySpace = createDefaultMemorySpace();
   const request = createClient(memorySpace);
   try {
     const space = (await request("POST", "/spaces", { name: "HTTP Handoff" })).body;
@@ -67,7 +68,7 @@ test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async (
       key: "project.goal.primary", content: "完成跨 Agent 记忆管理系统"
     })).body;
     const promotion = await request("POST", `/memories/${goal.id}/promote`, {
-      actor: "agent", reason: "项目主要目标"
+      reason: "项目主要目标"
     });
     assert.equal(promotion.body.tier, "core");
     const event = (await request("POST", `/sessions/${sessionA.id}/events`, {
@@ -97,6 +98,31 @@ test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async (
     );
     assert.equal(search.body[0].memory.id, detail.id);
     assert.equal(search.body[0].memory.tier, "indexed");
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("HTTP rejects direct Core remember and caller-provided promotion actor", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const request = createClient(memorySpace);
+  try {
+    const space = (await request("POST", "/spaces", { name: "HTTP trust boundary" })).body;
+    const directCore = await request("POST", `/spaces/${space.id}/memories`, {
+      family: "state", type: "goal", content: "Bypass", tier: "core"
+    });
+    assert.equal(directCore.status, 422);
+    assert.equal(directCore.body.error.code, "VALIDATION_ERROR");
+
+    const memory = (await request("POST", `/spaces/${space.id}/memories`, {
+      family: "knowledge", type: "fact", content: "Session-local detail"
+    })).body;
+    const spoof = await request("POST", `/memories/${memory.id}/promote`, {
+      actor: "user", reason: "I claim to be the user"
+    });
+    assert.equal(spoof.status, 422);
+    assert.equal(spoof.body.error.code, "VALIDATION_ERROR");
+    assert.equal((await memorySpace.getMemory(memory.id)).tier, "indexed");
   } finally {
     await memorySpace.close();
   }
