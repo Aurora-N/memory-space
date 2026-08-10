@@ -41,7 +41,9 @@ export interface MemoryStore {
   insertSpace(space: Space): Promise<void>;
   findSpace(id: string): Promise<Space | undefined>;
   insertSession(session: Session): Promise<void>;
+  getOrCreateProviderSession(session: Session): Promise<{ session: Session; created: boolean }>;
   findSession(id: string): Promise<Session | undefined>;
+  findSessionByProviderIdentity(provider: string, externalSessionId: string): Promise<Session | undefined>;
   updateSession(session: Session): Promise<void>;
 
   insertEvent(event: Omit<SessionEvent, "sequence">): Promise<SessionEvent>;

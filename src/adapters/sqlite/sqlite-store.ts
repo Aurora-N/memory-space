@@ -157,9 +157,40 @@ export class SqliteMemoryStore implements MemoryStore {
     );
   }
 
+  async getOrCreateProviderSession(session: Session): Promise<{ session: Session; created: boolean }> {
+    await this.#ready();
+    if (!session.provider || !session.externalSessionId) {
+      throw new Error("Provider Session get-or-create requires provider and externalSessionId");
+    }
+    const result = this.database.prepare(`
+      INSERT INTO sessions (
+        id, space_id, agent_id, provider, external_session_id, summary,
+        last_checkpoint_event_id, latest_handoff_snapshot_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider, external_session_id)
+        WHERE provider IS NOT NULL AND external_session_id IS NOT NULL
+      DO NOTHING
+    `).run(
+      session.id, session.spaceId, session.agentId ?? null, session.provider,
+      session.externalSessionId, session.summary ?? null,
+      session.lastCheckpointEventId ?? null, session.latestHandoffSnapshotId ?? null,
+      session.createdAt, session.updatedAt
+    );
+    const persisted = await this.findSessionByProviderIdentity(session.provider, session.externalSessionId);
+    if (!persisted) throw new Error("Provider Session get-or-create did not return a persisted Session");
+    return { session: persisted, created: Number(result.changes) === 1 };
+  }
+
   async findSession(id: string): Promise<Session | undefined> {
     await this.#ready();
     return mapSession(this.database.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as Row | undefined);
+  }
+
+  async findSessionByProviderIdentity(provider: string, externalSessionId: string): Promise<Session | undefined> {
+    await this.#ready();
+    return mapSession(this.database.prepare(
+      "SELECT * FROM sessions WHERE provider = ? AND external_session_id = ?"
+    ).get(provider, externalSessionId) as Row | undefined);
   }
 
   async updateSession(session: Session): Promise<void> {

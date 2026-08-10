@@ -86,5 +86,14 @@ export const migrations: Migration[] = [
       );
       CREATE INDEX handoff_space_created_idx ON handoff_snapshots(space_id, created_at);
     `
+  },
+  {
+    version: 2,
+    name: "provider-session-identity",
+    sql: `
+      CREATE UNIQUE INDEX sessions_provider_external_idx
+        ON sessions(provider, external_session_id)
+        WHERE provider IS NOT NULL AND external_session_id IS NOT NULL;
+    `
   }
 ];
