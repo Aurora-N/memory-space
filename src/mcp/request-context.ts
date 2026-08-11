@@ -7,7 +7,10 @@ import { commandError } from "./errors.ts";
 export interface MCPRequestContext {
   cwd?: string;
   sessionId?: string;
+  explicitSpaceId?: string;
 }
+
+export type MCPRuntimeContext = Omit<MCPRequestContext, "sessionId">;
 
 export interface ResolvedMCPRequestContext {
   space: Space;
@@ -18,15 +21,18 @@ export class MCPRequestContextResolver {
   readonly memorySpace: MemorySpace;
   readonly spaceResolver: SpaceResolver;
   readonly cwd: string;
+  readonly explicitSpaceId?: string;
 
   constructor(options: {
     memorySpace: MemorySpace;
     spaceResolver?: SpaceResolver;
     cwd?: string;
+    explicitSpaceId?: string;
   }) {
     this.memorySpace = options.memorySpace;
     this.spaceResolver = options.spaceResolver ?? new SpaceResolver();
     this.cwd = options.cwd ?? process.cwd();
+    this.explicitSpaceId = options.explicitSpaceId;
   }
 
   async resolve(context: MCPRequestContext): Promise<ResolvedMCPRequestContext> {
@@ -52,7 +58,10 @@ export class MCPRequestContextResolver {
       }
     }
 
-    const binding = await this.spaceResolver.resolve({ cwd: context.cwd ?? this.cwd });
+    const binding = await this.spaceResolver.resolve({
+      cwd: context.cwd ?? this.cwd,
+      explicitSpaceId: context.explicitSpaceId ?? this.explicitSpaceId
+    });
     try {
       return { space: await this.memorySpace.getSpace(binding.spaceId) };
     } catch (error) {

@@ -41,19 +41,42 @@ curl -s -X POST http://127.0.0.1:4310/spaces \
 
 See [`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint event examples.
 
-## MCP command plane
+## Shared daemon and MCP command plane
 
-Start the shared stdio MCP server with:
+`pnpm start` is the supported runtime. One daemon creates one `MemorySpace`/SQLite owner and serves both the existing HTTP API and the Streamable HTTP MCP endpoint:
 
 ```bash
 MEMORY_SPACE_DB=./data/memory-space.db \
 MEMORY_SPACE_CWD=/absolute/path/to/bound/project \
-pnpm mcp
+pnpm start
 ```
 
-`MEMORY_SPACE_CWD` is the trusted runtime directory used for nearest-ancestor `.memory-space/config.json` resolution when a read tool does not receive a Session ID. A supplied Session ID is authoritative and cannot be rebound by cwd. Durable tools (`memory_remember`, `memory_promote`, and `memory_checkpoint`) always require a Session.
+```text
+HTTP API: http://127.0.0.1:4310/...
+MCP:      http://127.0.0.1:4310/mcp
+```
 
-The MCP surface is exactly `memory_bootstrap`, `memory_context`, `memory_search`, `memory_remember`, `memory_promote`, and `memory_checkpoint`. It intentionally exposes no raw CRUD or agent-controlled Space, tier, actor, or checkpoint-boundary fields.
+Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. The local MCP endpoint validates localhost Host and Origin values to reduce DNS-rebinding exposure.
+
+The provider-neutral `LifecycleHandler` is composed against the daemon's same
+`MemorySpace`; provider-specific lifecycle routes remain P2 work and are not
+exposed by this P1 runtime.
+
+For no-Session read tools, `MEMORY_SPACE_SPACE_ID` is the highest-priority trusted explicit Space override. Otherwise, `MEMORY_SPACE_CWD` is the trusted directory used for nearest-ancestor `.memory-space/config.json` resolution; it defaults to daemon cwd only when not configured. One daemon endpoint therefore has one trusted no-Session project context. A supplied Session ID is always authoritative and cannot be rebound by either setting. Neither `cwd` nor `spaceId` is accepted as a tool argument.
+
+Durable tools (`memory_remember`, `memory_promote`, and `memory_checkpoint`) always require a Session. The MCP surface is exactly `memory_bootstrap`, `memory_context`, `memory_search`, `memory_remember`, `memory_promote`, and `memory_checkpoint`. It intentionally exposes no raw CRUD or agent-controlled Space, tier, actor, or checkpoint-boundary fields.
+
+Strict schema failures happen before tool execution and use the MCP SDK/protocol validation error. Inputs that pass schema validation but fail domain or integration execution return the stable `MemoryMcpError` structured envelope. Both are fail-visible; raw SQLite/internal details are never the intended public tool result.
+
+An isolated stdio development mode remains available only with explicit opt-in:
+
+```bash
+MEMORY_SPACE_ALLOW_STANDALONE=1 \
+MEMORY_SPACE_DB=/path/to/isolated-development.db \
+pnpm mcp:standalone
+```
+
+Standalone mode owns its SQLite connection. Never point it at a database used by the daemon or another standalone process; it is not the supported provider runtime.
 
 ## Architecture
 
@@ -84,4 +107,4 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **Implementation status: MVP capability surface complete and covered by automated tests/eval.**
 
-**Provider Integration status: P0 frozen after CR-PHASE3; P1 MCP Command Plane complete.**
+**Provider Integration P0: FROZEN. MCP Command Plane P1: FROZEN after CR-PHASE4.**

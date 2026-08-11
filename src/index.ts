@@ -53,7 +53,8 @@ export type {
   ProviderUserPromptEvent,
   TranscriptRef
 } from "./provider/types.ts";
-export { createMemoryMcpServer } from "./mcp/server.ts";
+export { createMemoryMcpServer, createMemoryMcpServerForGateway } from "./mcp/server.ts";
+export type { CreateMemoryMcpServerOptions } from "./mcp/server.ts";
 export { MemoryMcpGateway } from "./mcp/tools.ts";
 export type {
   MemoryBootstrapToolInput,
@@ -64,8 +65,14 @@ export type {
   MemorySearchToolInput
 } from "./mcp/tools.ts";
 export { MCPRequestContextResolver } from "./mcp/request-context.ts";
-export type { MCPRequestContext, ResolvedMCPRequestContext } from "./mcp/request-context.ts";
+export type {
+  MCPRequestContext,
+  MCPRuntimeContext,
+  ResolvedMCPRequestContext
+} from "./mcp/request-context.ts";
 export { MemoryMcpCommandError, toMemoryMcpError } from "./mcp/errors.ts";
 export type { MemoryMcpError, MemoryMcpErrorCode } from "./mcp/errors.ts";
+export { createMemorySpaceDaemon, startServer } from "./daemon.ts";
+export type { MemorySpaceDaemon, MemorySpaceDaemonOptions } from "./daemon.ts";
 export * from "./domain/types.ts";
 export { MemorySpaceError, NotFoundError, ValidationError, ConflictError } from "./domain/errors.ts";

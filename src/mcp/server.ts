@@ -125,14 +125,16 @@ const writeAnnotations = {
   openWorldHint: false
 } as const;
 
-export function createMemoryMcpServer(options: {
+export interface CreateMemoryMcpServerOptions {
   memorySpace: MemorySpace;
   spaceResolver?: SpaceResolver;
   checkpointPolicy?: CheckpointCoordinator;
   cwd?: string;
-}): McpServer {
-  const gateway = new MemoryMcpGateway(options);
-  const server = new McpServer({ name: "memory-space", version: "0.1.0" });
+  explicitSpaceId?: string;
+}
+
+export function createMemoryMcpServerForGateway(gateway: MemoryMcpGateway): McpServer {
+  const server = new McpServer({ name: "memory-space-mcp-server", version: "0.1.0" });
 
   server.registerTool("memory_bootstrap", {
     title: "Bootstrap Memory Space",
@@ -183,4 +185,8 @@ export function createMemoryMcpServer(options: {
   }, (input) => execute(() => gateway.checkpoint(input)));
 
   return server;
+}
+
+export function createMemoryMcpServer(options: CreateMemoryMcpServerOptions): McpServer {
+  return createMemoryMcpServerForGateway(new MemoryMcpGateway(options));
 }

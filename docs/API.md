@@ -1,6 +1,6 @@
-# memory-space MVP HTTP API
+# memory-space daemon API
 
-The default server listens on `127.0.0.1:4310` and accepts JSON. Error responses use:
+The default daemon listens on `127.0.0.1:4310`, owns one `MemorySpace`, and serves the JSON HTTP API plus the Streamable HTTP MCP endpoint at `/mcp`. HTTP API error responses use:
 
 ```json
 {
@@ -15,6 +15,7 @@ The default server listens on `127.0.0.1:4310` and accepts JSON. Error responses
 
 | Capability | HTTP endpoint |
 | --- | --- |
+| MCP command plane | `GET /mcp`, `POST /mcp`, `DELETE /mcp` |
 | `space.create` | `POST /spaces` |
 | `space.get` | `GET /spaces/:spaceId` |
 | `session.create` | `POST /spaces/:spaceId/sessions` |

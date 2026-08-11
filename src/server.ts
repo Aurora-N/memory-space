@@ -1,4 +1,6 @@
-export { createRequestHandler, startServer } from "./http/server.ts";
-import { startServer } from "./http/server.ts";
+import { pathToFileURL } from "node:url";
+export { createRequestHandler } from "./http/server.ts";
+export { createMemorySpaceDaemon, startServer } from "./daemon.ts";
+import { startServer } from "./daemon.ts";
 
-startServer();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) startServer();

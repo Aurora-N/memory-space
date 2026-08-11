@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,12 +41,12 @@ function errorOutput(result: CallToolResult): MemoryMcpError {
   return structured<MemoryMcpError>(result);
 }
 
-async function connect(memorySpace: MemorySpace, cwd?: string): Promise<{
+async function connect(memorySpace: MemorySpace, cwd?: string, explicitSpaceId?: string): Promise<{
   client: Client;
   server: McpServer;
   close(): Promise<void>;
 }> {
-  const server = createMemoryMcpServer({ memorySpace, cwd });
+  const server = createMemoryMcpServer({ memorySpace, cwd, explicitSpaceId });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "memory-space-test", version: "1.0.0" });
   await server.connect(serverTransport);
@@ -59,15 +60,19 @@ async function connect(memorySpace: MemorySpace, cwd?: string): Promise<{
   };
 }
 
-async function inputIsRejected(
+async function assertSchemaValidationFailure(
   client: Client,
   name: string,
   args: Record<string, unknown>
-): Promise<boolean> {
+): Promise<void> {
   try {
-    return (await client.callTool({ name, arguments: args })).isError === true;
-  } catch {
-    return true;
+    const result = await client.callTool({ name, arguments: args });
+    assert.equal(result.isError, true);
+    assert.equal(result.structuredContent, undefined);
+    const text = result.content.find((item) => item.type === "text")?.text ?? "";
+    assert.match(text, /validation|invalid arguments/iu);
+  } catch (error) {
+    assert.match(String(error), /validation|invalid arguments|invalid params/iu);
   }
 }
 
@@ -101,9 +106,12 @@ test("MCP publishes exactly six strict domain tools with no privileged inputs", 
     for (const forbidden of ["spaceId", "toEventId", "fromEventId", "idempotencyKey", "trigger"]) {
       assert.equal(forbidden in checkpointProperties, false);
     }
-    assert.equal(await inputIsRejected(connection.client, "memory_search", {
+    await assertSchemaValidationFailure(connection.client, "memory_search", {
       query: "secret", spaceId: "spoofed", tier: "core", status: "active"
-    }), true);
+    });
+    await assertSchemaValidationFailure(connection.client, "memory_search", {
+      query: "secret", cwd: "/agent-controlled"
+    });
   } finally {
     await connection.close();
     await memorySpace.close();
@@ -118,8 +126,9 @@ test("memory_bootstrap uses Session Space over conflicting cwd and reports unbou
     const spaceA = await memorySpace.createSpace({ id: "mcp-space-a", name: "Space A" });
     const spaceB = await memorySpace.createSpace({ id: "mcp-space-b", name: "Space B" });
     const sessionA = await memorySpace.createSession({ spaceId: spaceA.id, provider: "fake" });
+    const sessionB = await memorySpace.createSession({ spaceId: spaceB.id, provider: "fake" });
     bind(directory, spaceB.id);
-    const connection = await connect(memorySpace, directory);
+    const connection = await connect(memorySpace, directory, spaceA.id);
     try {
       const bySession = structured<{ space: { id: string }; session: { id: string } }>(
         await connection.client.callTool({
@@ -129,13 +138,30 @@ test("memory_bootstrap uses Session Space over conflicting cwd and reports unbou
       assert.equal(bySession.space.id, spaceA.id);
       assert.equal(bySession.session.id, sessionA.id);
       assert.equal("coreMemories" in bySession, false);
-      const byCwd = structured<{ space: { id: string }; session?: unknown }>(
+      const byExplicit = structured<{ space: { id: string }; session?: unknown }>(
         await connection.client.callTool({ name: "memory_bootstrap", arguments: {} })
+      );
+      assert.equal(byExplicit.space.id, spaceA.id);
+      assert.equal(byExplicit.session, undefined);
+      const explicitCannotRebindSession = structured<{ space: { id: string } }>(
+        await connection.client.callTool({
+          name: "memory_bootstrap", arguments: { sessionId: sessionB.id }
+        })
+      );
+      assert.equal(explicitCannotRebindSession.space.id, spaceB.id);
+    } finally {
+      await connection.close();
+    }
+
+    const cwdOnly = await connect(memorySpace, directory);
+    try {
+      const byCwd = structured<{ space: { id: string }; session?: unknown }>(
+        await cwdOnly.client.callTool({ name: "memory_bootstrap", arguments: {} })
       );
       assert.equal(byCwd.space.id, spaceB.id);
       assert.equal(byCwd.session, undefined);
     } finally {
-      await connection.close();
+      await cwdOnly.close();
     }
 
     const unbound = await connect(memorySpace, unboundDirectory);
@@ -254,10 +280,10 @@ test("memory_remember derives Space and provenance from Session and rejects spoo
       }
     });
     assert.equal(errorOutput(missing).code, "SESSION_NOT_FOUND");
-    assert.equal(await inputIsRejected(connection.client, "memory_remember", {
+    await assertSchemaValidationFailure(connection.client, "memory_remember", {
       family: "knowledge", type: "fact", content: "no session"
-    }), true);
-    assert.equal(await inputIsRejected(connection.client, "memory_remember", {
+    });
+    await assertSchemaValidationFailure(connection.client, "memory_remember", {
       sessionId: sessionA.id,
       family: "state",
       type: "goal",
@@ -265,7 +291,7 @@ test("memory_remember derives Space and provenance from Session and rejects spoo
       tier: "core",
       status: "active",
       actor: "user"
-    }), true);
+    });
 
     await memorySpace.remember({
       spaceId: spaceA.id,
@@ -331,13 +357,13 @@ test("memory_promote fixes actor=agent and enforces policy, capacity, and Space 
       arguments: { sessionId: sessionA.id, memoryId: "missing-memory", reason: "Must fail" }
     });
     assert.equal(errorOutput(missing).code, "MEMORY_NOT_FOUND");
-    assert.equal(await inputIsRejected(connection.client, "memory_promote", {
+    await assertSchemaValidationFailure(connection.client, "memory_promote", {
       sessionId: sessionA.id,
       memoryId: ineligible.id,
       reason: "User spoof",
       actor: "user",
       force: true
-    }), true);
+    });
 
     const secondCore = await memorySpace.remember({
       spaceId: spaceA.id, family: "state", type: "decision", content: "Second Core"
@@ -387,12 +413,12 @@ test("memory_checkpoint exposes completed/noop semantics and hides boundary cont
       })
     );
     assert.deepEqual(repeated, { status: "noop", reason: "no_uncommitted_events" });
-    assert.equal(await inputIsRejected(connection.client, "memory_checkpoint", {
+    await assertSchemaValidationFailure(connection.client, "memory_checkpoint", {
       sessionId: session.id,
       toEventId: event.id,
       idempotencyKey: "spoof",
       trigger: "session_end"
-    }), true);
+    });
   } finally {
     await connection.close();
     await memorySpace.close();
@@ -421,7 +447,7 @@ test("MCP hides internal storage failures behind a fail-visible stable envelope"
   }
 });
 
-test("stdio entrypoint serves the shared MCP tools against durable SQLite", async () => {
+test("standalone development stdio entrypoint requires explicit opt-in", async () => {
   const directory = mkdtempSync(join(tmpdir(), "memory-space-mcp-stdio-"));
   const databasePath = join(directory, "memory.db");
   const memorySpace = createDefaultMemorySpace({ databasePath });
@@ -430,13 +456,23 @@ test("stdio entrypoint serves the shared MCP tools against durable SQLite", asyn
   await memorySpace.close();
   bind(directory, space.id);
 
+  const entrypoint = fileURLToPath(new URL("../src/mcp/standalone-stdio.ts", import.meta.url));
+  const rejected = spawnSync(process.execPath, ["--experimental-strip-types", entrypoint], {
+    cwd: directory,
+    env: { MEMORY_SPACE_DB: databasePath },
+    encoding: "utf8"
+  });
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /development-only|ALLOW_STANDALONE/u);
+
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: ["--experimental-strip-types", fileURLToPath(new URL("../src/mcp/stdio.ts", import.meta.url))],
+    args: ["--experimental-strip-types", entrypoint],
     cwd: directory,
     env: {
       MEMORY_SPACE_DB: databasePath,
-      MEMORY_SPACE_CORE_LIMIT: "64"
+      MEMORY_SPACE_CORE_LIMIT: "64",
+      MEMORY_SPACE_ALLOW_STANDALONE: "1"
     },
     stderr: "pipe"
   });

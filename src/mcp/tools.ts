@@ -60,13 +60,15 @@ export class MemoryMcpGateway {
     spaceResolver?: SpaceResolver;
     checkpointPolicy?: CheckpointCoordinator;
     cwd?: string;
+    explicitSpaceId?: string;
   }) {
     this.memorySpace = options.memorySpace;
     this.checkpointPolicy = options.checkpointPolicy ?? new CheckpointPolicy(options.memorySpace);
     this.requestContext = new MCPRequestContextResolver({
       memorySpace: options.memorySpace,
       spaceResolver: options.spaceResolver,
-      cwd: options.cwd
+      cwd: options.cwd,
+      explicitSpaceId: options.explicitSpaceId
     });
   }
 

@@ -1,6 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { AddressInfo } from "node:net";
-import { pathToFileURL } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   MemorySpace,
   type AppendEventInput,
@@ -8,7 +6,6 @@ import {
   type CreateSpaceInput,
   type RememberInput
 } from "../application/memory-space.ts";
-import { createDefaultMemorySpace } from "../composition.ts";
 import { MemorySpaceError, NotFoundError, ValidationError } from "../domain/errors.ts";
 import type { MemorySearchInput, MemoryStatus } from "../domain/types.ts";
 
@@ -155,24 +152,3 @@ export function createRequestHandler(memorySpace: MemorySpace) {
     }
   };
 }
-
-export function startServer(options: {
-  databasePath?: string; host?: string; port?: number; coreLimit?: number;
-} = {}) {
-  const databasePath = options.databasePath ?? process.env.MEMORY_SPACE_DB ?? "./data/memory-space.db";
-  const host = options.host ?? process.env.MEMORY_SPACE_HOST ?? "127.0.0.1";
-  const port = options.port ?? Number(process.env.MEMORY_SPACE_PORT ?? 4310);
-  const coreLimit = options.coreLimit ?? Number(process.env.MEMORY_SPACE_CORE_LIMIT ?? 64);
-  const memorySpace = createDefaultMemorySpace({ databasePath, coreLimit });
-  const server = createServer(createRequestHandler(memorySpace));
-  server.listen(port, host, () => {
-    const address = server.address() as AddressInfo;
-    console.log(`memory-space listening on http://${host}:${address.port}`);
-  });
-  const close = () => server.close(() => void memorySpace.close().then(() => process.exit(0)));
-  process.once("SIGINT", close);
-  process.once("SIGTERM", close);
-  return { server, memorySpace };
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) startServer();

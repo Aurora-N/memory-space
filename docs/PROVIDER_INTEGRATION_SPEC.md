@@ -1004,6 +1004,18 @@ interface MCPError {
 }
 ```
 
+P1 transport-boundary clarification:
+
+```text
+MCP protocol/schema validation failure
+→ MCP SDK/protocol validation error
+
+schema-valid domain/integration execution failure
+→ stable MCPError structured tool result
+```
+
+Both cases are fail-visible. Strict tool schemas must not be weakened to force protocol-level validation failures through the domain error envelope. SQLite and unexpected internal failures remain hidden behind `MEMORY_SERVICE_UNAVAILABLE`.
+
 The exact list may reuse existing domain error codes where already stable.
 
 Invariant:

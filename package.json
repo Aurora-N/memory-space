@@ -12,7 +12,7 @@
   "exports": "./src/index.ts",
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
-    "mcp": "node --experimental-strip-types src/mcp/stdio.ts",
+    "mcp:standalone": "node --experimental-strip-types src/mcp/standalone-stdio.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
     "lint": "node scripts/lint.mjs",
     "typecheck": "tsc --noEmit",
@@ -25,7 +25,9 @@
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
+    "hono": "catalog:",
     "zod": "catalog:"
   }
 }
