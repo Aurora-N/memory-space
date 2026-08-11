@@ -1,6 +1,6 @@
 # Codex Provider Integration
 
-**Status:** P2 implementation and automated validation complete; real-Codex smoke pending; not Frozen
+**Status:** P2 Frozen after real-Codex smoke validation
 
 Protocol references: [Codex Hooks](https://developers.openai.com/codex/hooks)
 and [Codex MCP](https://developers.openai.com/codex/mcp).
@@ -114,8 +114,25 @@ inside the trusted runtime rather than the tool schema.
 
 ## 5. Manual smoke test
 
-This real-provider smoke has not yet been recorded in the repository. Until it
-is completed successfully, P2 is not Frozen and P3 must not start.
+The real-provider smoke passed on 2026-08-11 with `codex-cli 0.147.0`. The
+evidence and exact Session identifiers are recorded in
+[`validation/CODEX_P2_SMOKE.md`](./validation/CODEX_P2_SMOKE.md).
+
+The repeatable runner requires an authenticated Codex CLI and macOS:
+
+```bash
+pnpm run smoke:codex:p2 -- --preflight
+pnpm run smoke:codex:p2
+```
+
+The read-only preflight makes no model calls. The full runner reclaims only an
+exact smoke hook left by an interrupted earlier run and refuses to replace any
+other project `.codex/hooks.json`. It uses temporary daemon/database state and
+shows eight numbered progress stages plus 20-second `WAIT` heartbeats during
+real Codex calls. Progress goes to stderr while the final machine-readable
+result stays on stdout. It only reports PASS after cross-checking native hooks,
+Codex MCP calls, and persisted Memory Space state. The following steps remain
+useful for an independent manual re-check:
 
 1. Start the daemon and Codex from the bound project.
 2. Confirm the initial context contains a `Memory Space` Session handle.

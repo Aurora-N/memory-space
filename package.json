@@ -13,11 +13,12 @@
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
     "codex:hook": "node --experimental-strip-types src/adapters/providers/codex/hook.ts",
+    "smoke:codex:p2": "node scripts/codex-p2-real-smoke.mjs",
     "mcp:standalone": "node --experimental-strip-types src/mcp/standalone-stdio.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
     "lint": "node scripts/lint.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
+    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test",
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {

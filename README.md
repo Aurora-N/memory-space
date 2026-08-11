@@ -121,4 +121,6 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **Provider Integration P0: FROZEN. MCP Command Plane P1: FROZEN after CR-PHASE4.**
 
-**Codex P2: implementation and automated validation complete; real-Codex smoke pending; NOT YET FROZEN. P3 has not started.**
+**Codex P2: FROZEN after the recorded real-Codex CLI smoke. P3 has not started.**
+
+Real-provider evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).

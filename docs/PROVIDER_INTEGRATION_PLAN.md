@@ -1,12 +1,12 @@
 # Provider Integration v1 — Implementation Plan
 
-**Status:** P2 implementation and automated validation complete; real-Codex smoke pending
+**Status:** P2 Frozen after real-Codex smoke validation
 
 **P0 status:** Frozen after CR-PHASE3
 
 **P1 status:** Frozen after CR-PHASE4 runtime hardening
 
-**P2 status:** NOT YET FROZEN — real-Codex smoke has not been recorded
+**P2 status:** FROZEN — real-Codex smoke passed
 
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 
@@ -713,8 +713,10 @@ P1 is complete when:
 
 **Implementation status:** The native hook bridge, daemon lifecycle route,
 bootstrap injection, Conversation-lite capture, fail-open behavior, and Codex
-lifecycle eval are implemented and pass automated validation. A real Codex
-smoke has not yet been recorded, so P2 is not Frozen and P3 has not started.
+lifecycle eval are implemented and pass automated validation. The real Codex
+CLI smoke is recorded in
+[`validation/CODEX_P2_SMOKE.md`](./validation/CODEX_P2_SMOKE.md), so P2 is
+Frozen. P3 has not started.
 
 ## Objective
 

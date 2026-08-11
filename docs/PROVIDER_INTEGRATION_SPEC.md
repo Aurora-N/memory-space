@@ -338,16 +338,29 @@ Critical invariant:
 After Session creation:
 
 ```text
-sessionId
-   ↓
+(provider, externalSessionId)
+        ↓
+existing Memory Session
+        ↓
 Session.spaceId
 ```
 
 is authoritative.
 
-Changing `cwd` inside the agent session must not rebind the Session to another Space.
+`cwd` participates in Space resolution only when the provider-native identity
+is first bound to a Memory Session.
 
-If the same provider native session identity is later presented under a conflicting Space binding, the resolver must return a conflict rather than silently migrate/rebind the Session.
+After that binding exists, later lifecycle events and repeated SessionStart
+deliveries MUST resolve the existing provider Session before considering
+filesystem-derived binding. A changed `cwd`, including a cwd that would resolve
+to another nearest-ancestor `.memory-space/config.json`, MUST NOT migrate,
+rebind, or conflict with the existing Session.
+
+A trusted explicit Space override is different from cwd-derived runtime
+evidence. If a trusted `explicitSpaceId` is supplied for an already-bound
+provider Session and it does not match `Session.spaceId`, integration MUST
+return an explicit Space binding conflict rather than silently migrate the
+Session.
 
 ---
 
