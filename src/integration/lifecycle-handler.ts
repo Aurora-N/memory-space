@@ -12,6 +12,7 @@ import type {
 import { validateProviderLifecycleEvent } from "../provider/types.ts";
 import type { SpaceBinding, SpaceResolutionInput } from "../binding/space-resolver.ts";
 import type { CheckpointCoordinator, CheckpointPolicyResult } from "./checkpoint-policy.ts";
+import { SpaceBindingConflictError } from "./errors.ts";
 import type { ProviderSessionResolutionInput } from "./provider-session-resolver.ts";
 
 interface LifecycleMemorySpace {
@@ -26,6 +27,7 @@ interface LifecycleSpaceResolver {
 
 interface LifecycleSessionResolver {
   resolve(input: ProviderSessionResolutionInput): Promise<Session>;
+  findOptional(provider: string, externalSessionId: string): Promise<Session | undefined>;
   find(provider: string, externalSessionId: string): Promise<Session>;
 }
 
@@ -127,6 +129,27 @@ export class LifecycleHandler {
   }
 
   async #start(event: ProviderSessionStartEvent, context: LifecycleContext): Promise<LifecycleResult> {
+    if (event.externalSessionId) {
+      const existing = await this.sessionResolver.findOptional(event.provider, event.externalSessionId);
+      if (existing) {
+        if (context.explicitSpaceId !== undefined) {
+          const explicitBinding = await this.spaceResolver.resolve({
+            explicitSpaceId: context.explicitSpaceId
+          });
+          if (explicitBinding.spaceId !== existing.spaceId) {
+            throw new SpaceBindingConflictError(
+              event.provider,
+              event.externalSessionId,
+              explicitBinding.spaceId,
+              existing.spaceId
+            );
+          }
+        }
+        const bootstrap = await this.memorySpace.bootstrap(existing.spaceId);
+        return { status: "ok", type: "session_start", session: existing, bootstrap };
+      }
+    }
+
     const binding = await this.spaceResolver.resolve({
       cwd: event.cwd ?? context.cwd,
       explicitSpaceId: context.explicitSpaceId

@@ -34,14 +34,18 @@ function nativePayload(
   };
 }
 
-function integration(memorySpace: ReturnType<typeof createDefaultMemorySpace>) {
+function integration(
+  memorySpace: ReturnType<typeof createDefaultMemorySpace>,
+  explicitSpaceId?: string
+) {
   return new CodexLifecycleIntegration({
     lifecycleHandler: new LifecycleHandler({
       memorySpace,
       spaceResolver: new SpaceResolver(),
       sessionResolver: new ProviderSessionResolver(memorySpace),
       checkpointPolicy: new CheckpointPolicy(memorySpace)
-    })
+    }),
+    runtime: { explicitSpaceId }
   });
 }
 
@@ -168,20 +172,38 @@ test("eval Codex native lifecycle completes durable bootstrap, capture, checkpoi
     assert.equal(repeated.status, "ok");
     if (repeated.status !== "ok") throw new Error("Expected repeated PreCompact success");
     assert.equal(repeated.checkpointStatus, "noop");
+    const compactReentry = await codex.handleNative(nativePayload("SessionStart", nested, {
+      source: "compact"
+    }));
+    assert.equal(compactReentry.status, "ok");
+    if (compactReentry.status !== "ok") throw new Error("Expected compact re-entry success");
+    assert.equal(compactReentry.sessionId, started.sessionId);
+    assert.match(compactReentry.output?.hookSpecificOutput?.additionalContext ?? "",
+      /P2 implementation is ready/u);
+    assert.equal((await first.getSession(session.id)).spaceId, "codex-space-a");
+
+    const resumedAfterCwdChange = await codex.handleNative(nativePayload("SessionStart", nested, {
+      source: "resume"
+    }));
+    assert.equal(resumedAfterCwdChange.status, "ok");
+    if (resumedAfterCwdChange.status !== "ok") throw new Error("Expected changed-cwd resume success");
+    assert.equal(resumedAfterCwdChange.sessionId, started.sessionId);
+    assert.equal((await first.getSession(session.id)).spaceId, "codex-space-a");
+
+    const conflictingStart = await integration(first, "codex-space-b").handleNative(
+      nativePayload("SessionStart", nested, { source: "resume" })
+    );
+    assert.equal(conflictingStart.status, "warning");
+    if (conflictingStart.status !== "warning") throw new Error("Expected explicit binding conflict warning");
+    assert.equal(conflictingStart.warning.error.code, "SPACE_BINDING_CONFLICT");
+    assert.doesNotMatch(conflictingStart.warning.error.message, /codex-space|codex-native-session/u);
+    assert.doesNotMatch(conflictingStart.output.systemMessage ?? "", /codex-space|codex-native-session/u);
+    assert.equal((await first.getSession(session.id)).spaceId, "codex-space-a");
+
     const ended = await codex.handleNative(nativePayload("SessionEnd", nested, { reason: "other" }));
     assert.equal(ended.status, "ok");
     if (ended.status !== "ok") throw new Error("Expected SessionEnd success");
     assert.equal(ended.checkpointStatus, "noop");
-
-    const conflictingStart = await codex.handleNative(nativePayload("SessionStart", nested, {
-      source: "resume"
-    }));
-    assert.equal(conflictingStart.status, "warning");
-    if (conflictingStart.status !== "warning") throw new Error("Expected binding conflict warning");
-    assert.equal(conflictingStart.warning.error.code, "PROVIDER_SESSION_SPACE_CONFLICT");
-    assert.doesNotMatch(conflictingStart.warning.error.message, /codex-space|codex-native-session/u);
-    assert.doesNotMatch(conflictingStart.output.systemMessage ?? "", /codex-space|codex-native-session/u);
-    assert.equal((await first.getSession(session.id)).spaceId, "codex-space-a");
     await first.close();
 
     const reopened = createDefaultMemorySpace({ databasePath });

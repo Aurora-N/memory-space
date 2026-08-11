@@ -5,6 +5,8 @@
 **Target branch:** `agent/provider-integration-v1`  
 **Depends on:** Frozen Memory Space MVP domain model, CR-PHASE1, CR-PHASE2
 
+**Normative guardrails:** [`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md)
+
 ---
 
 ## 1. Purpose

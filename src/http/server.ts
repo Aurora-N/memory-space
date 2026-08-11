@@ -13,6 +13,14 @@ type JsonObject = Record<string, unknown>;
 type Params = Record<string, string>;
 
 export async function readJsonBody(request: IncomingMessage): Promise<JsonObject> {
+  const rawContentType = request.headers["content-type"];
+  const contentType = (Array.isArray(rawContentType) ? rawContentType[0] : rawContentType)
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (contentType !== "application/json") {
+    throw new ValidationError("Content-Type must be application/json");
+  }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {

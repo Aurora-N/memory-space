@@ -13,11 +13,20 @@ interface HttpResult {
 
 function createClient(memorySpace: MemorySpace) {
   const handler = createRequestHandler(memorySpace);
-  return async (method: string, url: string, body?: Record<string, unknown>): Promise<HttpResult> => {
+  return async (
+    method: string,
+    url: string,
+    body?: Record<string, unknown>,
+    options: { contentType?: string | null } = {}
+  ): Promise<HttpResult> => {
     const input = body ? [Buffer.from(JSON.stringify(body))] : [];
     const incoming = Readable.from(input) as IncomingMessage;
     incoming.method = method;
     incoming.url = url;
+    const contentType = options.contentType === undefined
+      ? body ? "application/json" : undefined
+      : options.contentType ?? undefined;
+    incoming.headers = contentType ? { "content-type": contentType } : {};
     let status = 0;
     let responseBody = "";
     const response = {
@@ -45,6 +54,33 @@ test("HTTP adapter exposes the Space/Session/Memory path", async () => {
     const missing = await request("GET", "/spaces/missing");
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error.code, "NOT_FOUND");
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("HTTP rejects missing or wrong JSON media types before mutation", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const request = createClient(memorySpace);
+  try {
+    const missing = await request(
+      "POST", "/spaces", { id: "missing-content-type", name: "Missing" }, { contentType: null }
+    );
+    assert.equal(missing.status, 422);
+    assert.equal(missing.body.error.code, "VALIDATION_ERROR");
+
+    const wrong = await request(
+      "POST", "/spaces", { id: "wrong-content-type", name: "Wrong" }, { contentType: "text/plain" }
+    );
+    assert.equal(wrong.status, 422);
+    assert.equal(wrong.body.error.code, "VALIDATION_ERROR");
+
+    assert.equal((await request("POST", "/spaces", {
+      id: "missing-content-type", name: "Created after rejection"
+    })).status, 201);
+    assert.equal((await request("POST", "/spaces", {
+      id: "wrong-content-type", name: "Created after rejection"
+    }, { contentType: "application/json; charset=utf-8" })).status, 201);
   } finally {
     await memorySpace.close();
   }

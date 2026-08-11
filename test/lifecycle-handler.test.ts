@@ -9,6 +9,7 @@ import {
   LifecycleHandler,
   NoopExtractor,
   ProviderSessionResolver,
+  SpaceBindingConflictError,
   SpaceResolver,
   ValidationError
 } from "../src/index.ts";
@@ -48,6 +49,27 @@ test("LifecycleHandler binds once, captures ordered conversation-lite events, an
       type: "session_start", provider: "fake", externalSessionId: "native-1", cwd: directory
     });
     assert.equal(duplicate.session.id, started.session.id);
+    const resumedAfterCwdChange = await handler.handle({
+      type: "session_start", provider: "fake", externalSessionId: "native-1", cwd: nested
+    });
+    assert.equal(resumedAfterCwdChange.type, "session_start");
+    if (resumedAfterCwdChange.type !== "session_start") {
+      throw new Error("Expected session_start result after cwd change");
+    }
+    assert.equal(resumedAfterCwdChange.session.id, started.session.id);
+    assert.equal(resumedAfterCwdChange.session.spaceId, "space-root");
+    assert.equal(resumedAfterCwdChange.bootstrap.space.id, "space-root");
+    const resumedWithMatchingExplicitSpace = await handler.handle({
+      type: "session_start", provider: "fake", externalSessionId: "native-1", cwd: nested
+    }, { explicitSpaceId: "space-root" });
+    assert.equal(resumedWithMatchingExplicitSpace.session.id, started.session.id);
+    await assert.rejects(
+      handler.handle({
+        type: "session_start", provider: "fake", externalSessionId: "native-1", cwd: nested
+      }, { explicitSpaceId: "space-nested" }),
+      (error: unknown) => error instanceof SpaceBindingConflictError
+        && error.code === "SPACE_BINDING_CONFLICT"
+    );
 
     await handler.handle({
       type: "user_prompt", provider: "fake", externalSessionId: "native-1",
@@ -181,6 +203,7 @@ test("LifecycleHandler validates normalized events before Memory operations", as
     spaceResolver: new SpaceResolver(),
     sessionResolver: {
       async resolve() { throw new Error("not expected"); },
+      async findOptional() { sessionLookups += 1; throw new Error("not expected"); },
       async find() { sessionLookups += 1; throw new Error("not expected"); }
     },
     checkpointPolicy: new CheckpointPolicy(memorySpace)

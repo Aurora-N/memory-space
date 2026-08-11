@@ -14,6 +14,7 @@ import {
   createDefaultMemorySpace,
   type DefaultMemorySpaceOptions
 } from "./composition.ts";
+import { MemorySpaceError, ValidationError } from "./domain/errors.ts";
 import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
 import { LifecycleHandler } from "./integration/lifecycle-handler.ts";
@@ -42,22 +43,36 @@ export interface MemorySpaceDaemon {
   close(): Promise<void>;
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.trim().toLowerCase());
+}
+
 function internalError(response: ServerResponse, error: unknown): void {
-  console.error(error);
   if (response.headersSent) {
     response.end();
     return;
   }
-  response.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify({
-    error: { code: "INTERNAL_ERROR", message: "Internal server error" }
-  }));
+  const known = error instanceof MemorySpaceError;
+  if (!known) console.error(error);
+  sendJson(response, known ? error.status : 500, {
+    error: {
+      code: known ? error.code : "INTERNAL_ERROR",
+      message: known ? error.message : "Internal server error"
+    }
+  });
 }
 
 export function createMemorySpaceDaemon(
   options: MemorySpaceDaemonOptions = {}
 ): MemorySpaceDaemon {
   const host = options.host ?? process.env.MEMORY_SPACE_HOST ?? "127.0.0.1";
+  if (!isLoopbackHost(host)) {
+    throw new ValidationError(
+      "Memory Space daemon host must be a loopback address (127.0.0.1, ::1, or localhost)"
+    );
+  }
   const port = options.port ?? Number(process.env.MEMORY_SPACE_PORT ?? 4310);
   const memorySpaceOptions: DefaultMemorySpaceOptions = {
     databasePath: options.databasePath ?? process.env.MEMORY_SPACE_DB ?? "./data/memory-space.db",
@@ -107,9 +122,8 @@ export function createMemorySpaceDaemon(
   const validateLocalOrigin = localhostOriginValidation();
   const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", "http://memory-space.local");
-    const protectedLocalRoute = url.pathname === "/mcp"
-      || url.pathname === "/providers/codex/lifecycle";
-    if (protectedLocalRoute
+    const healthRequest = request.method === "GET" && url.pathname === "/health";
+    if (!healthRequest
       && (!validateLocalHost(request, response) || !validateLocalOrigin(request, response))) return;
     if (url.pathname === "/mcp") {
       await mcpNodeHandler(request, response);

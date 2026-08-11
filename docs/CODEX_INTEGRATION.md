@@ -1,6 +1,6 @@
 # Codex Provider Integration
 
-**Status:** P2 local integration
+**Status:** P2 implementation and automated validation complete; real-Codex smoke pending; not Frozen
 
 Protocol references: [Codex Hooks](https://developers.openai.com/codex/hooks)
 and [Codex MCP](https://developers.openai.com/codex/mcp).
@@ -61,9 +61,13 @@ Add this trusted project-local binding at
 ```
 
 The native Codex `cwd` is used only when first binding a provider Session.
-After that, the durable Session binding is authoritative; changing cwd cannot
-migrate the Session. A daemon-level `MEMORY_SPACE_SPACE_ID` remains the trusted
-explicit override and takes precedence over hook cwd.
+Every later `SessionStart` (including `source = "compact"` and `"resume"`)
+first resolves the durable `(provider, externalSessionId)` identity. The
+existing Session and its Space are authoritative, so changing cwd cannot
+migrate or conflict with that Session. A daemon-level
+`MEMORY_SPACE_SPACE_ID` is a trusted explicit binding: it binds a new Session,
+but on re-entry it must match the existing Session Space or the hook returns a
+non-blocking `SPACE_BINDING_CONFLICT` warning.
 
 ## 3. Configure Codex hooks
 
@@ -91,6 +95,13 @@ Changed hook definitions must be reviewed again. Project-local hooks only load
 for a trusted project. Install the Memory Space hook configuration in only one
 active hook source; Codex merges matching hook sources and runs them all.
 
+Codex includes `turn_id` on turn-scoped hooks. The P2 adapter validates it but
+does not persist it or use it as an idempotency key. If the same hook command is
+installed in multiple active sources, duplicate turn evidence can therefore be
+captured. This is an accepted P2 limitation: use one active hook source. A
+future provider-event idempotency design may use provider + external Session +
+event metadata; `TranscriptRef.cursor` is not repurposed to store `turn_id`.
+
 ## 4. Configure MCP
 
 Merge [`examples/codex/config.toml`](../examples/codex/config.toml) into the
@@ -102,6 +113,9 @@ the latest Handoff. Durable MCP tools use that handle. Project binding remains
 inside the trusted runtime rather than the tool schema.
 
 ## 5. Manual smoke test
+
+This real-provider smoke has not yet been recorded in the repository. Until it
+is completed successfully, P2 is not Frozen and P3 must not start.
 
 1. Start the daemon and Codex from the bound project.
 2. Confirm the initial context contains a `Memory Space` Session handle.
@@ -129,8 +143,13 @@ conversation is not an immediate end signal.
 
 ## Security and current limits
 
-- The daemon is local-only by default and has no authentication in v1.
-- The lifecycle and MCP routes enforce localhost Host/Origin validation.
+- The unauthenticated v1 daemon is loopback-only: only `127.0.0.1`, `::1`, and
+  `localhost` listener values are accepted. Remote/LAN deployment is unsupported.
+- Every daemon route except `GET /health` enforces the same localhost
+  Host/Origin validation before routing.
+- Lifecycle and REST requests with JSON bodies require
+  `Content-Type: application/json`; missing or other media types are rejected
+  before mutation.
 - Provider fields such as `spaceId`, `tier`, `recommendedTier`, `actor`, and
   `force` are ignored by the Codex adapter and cannot become privileged Memory
   commands.

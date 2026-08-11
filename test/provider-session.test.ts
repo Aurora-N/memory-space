@@ -26,6 +26,8 @@ test("Provider Session identity is durable, atomic, provider-scoped, and Space-f
     ]);
     assert.equal(left.id, right.id);
     assert.equal(left.spaceId, spaceA.id);
+    assert.equal((await firstResolver.findOptional("fake", "native-1"))?.id, left.id);
+    assert.equal(await firstResolver.findOptional("fake", "missing-native-session"), undefined);
 
     const directSameSpace = await first.getOrCreateProviderSession({
       provider: "fake", externalSessionId: "native-1", spaceId: spaceA.id

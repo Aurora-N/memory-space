@@ -50,4 +50,10 @@ export class ProviderSessionResolver {
     if (!session) throw new ProviderSessionNotFoundError(provider, externalSessionId);
     return session;
   }
+
+  async findOptional(providerInput: string, externalSessionIdInput: string): Promise<Session | undefined> {
+    const provider = requiredString(providerInput, "provider");
+    const externalSessionId = requiredString(externalSessionIdInput, "externalSessionId");
+    return this.memorySpace.findProviderSession(provider, externalSessionId);
+  }
 }

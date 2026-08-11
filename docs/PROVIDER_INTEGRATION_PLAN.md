@@ -1,13 +1,17 @@
 # Provider Integration v1 — Implementation Plan
 
-**Status:** Ready for Coding Agent  
+**Status:** P2 implementation and automated validation complete; real-Codex smoke pending
+
 **P0 status:** Frozen after CR-PHASE3
 
 **P1 status:** Frozen after CR-PHASE4 runtime hardening
 
-**P2 status:** Frozen after Codex native hook integration validation
+**P2 status:** NOT YET FROZEN — real-Codex smoke has not been recorded
 
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
+
+**Normative guardrails:** [`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md)
+
 **Target branch:** `agent/provider-integration-v1`  
 **Delivery model:** Incremental phases with code review between phases
 
@@ -45,6 +49,10 @@ Stop for review after P0/P1 and again after P2 before implementing Claude-specif
 ---
 
 # 2. Global Constraints
+
+The normative Provider Integration guardrails are required reading before each
+phase. In particular, P3 and P4 must not begin without re-reading
+[`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md).
 
 Do not introduce in this implementation plan:
 
@@ -703,9 +711,10 @@ P1 is complete when:
 
 # 6. P2 — Codex Provider Integration
 
-**Implementation status:** Frozen. The native hook bridge, daemon lifecycle
-route, bootstrap injection, Conversation-lite capture, fail-open behavior, and
-Codex lifecycle eval are implemented and verified. P3 has not started.
+**Implementation status:** The native hook bridge, daemon lifecycle route,
+bootstrap injection, Conversation-lite capture, fail-open behavior, and Codex
+lifecycle eval are implemented and pass automated validation. A real Codex
+smoke has not yet been recorded, so P2 is not Frozen and P3 has not started.
 
 ## Objective
 

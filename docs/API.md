@@ -1,6 +1,16 @@
 # memory-space daemon API
 
-The default daemon listens on `127.0.0.1:4310`, owns one `MemorySpace`, and serves the JSON HTTP API plus the Streamable HTTP MCP endpoint at `/mcp`. HTTP API error responses use:
+The default unauthenticated v1 daemon is local-only. It accepts only the
+explicit loopback listen hosts `127.0.0.1`, `::1`, and `localhost`; remote or
+LAN deployment is unsupported without a future authenticated design. It owns
+one `MemorySpace` and serves the JSON HTTP API plus the Streamable HTTP MCP
+endpoint at `/mcp`.
+
+Every route except `GET /health` passes the same localhost Host/Origin guard
+before routing. Every HTTP endpoint that consumes a JSON body requires
+`Content-Type: application/json` (parameters such as `charset=utf-8` are
+accepted); missing or other media types are rejected before mutation. HTTP API
+error responses use:
 
 ```json
 {

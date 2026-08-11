@@ -29,7 +29,7 @@ cp .env.example .env
 pnpm start
 ```
 
-The server defaults to `http://127.0.0.1:4310` and persists to `./data/memory-space.db`. Environment values can be exported from `.env.example`; the server intentionally does not hide configuration loading inside the domain layer.
+The server defaults to `http://127.0.0.1:4310` and persists to `./data/memory-space.db`. The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, or `localhost`; remote/LAN deployment is unsupported. Environment values can be exported from `.env.example`; the server intentionally does not hide configuration loading inside the domain layer.
 
 This repository is also a pnpm workspace. The current MVP remains the root package; future deployable applications belong in `apps/*`, reusable packages in `packages/*`, and repository tooling in `tools/*`. Shared toolchain versions use the workspace catalog. Run `pnpm run check:workspace` to execute each workspace package's `check` script when present.
 
@@ -56,11 +56,11 @@ HTTP API: http://127.0.0.1:4310/...
 MCP:      http://127.0.0.1:4310/mcp
 ```
 
-Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. The local MCP endpoint validates localhost Host and Origin values to reduce DNS-rebinding exposure.
+Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. Every daemon route except `GET /health` validates localhost Host and Origin values before routing to reduce DNS-rebinding exposure. JSON body endpoints require `Content-Type: application/json` before any mutation.
 
 The provider-neutral `LifecycleHandler` is composed against the daemon's same
-`MemorySpace`; provider-specific lifecycle routes remain P2 work and are not
-exposed by this P1 runtime.
+`MemorySpace`; the Codex lifecycle endpoint and MCP command plane therefore use
+the same in-process owner.
 
 For no-Session read tools, `MEMORY_SPACE_SPACE_ID` is the highest-priority trusted explicit Space override. Otherwise, `MEMORY_SPACE_CWD` is the trusted directory used for nearest-ancestor `.memory-space/config.json` resolution; it defaults to daemon cwd only when not configured. One daemon endpoint therefore has one trusted no-Session project context. A supplied Session ID is always authoritative and cannot be rebound by either setting. Neither `cwd` nor `spaceId` is accepted as a tool argument.
 
@@ -120,3 +120,5 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 **Implementation status: MVP capability surface complete and covered by automated tests/eval.**
 
 **Provider Integration P0: FROZEN. MCP Command Plane P1: FROZEN after CR-PHASE4.**
+
+**Codex P2: implementation and automated validation complete; real-Codex smoke pending; NOT YET FROZEN. P3 has not started.**

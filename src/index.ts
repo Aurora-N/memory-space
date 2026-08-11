@@ -90,7 +90,7 @@ export type {
 } from "./mcp/request-context.ts";
 export { MemoryMcpCommandError, toMemoryMcpError } from "./mcp/errors.ts";
 export type { MemoryMcpError, MemoryMcpErrorCode } from "./mcp/errors.ts";
-export { createMemorySpaceDaemon, startServer } from "./daemon.ts";
+export { createMemorySpaceDaemon, isLoopbackHost, startServer } from "./daemon.ts";
 export type { MemorySpaceDaemon, MemorySpaceDaemonOptions } from "./daemon.ts";
 export * from "./domain/types.ts";
 export { MemorySpaceError, NotFoundError, ValidationError, ConflictError } from "./domain/errors.ts";
