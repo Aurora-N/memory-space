@@ -12,6 +12,7 @@
   "exports": "./src/index.ts",
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
+    "mcp": "node --experimental-strip-types src/mcp/stdio.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
     "lint": "node scripts/lint.mjs",
     "typecheck": "tsc --noEmit",
@@ -19,7 +20,12 @@
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "catalog:",
+    "zod": "catalog:"
   }
 }

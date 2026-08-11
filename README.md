@@ -14,6 +14,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - checkpoint-time Handoff Snapshots
 - Space-isolated lexical search and structured agent context
 - TypeScript application API plus a thin JSON HTTP adapter
+- provider-neutral MCP command plane with six policy-bounded tools
 - data-driven cross-agent handoff evaluation
 
 ## Run locally
@@ -39,6 +40,20 @@ curl -s -X POST http://127.0.0.1:4310/spaces \
 ```
 
 See [`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint event examples.
+
+## MCP command plane
+
+Start the shared stdio MCP server with:
+
+```bash
+MEMORY_SPACE_DB=./data/memory-space.db \
+MEMORY_SPACE_CWD=/absolute/path/to/bound/project \
+pnpm mcp
+```
+
+`MEMORY_SPACE_CWD` is the trusted runtime directory used for nearest-ancestor `.memory-space/config.json` resolution when a read tool does not receive a Session ID. A supplied Session ID is authoritative and cannot be rebound by cwd. Durable tools (`memory_remember`, `memory_promote`, and `memory_checkpoint`) always require a Session.
+
+The MCP surface is exactly `memory_bootstrap`, `memory_context`, `memory_search`, `memory_remember`, `memory_promote`, and `memory_checkpoint`. It intentionally exposes no raw CRUD or agent-controlled Space, tier, actor, or checkpoint-boundary fields.
 
 ## Architecture
 
@@ -68,3 +83,5 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 **Domain contract: MVP v1 frozen.**
 
 **Implementation status: MVP capability surface complete and covered by automated tests/eval.**
+
+**Provider Integration status: P0 frozen after CR-PHASE3; P1 MCP Command Plane complete.**

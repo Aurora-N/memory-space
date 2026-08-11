@@ -2,6 +2,7 @@
 
 **Status:** Ready for Coding Agent  
 **P0 status:** Frozen after CR-PHASE3
+**P1 status:** Complete — shared six-tool MCP command plane implemented and verified
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 **Target branch:** `agent/provider-integration-v1`  
 **Delivery model:** Incremental phases with code review between phases
