@@ -12,6 +12,24 @@ export type {
   RememberInput
 } from "./application/memory-space.ts";
 export { RuleBasedExtractor, NoopExtractor } from "./adapters/rule-based-extractor.ts";
+export { CodexAdapter } from "./adapters/providers/codex/adapter.ts";
+export {
+  codexUnavailableOutput,
+  codexWarningOutput,
+  renderCodexBootstrap
+} from "./adapters/providers/codex/bootstrap-renderer.ts";
+export type {
+  CodexBootstrapOutput,
+  CodexHookOutput
+} from "./adapters/providers/codex/bootstrap-renderer.ts";
+export { invokeCodexLifecycleHook } from "./adapters/providers/codex/hook-client.ts";
+export type { InvokeCodexLifecycleHookOptions } from "./adapters/providers/codex/hook-client.ts";
+export { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
+export type {
+  CodexLifecycleIntegrationOptions,
+  CodexLifecycleResponse,
+  CodexLifecycleRuntimeContext
+} from "./adapters/providers/codex/integration.ts";
 export { SqliteMemoryStore } from "./adapters/sqlite/sqlite-store.ts";
 export { NoopCache } from "./ports/cache.ts";
 export type { CachePort } from "./ports/cache.ts";

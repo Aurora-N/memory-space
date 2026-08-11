@@ -1,0 +1,67 @@
+{
+  "description": "Memory Space Codex lifecycle integration",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm --dir /absolute/path/to/memory-space --silent codex:hook",
+            "timeout": 5,
+            "statusMessage": "Loading durable project memory",
+            "additionalContextLimit": 5000
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm --dir /absolute/path/to/memory-space --silent codex:hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm --dir /absolute/path/to/memory-space --silent codex:hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm --dir /absolute/path/to/memory-space --silent codex:hook",
+            "timeout": 5,
+            "statusMessage": "Checkpointing durable project memory"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm --dir /absolute/path/to/memory-space --silent codex:hook",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
+

@@ -7,12 +7,14 @@ import {
   toNodeHandler
 } from "@modelcontextprotocol/node";
 import type { MemorySpace } from "./application/memory-space.ts";
+import { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
+import type { CodexLifecycleRuntimeContext } from "./adapters/providers/codex/integration.ts";
 import { SpaceResolver } from "./binding/space-resolver.ts";
 import {
   createDefaultMemorySpace,
   type DefaultMemorySpaceOptions
 } from "./composition.ts";
-import { createRequestHandler } from "./http/server.ts";
+import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
 import { LifecycleHandler } from "./integration/lifecycle-handler.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
@@ -24,6 +26,7 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   host?: string;
   port?: number;
   mcpRuntime?: MCPRuntimeContext;
+  codexRuntime?: CodexLifecycleRuntimeContext;
   memorySpaceFactory?: (options: DefaultMemorySpaceOptions) => MemorySpace;
   onMcpError?: (error: Error) => void;
 }
@@ -32,6 +35,7 @@ export interface MemorySpaceDaemon {
   readonly server: Server;
   readonly memorySpace: MemorySpace;
   readonly lifecycleHandler: LifecycleHandler;
+  readonly codexIntegration: CodexLifecycleIntegration;
   readonly mcpGateway: MemoryMcpGateway;
   readonly mcpHttpHandler: McpHttpHandler;
   listen(): Promise<AddressInfo>;
@@ -74,6 +78,14 @@ export function createMemorySpaceDaemon(
     cwd: options.mcpRuntime?.cwd ?? process.env.MEMORY_SPACE_CWD ?? process.cwd(),
     explicitSpaceId: options.mcpRuntime?.explicitSpaceId ?? process.env.MEMORY_SPACE_SPACE_ID
   };
+  const codexRuntime: CodexLifecycleRuntimeContext = {
+    cwd: options.codexRuntime?.cwd ?? runtime.cwd,
+    explicitSpaceId: options.codexRuntime?.explicitSpaceId ?? runtime.explicitSpaceId
+  };
+  const codexIntegration = new CodexLifecycleIntegration({
+    lifecycleHandler,
+    runtime: codexRuntime
+  });
   const mcpGateway = new MemoryMcpGateway({
     memorySpace,
     spaceResolver,
@@ -91,13 +103,20 @@ export function createMemorySpaceDaemon(
     onerror: options.onMcpError ?? ((error) => console.error(error))
   });
   const httpHandler = createRequestHandler(memorySpace);
-  const validateMcpHost = localhostHostValidation();
-  const validateMcpOrigin = localhostOriginValidation();
+  const validateLocalHost = localhostHostValidation();
+  const validateLocalOrigin = localhostOriginValidation();
   const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", "http://memory-space.local");
+    const protectedLocalRoute = url.pathname === "/mcp"
+      || url.pathname === "/providers/codex/lifecycle";
+    if (protectedLocalRoute
+      && (!validateLocalHost(request, response) || !validateLocalOrigin(request, response))) return;
     if (url.pathname === "/mcp") {
-      if (!validateMcpHost(request, response) || !validateMcpOrigin(request, response)) return;
       await mcpNodeHandler(request, response);
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/providers/codex/lifecycle") {
+      sendJson(response, 200, await codexIntegration.handleNative(await readJsonBody(request)));
       return;
     }
     await httpHandler(request, response);
@@ -146,7 +165,16 @@ export function createMemorySpaceDaemon(
     return closePromise;
   };
 
-  return { server, memorySpace, lifecycleHandler, mcpGateway, mcpHttpHandler, listen, close };
+  return {
+    server,
+    memorySpace,
+    lifecycleHandler,
+    codexIntegration,
+    mcpGateway,
+    mcpHttpHandler,
+    listen,
+    close
+  };
 }
 
 export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpaceDaemon {
@@ -167,6 +195,7 @@ export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpace
   void daemon.listen().then((address) => {
     console.log(`memory-space listening on http://${address.address}:${address.port}`);
     console.log(`memory-space MCP endpoint: http://${address.address}:${address.port}/mcp`);
+    console.log(`memory-space Codex lifecycle endpoint: http://${address.address}:${address.port}/providers/codex/lifecycle`);
   }).catch(async (error: unknown) => {
     console.error(error);
     process.exitCode = 1;

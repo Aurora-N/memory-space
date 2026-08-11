@@ -16,6 +16,7 @@ The default daemon listens on `127.0.0.1:4310`, owns one `MemorySpace`, and serv
 | Capability | HTTP endpoint |
 | --- | --- |
 | MCP command plane | `GET /mcp`, `POST /mcp`, `DELETE /mcp` |
+| Codex lifecycle plane | `POST /providers/codex/lifecycle` |
 | `space.create` | `POST /spaces` |
 | `space.get` | `GET /spaces/:spaceId` |
 | `session.create` | `POST /spaces/:spaceId/sessions` |
@@ -35,6 +36,11 @@ The default daemon listens on `127.0.0.1:4310`, owns one `MemorySpace`, and serv
 | `bootstrap` | `GET /spaces/:spaceId/bootstrap` |
 
 Search supports comma-separated `families`, `types`, `tiers`, and `statuses`, plus a `limit` from 1 to 100. Omitted statuses default to `active`.
+
+The Codex lifecycle endpoint accepts native Codex hook JSON and always returns
+a provider-facing `ok`, `ignored`, or fail-open `warning` result after a valid
+HTTP request. It never accepts a trusted Memory command or a caller-controlled
+Space/tier/actor override. See [`CODEX_INTEGRATION.md`](./CODEX_INTEGRATION.md).
 
 `memory.remember` always creates new Memory as Indexed; callers must use the promotion endpoint afterward. Supplying `tier` to the HTTP remember endpoint is rejected. The HTTP promotion endpoint accepts only `reason`; its actor is fixed to `agent` because the MVP has no authenticated user boundary. Trusted application callers may still request user-authoritative promotion directly.
 

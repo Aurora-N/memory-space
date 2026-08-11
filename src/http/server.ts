@@ -12,7 +12,7 @@ import type { MemorySearchInput, MemoryStatus } from "../domain/types.ts";
 type JsonObject = Record<string, unknown>;
 type Params = Record<string, string>;
 
-async function readBody(request: IncomingMessage): Promise<JsonObject> {
+export async function readJsonBody(request: IncomingMessage): Promise<JsonObject> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -34,7 +34,7 @@ async function readBody(request: IncomingMessage): Promise<JsonObject> {
   }
 }
 
-function send(response: ServerResponse, status: number, body: unknown): void {
+export function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));
 }
@@ -76,26 +76,26 @@ export function createRequestHandler(memorySpace: MemorySpace) {
       let status = 200;
 
       if (request.method === "GET" && url.pathname === "/health") {
-        return send(response, 200, { status: "ok" });
+        return sendJson(response, 200, { status: "ok" });
       } else if (request.method === "POST" && url.pathname === "/spaces") {
-        result = await memorySpace.createSpace(await readBody(request) as unknown as CreateSpaceInput);
+        result = await memorySpace.createSpace(await readJsonBody(request) as unknown as CreateSpaceInput);
         status = 201;
       } else if ((params = route("GET", "/spaces/:spaceId"))) {
         result = await memorySpace.getSpace(params.spaceId);
       } else if ((params = route("POST", "/spaces/:spaceId/sessions"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.createSession({ ...body, spaceId: params.spaceId } as unknown as CreateSessionInput);
         status = 201;
       } else if ((params = route("GET", "/sessions/:sessionId"))) {
         result = await memorySpace.getSession(params.sessionId);
       } else if ((params = route("POST", "/sessions/:sessionId/events"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.appendEvent({ ...body, sessionId: params.sessionId } as unknown as AppendEventInput);
         status = 201;
       } else if ((params = route("GET", "/sessions/:sessionId/events"))) {
         result = await memorySpace.listEvents(params.sessionId);
       } else if ((params = route("POST", "/spaces/:spaceId/memories"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.remember({ ...body, spaceId: params.spaceId } as unknown as RememberInput);
         status = 201;
       } else if ((params = route("GET", "/memories/:memoryId/history"))) {
@@ -103,7 +103,7 @@ export function createRequestHandler(memorySpace: MemorySpace) {
       } else if ((params = route("GET", "/memories/:memoryId"))) {
         result = await memorySpace.getMemory(params.memoryId);
       } else if ((params = route("POST", "/memories/:memoryId/promote"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         if ("actor" in body) {
           throw new ValidationError("promotion actor is determined by the trusted adapter and cannot be provided");
         }
@@ -111,19 +111,19 @@ export function createRequestHandler(memorySpace: MemorySpace) {
           actor: "agent", reason: body.reason as string | undefined
         });
       } else if ((params = route("POST", "/memories/:memoryId/demote"))) {
-        result = await memorySpace.demote(params.memoryId, await readBody(request) as { reason?: string });
+        result = await memorySpace.demote(params.memoryId, await readJsonBody(request) as { reason?: string });
       } else if ((params = route("POST", "/memories/:memoryId/status"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.setMemoryStatus(
           params.memoryId, body.status as MemoryStatus, { reason: body.reason as string | undefined }
         );
       } else if ((params = route("GET", "/spaces/:spaceId/memories/search"))) {
         result = await memorySpace.search(searchInput(params.spaceId, url));
       } else if ((params = route("POST", "/spaces/:spaceId/memory-context"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.context({ ...body, spaceId: params.spaceId } as unknown as MemorySearchInput);
       } else if ((params = route("POST", "/sessions/:sessionId/checkpoints"))) {
-        const body = await readBody(request);
+        const body = await readJsonBody(request);
         result = await memorySpace.checkpoint({
           sessionId: params.sessionId,
           toEventId: body.toEventId as string | undefined,
@@ -139,10 +139,10 @@ export function createRequestHandler(memorySpace: MemorySpace) {
       } else {
         throw new NotFoundError("Route", `${request.method} ${url.pathname}`);
       }
-      send(response, status, result);
+      sendJson(response, status, result);
     } catch (error) {
       const known = error instanceof MemorySpaceError;
-      send(response, known ? error.status : 500, {
+      sendJson(response, known ? error.status : 500, {
         error: {
           code: known ? error.code : "INTERNAL_ERROR",
           message: known ? error.message : "Internal server error"

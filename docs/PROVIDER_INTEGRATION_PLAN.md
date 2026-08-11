@@ -2,7 +2,11 @@
 
 **Status:** Ready for Coding Agent  
 **P0 status:** Frozen after CR-PHASE3
+
 **P1 status:** Frozen after CR-PHASE4 runtime hardening
+
+**P2 status:** Frozen after Codex native hook integration validation
+
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 **Target branch:** `agent/provider-integration-v1`  
 **Delivery model:** Incremental phases with code review between phases
@@ -698,6 +702,10 @@ P1 is complete when:
 ---
 
 # 6. P2 — Codex Provider Integration
+
+**Implementation status:** Frozen. The native hook bridge, daemon lifecycle
+route, bootstrap injection, Conversation-lite capture, fail-open behavior, and
+Codex lifecycle eval are implemented and verified. P3 has not started.
 
 ## Objective
 

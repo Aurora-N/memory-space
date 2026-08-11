@@ -78,6 +78,18 @@ pnpm mcp:standalone
 
 Standalone mode owns its SQLite connection. Never point it at a database used by the daemon or another standalone process; it is not the supported provider runtime.
 
+## Codex provider integration
+
+P2 supports Codex's native `SessionStart`, `UserPromptSubmit`, `Stop`,
+`PreCompact`, and `SessionEnd` hooks through the daemon's local lifecycle
+endpoint. The hook bridge captures conversation-lite evidence, injects
+bootstrap context, checkpoints supported boundaries, and fails open when the
+Memory service is unavailable. Codex connects to the same daemon over MCP for
+explicit Memory commands.
+
+See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for hook/MCP setup
+and the manual real-Codex smoke test.
+
 ## Architecture
 
 The implementation is a TypeScript modular monolith. The application layer depends on two asynchronous ports:
