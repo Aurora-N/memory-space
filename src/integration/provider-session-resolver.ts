@@ -1,7 +1,7 @@
 import type { MemorySpace } from "../application/memory-space.ts";
 import { ValidationError } from "../domain/errors.ts";
 import type { Session } from "../domain/types.ts";
-import { ProviderSessionNotFoundError, SpaceBindingConflictError } from "./errors.ts";
+import { ProviderSessionNotFoundError } from "./errors.ts";
 
 export interface ProviderSessionResolutionInput {
   provider: string;
@@ -38,13 +38,9 @@ export class ProviderSessionResolver {
       return this.memorySpace.createSession({ spaceId, provider, agentId });
     }
 
-    const session = await this.memorySpace.getOrCreateProviderSession({
+    return this.memorySpace.getOrCreateProviderSession({
       spaceId, provider, externalSessionId, agentId
     });
-    if (session.spaceId !== spaceId) {
-      throw new SpaceBindingConflictError(provider, externalSessionId, spaceId, session.spaceId);
-    }
-    return session;
   }
 
   async find(providerInput: string, externalSessionIdInput: string): Promise<Session> {

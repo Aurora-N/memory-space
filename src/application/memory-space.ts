@@ -200,7 +200,14 @@ export class MemorySpace {
       createdAt: now,
       updatedAt: now
     };
-    return (await this.store.getOrCreateProviderSession(candidate)).session;
+    const session = (await this.store.getOrCreateProviderSession(candidate)).session;
+    if (session.spaceId !== space.id) {
+      throw new ConflictError(
+        `Provider Session ${provider}:${externalSessionId} is bound to Space ${session.spaceId}, not ${space.id}`,
+        "PROVIDER_SESSION_SPACE_CONFLICT"
+      );
+    }
+    return session;
   }
 
   async findProviderSession(provider: string, externalSessionId: string): Promise<Session | undefined> {

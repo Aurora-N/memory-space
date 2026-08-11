@@ -143,6 +143,23 @@ test("internal Session handles enforce the frozen provider identity tuple", asyn
   );
   assert.equal(omitted.session.id, identified.id);
   await assert.rejects(
+    handler.handle({
+      type: "user_prompt", provider: "fake", content: "wrong transcript",
+      transcriptRef: { provider: "fake", externalSessionId: "native-2", locator: "opaque://native-2" }
+    }, { sessionId: identified.id }),
+    /transcriptRef.externalSessionId.*Session.externalSessionId/u
+  );
+  const matchingTranscript = await handler.handle({
+    type: "user_prompt", provider: "fake", content: "matching transcript",
+    transcriptRef: { provider: "fake", externalSessionId: "native-1", locator: "opaque://native-1" }
+  }, { sessionId: identified.id });
+  assert.equal(matchingTranscript.session.id, identified.id);
+  const transcriptWithoutExternalId = await handler.handle({
+    type: "assistant_turn", provider: "fake", content: "provider-only transcript",
+    transcriptRef: { provider: "fake", locator: "opaque://provider-only" }
+  }, { sessionId: identified.id });
+  assert.equal(transcriptWithoutExternalId.session.id, identified.id);
+  await assert.rejects(
     handler.handle({ type: "user_prompt", provider: "other", content: "x" }, { sessionId: identified.id }),
     /does not match Session.provider/u
   );

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  ConflictError,
   createDefaultMemorySpace,
-  ProviderSessionResolver,
-  SpaceBindingConflictError
+  ProviderSessionResolver
 } from "../src/index.ts";
 
 test("Provider Session identity is durable, atomic, provider-scoped, and Space-frozen", async () => {
@@ -27,6 +27,18 @@ test("Provider Session identity is durable, atomic, provider-scoped, and Space-f
     assert.equal(left.id, right.id);
     assert.equal(left.spaceId, spaceA.id);
 
+    const directSameSpace = await first.getOrCreateProviderSession({
+      provider: "fake", externalSessionId: "native-1", spaceId: spaceA.id
+    });
+    assert.equal(directSameSpace.id, left.id);
+    await assert.rejects(
+      first.getOrCreateProviderSession({
+        provider: "fake", externalSessionId: "native-1", spaceId: spaceB.id
+      }),
+      (error: unknown) => error instanceof ConflictError
+        && error.code === "PROVIDER_SESSION_SPACE_CONFLICT"
+    );
+
     const otherProvider = await firstResolver.resolve({
       provider: "other", externalSessionId: "native-1", spaceId: spaceA.id
     });
@@ -37,7 +49,7 @@ test("Provider Session identity is durable, atomic, provider-scoped, and Space-f
 
     await assert.rejects(
       secondResolver.resolve({ provider: "fake", externalSessionId: "native-1", spaceId: spaceB.id }),
-      (error: unknown) => error instanceof SpaceBindingConflictError && error.code === "SPACE_BINDING_CONFLICT"
+      (error: unknown) => error instanceof ConflictError && error.code === "PROVIDER_SESSION_SPACE_CONFLICT"
     );
     await first.close();
     await second.close();

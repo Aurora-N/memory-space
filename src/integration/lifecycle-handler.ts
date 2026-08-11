@@ -156,6 +156,13 @@ export class LifecycleHandler {
     if (event.externalSessionId !== undefined && event.externalSessionId !== session.externalSessionId) {
       throw new ValidationError("Provider lifecycle event does not match Session.externalSessionId");
     }
+    if (event.transcriptRef?.provider !== undefined && event.transcriptRef.provider !== session.provider) {
+      throw new ValidationError("transcriptRef.provider does not match Session.provider");
+    }
+    if (event.transcriptRef?.externalSessionId !== undefined
+      && event.transcriptRef.externalSessionId !== session.externalSessionId) {
+      throw new ValidationError("transcriptRef.externalSessionId does not match Session.externalSessionId");
+    }
     return session;
   }
 }
