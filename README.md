@@ -90,6 +90,10 @@ explicit Memory commands.
 See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for hook/MCP setup
 and the manual real-Codex smoke test.
 
+See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md) for
+Claude Code hook/MCP setup, lifecycle semantics, and the real-provider smoke
+runner.
+
 ## Architecture
 
 The implementation is a TypeScript modular monolith. The application layer depends on two asynchronous ports:
@@ -121,6 +125,12 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **Provider Integration P0: FROZEN. MCP Command Plane P1: FROZEN after CR-PHASE4.**
 
-**Codex P2: FROZEN after the recorded real-Codex CLI smoke. P3 has not started.**
+**Codex P2: FROZEN after the recorded real-Codex CLI smoke.**
+
+**Claude Code P3: implementation and automated validation complete; NOT YET
+FROZEN because the current compatibility gateway does not preserve Claude MCP
+tool names during real-CLI execution.**
 
 Real-provider evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
+The current Claude attempt and rerun instructions are recorded in
+[`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).

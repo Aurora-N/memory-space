@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "memory_space": {
+      "type": "http",
+      "url": "http://127.0.0.1:4310/mcp"
+    }
+  }
+}

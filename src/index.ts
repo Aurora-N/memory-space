@@ -12,6 +12,26 @@ export type {
   RememberInput
 } from "./application/memory-space.ts";
 export { RuleBasedExtractor, NoopExtractor } from "./adapters/rule-based-extractor.ts";
+export { ClaudeAdapter } from "./adapters/providers/claude-code/adapter.ts";
+export {
+  claudeCodeUnavailableOutput,
+  claudeCodeWarningOutput,
+  renderClaudeCodeBootstrap
+} from "./adapters/providers/claude-code/bootstrap-renderer.ts";
+export type {
+  ClaudeCodeBootstrapOutput,
+  ClaudeCodeHookOutput
+} from "./adapters/providers/claude-code/bootstrap-renderer.ts";
+export { invokeClaudeCodeLifecycleHook } from "./adapters/providers/claude-code/hook-client.ts";
+export type {
+  InvokeClaudeCodeLifecycleHookOptions
+} from "./adapters/providers/claude-code/hook-client.ts";
+export { ClaudeCodeLifecycleIntegration } from "./adapters/providers/claude-code/integration.ts";
+export type {
+  ClaudeCodeLifecycleIntegrationOptions,
+  ClaudeCodeLifecycleResponse,
+  ClaudeCodeLifecycleRuntimeContext
+} from "./adapters/providers/claude-code/integration.ts";
 export { CodexAdapter } from "./adapters/providers/codex/adapter.ts";
 export {
   codexUnavailableOutput,

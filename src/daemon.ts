@@ -7,6 +7,8 @@ import {
   toNodeHandler
 } from "@modelcontextprotocol/node";
 import type { MemorySpace } from "./application/memory-space.ts";
+import { ClaudeCodeLifecycleIntegration } from "./adapters/providers/claude-code/integration.ts";
+import type { ClaudeCodeLifecycleRuntimeContext } from "./adapters/providers/claude-code/integration.ts";
 import { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
 import type { CodexLifecycleRuntimeContext } from "./adapters/providers/codex/integration.ts";
 import { SpaceResolver } from "./binding/space-resolver.ts";
@@ -28,6 +30,7 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   port?: number;
   mcpRuntime?: MCPRuntimeContext;
   codexRuntime?: CodexLifecycleRuntimeContext;
+  claudeCodeRuntime?: ClaudeCodeLifecycleRuntimeContext;
   memorySpaceFactory?: (options: DefaultMemorySpaceOptions) => MemorySpace;
   onMcpError?: (error: Error) => void;
 }
@@ -37,6 +40,7 @@ export interface MemorySpaceDaemon {
   readonly memorySpace: MemorySpace;
   readonly lifecycleHandler: LifecycleHandler;
   readonly codexIntegration: CodexLifecycleIntegration;
+  readonly claudeCodeIntegration: ClaudeCodeLifecycleIntegration;
   readonly mcpGateway: MemoryMcpGateway;
   readonly mcpHttpHandler: McpHttpHandler;
   listen(): Promise<AddressInfo>;
@@ -101,6 +105,14 @@ export function createMemorySpaceDaemon(
     lifecycleHandler,
     runtime: codexRuntime
   });
+  const claudeCodeRuntime: ClaudeCodeLifecycleRuntimeContext = {
+    cwd: options.claudeCodeRuntime?.cwd ?? runtime.cwd,
+    explicitSpaceId: options.claudeCodeRuntime?.explicitSpaceId ?? runtime.explicitSpaceId
+  };
+  const claudeCodeIntegration = new ClaudeCodeLifecycleIntegration({
+    lifecycleHandler,
+    runtime: claudeCodeRuntime
+  });
   const mcpGateway = new MemoryMcpGateway({
     memorySpace,
     spaceResolver,
@@ -131,6 +143,15 @@ export function createMemorySpaceDaemon(
     }
     if (request.method === "POST" && url.pathname === "/providers/codex/lifecycle") {
       sendJson(response, 200, await codexIntegration.handleNative(await readJsonBody(request)));
+      return;
+    }
+    if (request.method === "POST"
+      && url.pathname === "/providers/claude-code/lifecycle") {
+      sendJson(
+        response,
+        200,
+        await claudeCodeIntegration.handleNative(await readJsonBody(request))
+      );
       return;
     }
     await httpHandler(request, response);
@@ -184,6 +205,7 @@ export function createMemorySpaceDaemon(
     memorySpace,
     lifecycleHandler,
     codexIntegration,
+    claudeCodeIntegration,
     mcpGateway,
     mcpHttpHandler,
     listen,
@@ -210,6 +232,7 @@ export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpace
     console.log(`memory-space listening on http://${address.address}:${address.port}`);
     console.log(`memory-space MCP endpoint: http://${address.address}:${address.port}/mcp`);
     console.log(`memory-space Codex lifecycle endpoint: http://${address.address}:${address.port}/providers/codex/lifecycle`);
+    console.log(`memory-space Claude Code lifecycle endpoint: http://${address.address}:${address.port}/providers/claude-code/lifecycle`);
   }).catch(async (error: unknown) => {
     console.error(error);
     process.exitCode = 1;

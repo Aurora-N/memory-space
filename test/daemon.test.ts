@@ -93,6 +93,7 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
     assert.equal(daemon.mcpGateway.memorySpace, shared);
     assert.equal(daemon.lifecycleHandler.memorySpace, shared);
     assert.equal(daemon.codexIntegration.lifecycleHandler, daemon.lifecycleHandler);
+    assert.equal(daemon.claudeCodeIntegration.lifecycleHandler, daemon.lifecycleHandler);
     const address = await daemon.listen() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
@@ -266,6 +267,73 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
       body: JSON.stringify(nativeStart)
     });
     assert.equal(rejectedOrigin.status, 403);
+
+    const nativeClaudeStart = {
+      session_id: "daemon-claude-session",
+      transcript_path: join(directory, "claude-transcript.jsonl"),
+      cwd: directory,
+      hook_event_name: "SessionStart",
+      source: "startup",
+      model: "claude-sonnet-4-6",
+      permission_mode: "default"
+    };
+    const rejectedClaudeMediaType = await fetch(
+      `${baseUrl}/providers/claude-code/lifecycle`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...nativeClaudeStart,
+          session_id: "rejected-claude-media-session"
+        })
+      }
+    );
+    assert.equal(rejectedClaudeMediaType.status, 422);
+    assert.equal(
+      await shared.findProviderSession(
+        "claude-code",
+        "rejected-claude-media-session"
+      ),
+      undefined
+    );
+    const claudeLifecycle = await post(
+      `${baseUrl}/providers/claude-code/lifecycle`,
+      nativeClaudeStart
+    ) as {
+      status: string;
+      type: string;
+      sessionId: string;
+      output: { hookSpecificOutput: { additionalContext: string } };
+    };
+    assert.equal(claudeLifecycle.status, "ok");
+    assert.equal(claudeLifecycle.type, "session_start");
+    assert.match(
+      claudeLifecycle.output.hookSpecificOutput.additionalContext,
+      new RegExp(`Session: ${claudeLifecycle.sessionId}`, "u")
+    );
+    assert.equal(
+      (await shared.getSession(claudeLifecycle.sessionId)).provider,
+      "claude-code"
+    );
+    assert.notEqual(claudeLifecycle.sessionId, lifecycle.sessionId);
+    const rejectedClaudeOrigin = await fetch(
+      `${baseUrl}/providers/claude-code/lifecycle`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://attacker.example"
+        },
+        body: JSON.stringify({
+          ...nativeClaudeStart,
+          session_id: "rejected-claude-session"
+        })
+      }
+    );
+    assert.equal(rejectedClaudeOrigin.status, 403);
+    assert.equal(
+      await shared.findProviderSession("claude-code", "rejected-claude-session"),
+      undefined
+    );
     assert.equal(factoryCalls, 1);
   } finally {
     await client?.close();

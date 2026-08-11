@@ -1,12 +1,17 @@
 # Provider Integration v1 — Implementation Plan
 
-**Status:** P2 Frozen after real-Codex smoke validation
+**Status:** P3 implementation and automated validation complete; real-Claude
+MCP execution smoke blocked by the active compatibility gateway
 
 **P0 status:** Frozen after CR-PHASE3
 
 **P1 status:** Frozen after CR-PHASE4 runtime hardening
 
 **P2 status:** FROZEN — real-Codex smoke passed
+
+**P3 status:** NOT YET FROZEN — real Claude Code lifecycle/bootstrap evidence
+exists, but the active gateway rewrites `mcp__memory_space__*` tool names and
+prevents real MCP tool execution
 
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 
@@ -716,7 +721,8 @@ bootstrap injection, Conversation-lite capture, fail-open behavior, and Codex
 lifecycle eval are implemented and pass automated validation. The real Codex
 CLI smoke is recorded in
 [`validation/CODEX_P2_SMOKE.md`](./validation/CODEX_P2_SMOKE.md), so P2 is
-Frozen. P3 has not started.
+Frozen. P3 implementation is complete and awaiting a compatible real-Claude
+MCP execution smoke.
 
 ## Objective
 
@@ -835,6 +841,16 @@ and automated adapter/integration tests pass.
 ---
 
 # 7. P3 — Claude Code Provider Integration
+
+**Implementation status:** `ClaudeAdapter`, lifecycle daemon routing,
+SessionStart bootstrap injection, shared six-tool MCP configuration, provider
+parity tests, and the automated lifecycle eval are complete. A real Claude Code
+2.1.227 run has validated hook loading, bootstrap injection, MCP connection and
+six-tool discovery, UserPromptSubmit, Stop final capture, and SessionEnd. The
+active compatibility gateway rewrites Claude's double-underscore MCP names, so
+real `memory_remember/search` execution is blocked outside Memory Space. See
+[`validation/CLAUDE_P3_SMOKE.md`](./validation/CLAUDE_P3_SMOKE.md). P3 remains
+NOT YET FROZEN.
 
 ## Objective
 
