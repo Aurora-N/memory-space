@@ -223,19 +223,28 @@ test("memory_context and memory_search recall Core plus Indexed without cross-Sp
     assert.deepEqual(new Set(context.memories.map((memory) => memory.id)), new Set([core.id, indexed.id]));
     assert.doesNotMatch(context.context, /Space B/u);
 
-    const search = structured<{ results: Array<{ id: string; tier: string }> }>(
+    const search = structured<{ results: Array<{
+      id: string;
+      family: string;
+      type: string;
+      content: string;
+      tier: string;
+      score: number;
+      updatedAt: string;
+    }> }>(
       await connection.client.callTool({
         name: "memory_search",
         arguments: { sessionId: sessionA.id, query: "adapter", families: ["knowledge"] }
       })
     );
-    assert.deepEqual(search.results, [{
+    assert.equal(search.results.length, 1);
+    assert.ok(search.results[0].score > 0);
+    assert.deepEqual(search.results.map(({ score: _score, ...result }) => result), [{
       id: indexed.id,
       family: "knowledge",
       type: "fact",
       content: "Architecture adapter lives in src/adapters/sqlite",
       tier: "indexed",
-      score: 11,
       updatedAt: indexed.updatedAt
     }]);
     assert.equal(search.results.some((result) => result.id === other.id), false);

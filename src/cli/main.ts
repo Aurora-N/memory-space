@@ -4,7 +4,15 @@ import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
-import { runDoctor, runEval, runInit, runQualityEval, runStatus } from "./commands.ts";
+import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
+import {
+  runDoctor,
+  runEval,
+  runInit,
+  runQualityComparison,
+  runQualityEval,
+  runStatus
+} from "./commands.ts";
 import { asCliError, CliError } from "./errors.ts";
 import {
   DEFAULT_DAEMON_ENDPOINT,
@@ -13,7 +21,7 @@ import {
 } from "./local-client.ts";
 
 type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
-type BooleanOption = "json";
+type BooleanOption = "json" | "compare-stage-a";
 
 interface ParsedOptions {
   cwd?: string;
@@ -21,6 +29,7 @@ interface ParsedOptions {
   spaceId?: string;
   endpoint?: string;
   json?: boolean;
+  compareStageA?: boolean;
 }
 
 export interface CliDependencies {
@@ -32,6 +41,7 @@ export interface CliDependencies {
   clientFactory?: (endpoint: string) => LocalMemorySpaceClientPort;
   evalRunner?: () => Promise<CrossSessionEvalReport>;
   qualityEvalRunner?: () => Promise<MemoryQualityReport>;
+  qualityComparisonRunner?: () => Promise<StageB1ComparisonReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
 }
 
@@ -42,7 +52,7 @@ Usage:
   memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
   memory-space status [--cwd <path>] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
-  memory-space eval quality [--json]
+  memory-space eval quality [--json] [--compare-stage-a]
 
 Development invocation:
   pnpm memory-space <command>`;
@@ -63,7 +73,8 @@ function parseOptions(
     }
     const name = argument.slice(2) as ValueOption | BooleanOption;
     if (allowedBooleans.includes(name as BooleanOption)) {
-      result[name as BooleanOption] = true;
+      if (name === "compare-stage-a") result.compareStageA = true;
+      else result.json = true;
       continue;
     }
     if (!allowedValues.includes(name as ValueOption)) {
@@ -95,6 +106,11 @@ async function defaultQualityEvalRunner(): Promise<MemoryQualityReport> {
   return module.runMemoryQualityEval();
 }
 
+async function defaultQualityComparisonRunner(): Promise<StageB1ComparisonReport> {
+  const module = await import("../../eval/quality/comparison.ts");
+  return module.runStageB1Comparison();
+}
+
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {}
@@ -119,9 +135,19 @@ export async function runCli(
           remediation: "Run: memory-space eval cross-session or memory-space eval quality"
         });
       }
-      const options = parseOptions(argv.slice(2), [], ["json"]);
+      const options = parseOptions(
+        argv.slice(2),
+        [],
+        target === "quality" ? ["json", "compare-stage-a"] : ["json"]
+      );
       return target === "cross-session"
         ? await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner)
+        : options.compareStageA
+          ? await runQualityComparison(
+            options,
+            write,
+            dependencies.qualityComparisonRunner ?? defaultQualityComparisonRunner
+          )
         : await runQualityEval(
           options,
           write,

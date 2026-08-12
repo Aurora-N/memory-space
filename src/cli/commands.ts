@@ -3,6 +3,10 @@ import { stat } from "node:fs/promises";
 import type {
   CrossSessionEvalReport
 } from "../../eval/support/cross-session-runner.ts";
+import {
+  formatStageB1Comparison,
+  type StageB1ComparisonReport
+} from "../../eval/quality/comparison.ts";
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { Space } from "../domain/types.ts";
@@ -361,4 +365,18 @@ export async function runQualityEval(
     for (const line of formatMemoryQualityReport(report)) write(line);
   }
   return report.correctness.overall === "pass" ? 0 : 1;
+}
+
+export async function runQualityComparison(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<StageB1ComparisonReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of formatStageB1Comparison(report)) write(line);
+  }
+  return report.acceptance.overall === "pass" ? 0 : 1;
 }

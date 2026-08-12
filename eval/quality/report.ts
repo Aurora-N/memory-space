@@ -11,7 +11,7 @@ function compact(value: unknown): string {
 
 export function formatMemoryQualityReport(report: MemoryQualityReport): string[] {
   const lines = [
-    "Memory Quality v1 — Baseline",
+    "Memory Quality v1 — Current evaluation",
     "",
     "Extraction",
     `  Precision        ${metric(report.summary.extraction.precision)} (${report.summary.extraction.tp} TP / ${report.summary.extraction.fp} FP)`,
@@ -62,6 +62,6 @@ export function formatMemoryQualityReport(report: MemoryQualityReport): string[]
       );
     }
   }
-  lines.push("", "Quality scores are baseline observations, not PASS/FAIL thresholds.");
+  lines.push("", "Quality scores are observations, not universal PASS/FAIL thresholds.");
   return lines;
 }

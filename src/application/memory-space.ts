@@ -19,6 +19,11 @@ import type {
 import type { CachePort } from "../ports/cache.ts";
 import type { MemoryExtractor } from "../ports/extractor.ts";
 import type { MemoryHistoryRecord, MemoryStore } from "../ports/store.ts";
+import {
+  compareLexicalResults,
+  normalizeLexicalText,
+  scoreLexicalMemory
+} from "./lexical-retrieval.ts";
 
 const families = new Set<MemoryFamily>(["knowledge", "state", "episode", "procedure"]);
 const tiers = new Set<MemoryTier>(["core", "indexed"]);
@@ -90,19 +95,6 @@ function score(value: unknown, fallback: number, label: string): number {
     throw new ValidationError(`${label} must be a finite number between 0 and 1`);
   }
   return result;
-}
-
-function normalize(value: string): string {
-  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase();
-}
-
-function queryTokens(value: string): string[] {
-  const normalized = normalize(value);
-  const tokens = normalized.match(/[a-z0-9_.+-]+|[\p{Script=Han}]+/gu) ?? [];
-  return [...new Set(tokens.flatMap((token) => {
-    if (!/^[\p{Script=Han}]+$/u.test(token) || token.length < 2) return [token];
-    return Array.from({ length: token.length - 1 }, (_, index) => token.slice(index, index + 2));
-  }))];
 }
 
 function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
@@ -327,18 +319,13 @@ export class MemorySpace {
       spaceId: input.spaceId, families: input.families, types: input.types,
       tiers: input.tiers, statuses: input.statuses ?? ["active"]
     });
-    const query = normalize(input.query ?? "");
-    const tokens = queryTokens(query);
+    const query = input.query ?? "";
     const results = memories.map((memory) => {
-      const haystack = normalize(`${memory.key ?? ""} ${memory.type} ${memory.content} ${JSON.stringify(memory.data ?? {})}`);
-      let resultScore = query && haystack.includes(query) ? 10 : 0;
-      for (const token of tokens) if (haystack.includes(token)) resultScore += 1;
-      if (!query) resultScore = 1;
-      return { memory, score: resultScore };
-    }).filter((result) => !query || result.score > 0);
-    results.sort((a, b) => b.score - a.score
-      || b.memory.updatedAt.localeCompare(a.memory.updatedAt)
-      || a.memory.id.localeCompare(b.memory.id));
+      if (query.trim() === "") return { memory, score: 1 };
+      const match = scoreLexicalMemory(query, memory);
+      return { memory, score: match.relevant ? match.score : 0 };
+    }).filter((result) => query.trim() === "" || result.score > 0);
+    results.sort(compareLexicalResults);
     return results.slice(0, input.limit ?? 20);
   }
 
@@ -636,7 +623,7 @@ export class MemorySpace {
     const now = timestamp();
     if (existing) {
       for (const eventId of input.sourceEventIds) await this.store.addMemorySource(existing.id, eventId, now);
-      if (normalize(existing.content) === normalize(input.content)) {
+      if (normalizeLexicalText(existing.content) === normalizeLexicalText(input.content)) {
         let result = existing;
         if (actor === "extractor" && input.tier === "core" && existing.tier === "indexed") {
           result = await this.#changeTier(existing, "core", input.reason);

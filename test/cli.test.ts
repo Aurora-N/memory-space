@@ -13,6 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
 import type { MemoryQualityReport } from "../eval/quality/types.ts";
+import { runStageB1Comparison } from "../eval/quality/comparison.ts";
 import { runCli, type CliDependencies } from "../src/cli/main.ts";
 import { CliError } from "../src/cli/errors.ts";
 import { detectProviderConfigs } from "../src/cli/provider-config.ts";
@@ -668,8 +669,8 @@ test("quality eval CLI is daemon-independent and separates metrics from correctn
     });
     assert.equal(success.code, 0, success.stderr);
     assert.equal(calls, 1);
-    assert.match(success.stdout, /Memory Quality v1 — Baseline/u);
-    assert.match(success.stdout, /baseline observations, not PASS\/FAIL thresholds/u);
+    assert.match(success.stdout, /Memory Quality v1 — Current evaluation/u);
+    assert.match(success.stdout, /observations, not universal PASS\/FAIL thresholds/u);
 
     const json = await cli(["eval", "quality", "--json"], {
       cwd: project,
@@ -683,6 +684,48 @@ test("quality eval CLI is daemon-independent and separates metrics from correctn
       dependencies: { qualityEvalRunner: async () => qualityEvalReport("fail") }
     });
     assert.equal(correctnessFailure.code, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("quality eval CLI exposes deterministic Stage A comparison in human and JSON forms", async () => {
+  const { directory, project } = temporaryProject("quality-comparison");
+  try {
+    const report = await runStageB1Comparison();
+    let calls = 0;
+    const human = await cli(["eval", "quality", "--compare-stage-a"], {
+      cwd: project,
+      dependencies: {
+        qualityComparisonRunner: async () => {
+          calls += 1;
+          return report;
+        },
+        clientFactory: () => {
+          throw new Error("quality comparison must not construct a daemon client");
+        }
+      }
+    });
+    assert.equal(human.code, 0, human.stderr);
+    assert.equal(calls, 1);
+    assert.match(human.stdout, /P6 Stage B1 — Retrieval comparison/u);
+    assert.match(human.stdout, /Overall PASS/u);
+
+    const json = await cli(["eval", "quality", "--json", "--compare-stage-a"], {
+      cwd: project,
+      dependencies: { qualityComparisonRunner: async () => report }
+    });
+    assert.equal(json.code, 0, json.stderr);
+    assert.equal(
+      (JSON.parse(json.stdout) as { acceptance: { overall: string } }).acceptance.overall,
+      "pass"
+    );
+
+    const invalid = await cli(["eval", "cross-session", "--compare-stage-a"], {
+      cwd: project
+    });
+    assert.equal(invalid.code, 2);
+    assert.match(invalid.stderr, /Unknown option/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

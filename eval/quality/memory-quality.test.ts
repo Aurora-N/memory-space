@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Memory, MemorySearchInput, MemorySearchResult } from "../../src/domain/types.ts";
 import type { MemorySpace } from "../../src/application/memory-space.ts";
 import { loadStageABaseline, stageABaselineSchema } from "./baseline.ts";
+import { formatStageB1Comparison, runStageB1Comparison } from "./comparison.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
 import { LogicalMemoryIndex } from "./identity.ts";
 import {
@@ -279,8 +280,41 @@ test("20-Session quality runner emits a deterministic report without random iden
   assert.ok(first.failures.length > 0, "Stage A must retain observed failure examples");
 
   const human = formatMemoryQualityReport(first).join("\n");
-  assert.match(human, /Memory Quality v1 — Baseline/u);
+  assert.match(human, /Memory Quality v1 — Current evaluation/u);
   assert.match(human, /Sessions\s+20/u);
   assert.match(human, /Negative retrieval/u);
-  assert.match(human, /Quality scores are baseline observations/u);
+  assert.match(human, /Quality scores are observations/u);
+});
+
+test("Stage B1 comparison is deterministic and enforces accepted baseline deltas", async () => {
+  const first = await runStageB1Comparison();
+  const second = await runStageB1Comparison();
+  assert.deepEqual(second, first);
+  assert.equal(first.acceptance.overall, "pass");
+  assert.ok(first.acceptance.checks.every((item) => item.status === "pass"));
+
+  const metric = (name: string) => first.metrics.find((item) => item.metric === name);
+  assert.equal(metric("P@1")?.baseline, 0.7272727272727273);
+  assert.equal(metric("P@1")?.candidate, 0.8181818181818182);
+  assert.equal(metric("R@1")?.candidate, 0.7727272727272727);
+  assert.equal(metric("P@3")?.delta, 0);
+  assert.equal(metric("R@10")?.delta, 0);
+  assert.equal(first.baseline.negativeRetrieval.falsePositiveRate, 1);
+  assert.equal(first.candidate.negativeRetrieval.falsePositiveRate, 0);
+  assert.equal(first.candidate.negativeRetrieval.abstentionRate, 1);
+
+  const semantic = first.queries.find((item) => item.id === "semantic-target-loses-to-overlap");
+  assert.equal(semantic?.change, "improved");
+  assert.equal(semantic?.baselineTop1Relevant, false);
+  assert.equal(semantic?.candidateTop1Relevant, true);
+  assert.equal(first.queries.some((item) => item.change === "regressed"), false);
+  assert.deepEqual(first.failures.new, []);
+  assert.deepEqual(first.failures.removed, [
+    "saas-commerce-api-20-session-evolution:long-old-sqlite-decision:negative-query-false-positive"
+  ]);
+
+  const human = formatStageB1Comparison(first).join("\n");
+  assert.match(human, /P6 Stage B1 — Retrieval comparison/u);
+  assert.match(human, /Negative abstention/u);
+  assert.match(human, /Overall PASS/u);
 });
