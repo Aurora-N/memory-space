@@ -1,12 +1,13 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** CR-PHASE9 fixes implemented; awaiting baseline re-review
+**Status:** Stage A ACCEPTED; Stage B1 READY / AUTHORIZED  
 **Phase:** P6  
-**Primary goal:** Measure whether durable Memory remains useful and correct over long horizons  
+**Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
-**Related:** `V1_ROADMAP.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`
+**Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
+**Related:** `V1_ROADMAP.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `quality/P6_BASELINE.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
 
-> P6 begins by measuring the current system. Do not change retrieval/extraction architecture before establishing a reproducible baseline and identifying concrete failure modes.
+> P6 is benchmark-first and delta-driven: establish a trustworthy measurement before changing production behavior, then improve one measured failure class at a time with explicit before/after evidence.
 
 ---
 
@@ -20,63 +21,67 @@ P6 asks the harder product question:
 
 > Is the Memory that persists actually the right Memory, at the right tier, at the right time, without becoming stale, duplicated, contradictory, or excessively large?
 
-The goal is a deterministic benchmark and quality report that can guide later targeted improvements.
+P6 therefore has two responsibilities:
+
+```text
+Stage A
+→ establish deterministic quality ground truth and accepted baseline
+
+Stage B
+→ make targeted production improvements against that accepted baseline
+```
+
+Stage A is complete and accepted after CR-PHASE9. Stage B proceeds only through separately scoped improvement stages.
 
 ---
 
 # 2. Quality dimensions
 
-The v1 benchmark should measure at least the following dimensions where the current domain semantics support deterministic ground truth.
+Memory Quality v1 measures at least the following dimensions where current domain semantics support deterministic ground truth.
 
 ## 2.1 Extraction precision / recall
 
 For checkpoint-derived candidates, compare extracted/retained memories to expected fixture labels.
-
-Conceptually:
 
 ```text
 precision = correct extracted memories / extracted memories
 recall    = correct extracted memories / expected memories
 ```
 
-Avoid counting purely explicit `memory_remember` commands as extractor success unless the benchmark is explicitly evaluating explicit-memory handling.
+Do not count purely explicit `memory_remember` commands as extractor success unless the benchmark explicitly evaluates explicit-memory handling.
 
 ## 2.2 Retrieval Precision@K / Recall@K
 
-For each query with known relevant Memory IDs:
+For positive queries with known relevant Memory identities:
 
 ```text
 Precision@K = relevant results in top K / K
 Recall@K    = relevant results in top K / total relevant memories
 ```
 
-Evaluate current lexical retrieval first. Do not add embeddings merely to improve the first benchmark score.
+Only K values meaningful for the filtered eligible corpus participate.
 
-Suggested K values:
+Zero-relevant queries are not ordinary Recall@K samples. They are evaluated separately by negative-query false-positive and abstention metrics.
+
+Stage A uses K values:
 
 ```text
 K = 1, 3, 5, 10
 ```
 
-Use only values meaningful for each fixture size.
+and preserves production search result ordering.
 
 ## 2.3 Core pollution rate
-
-Measure active Core items that should not be part of default working context.
-
-Conceptually:
 
 ```text
 Core pollution rate = irrelevant/stale/over-local active Core / active Core
 ```
 
-Fixtures should distinguish project-wide durable context from local/transient implementation detail.
+Fixtures distinguish project-wide durable context from local/transient implementation detail.
 
 ## 2.4 Bootstrap critical-context coverage
 
-For each benchmark state, define critical expected default context and assert whether bootstrap includes it.
-
-Examples:
+For benchmark state, define critical expected default context such as:
 
 ```text
 current goal
@@ -85,11 +90,11 @@ current blocker
 latest next step
 ```
 
-This is distinct from general search recall.
+This is distinct from general explicit search recall.
 
 ## 2.5 Handoff completeness
 
-Given expected checkpoint state, score whether latest Handoff preserves the necessary continuation fields such as:
+Score whether the latest Handoff preserves deterministic continuation facts such as:
 
 ```text
 current progress
@@ -98,258 +103,379 @@ open questions
 next steps
 ```
 
-Prefer deterministic field/content assertions over LLM-as-judge in v1.
+Deterministic field/content assertions remain primary over LLM-as-judge.
 
 ## 2.6 Stale-memory rate
 
-Create scenarios where an old fact/task/decision is superseded or resolved.
-
-Measure active memories that should no longer be treated as current.
-
-The benchmark should exercise existing status/keyed-update/supersession semantics before proposing new ones.
+Create scenarios where an old fact/task/decision is superseded or resolved and measure active memories that should no longer be treated as current.
 
 ## 2.7 Duplicate-memory rate
 
-Create repeated paraphrased/equivalent evidence and measure whether the durable set contains avoidable logical duplicates according to current key/dedup semantics.
+Create repeated paraphrased/equivalent evidence and measure avoidable logical duplicates according to current key/dedup semantics.
 
-Do not require semantic embedding dedup in v1; score the current behavior honestly.
+Semantic embedding dedup is not assumed by the Stage A baseline.
 
 ## 2.8 Contradiction / supersession correctness
 
-Fixtures should include state evolution such as:
+Fixtures include state evolution such as:
 
 ```text
 Session 2: database = SQLite
 Session 8: database = PostgreSQL
 ```
 
-The benchmark should verify whether current working context reflects the intended latest/active state and whether stale conflicting state remains incorrectly exposed.
+Current working context must reflect intended latest/active state and exclude stale conflicting state where the frozen keyed/status semantics require it.
 
 ## 2.9 Bootstrap size / cost
 
-Record stable deterministic size metrics:
+Record deterministic metrics:
 
 ```text
 Core item count
-Handoff size
+Handoff fact count
 bootstrap character count
 bootstrap byte count
 ```
 
-Exact provider-token counts are optional unless an existing tokenizer is already available. Do not introduce provider-specific tokenizer infrastructure solely for this metric.
+Provider-specific token infrastructure is not required solely for this metric.
 
 ## 2.10 Long-horizon continuity
 
-Evaluate quality over a multi-session sequence rather than isolated two-session cases.
-
-Minimum useful benchmark should include at least one scenario of approximately 20 logical Sessions/steps with:
+The accepted benchmark includes a 20 logical Session/step project evolution with:
 
 - evolving decisions;
 - completed/replaced tasks;
 - repeated evidence;
 - local details;
-- blockers opened and resolved;
+- blockers opened/resolved;
 - multiple checkpoints;
 - explicit and checkpoint-derived Memory.
 
 ---
 
-# 3. Benchmark-first rule
+# 3. Benchmark-first and staged-improvement rule
 
-P6 must be implemented in two stages.
+P6 is intentionally split into an accepted baseline plus independently reviewed improvement stages.
 
-## Stage A — Baseline
+## Stage A — Deterministic baseline — ACCEPTED
 
-Build fixtures, ground truth, metric computation, and a machine-readable report using the current implementation unchanged where possible.
-
-Required result:
+Stage A built:
 
 ```text
-baseline metrics
+fixtures
+independent ground truth
+metric computation
+machine-readable report
+human-readable report
 failure examples
-largest observed quality risks
+20-Session long-horizon scenario
+provider-neutral integration proof
 ```
 
-Do not optimize scores before this result exists.
+Stage A did not optimize product scores.
+
+Accepted review:
+
+```text
+docs/code-review/CR-PHASE9.md
+```
+
+Accepted evidence:
+
+```text
+docs/quality/P6_BASELINE.md
+commit 9490ebce94928132a2fb16aca247c8ae4888a7cf
+```
 
 ## Stage B — Targeted improvements
 
-Only after baseline review, select the highest-value measured failure mode(s).
+Stage B does not mean "optimize every metric".
 
-Examples:
+It is decomposed so one change class can be attributed to one measured outcome:
 
 ```text
-stale Core decisions
-poor lexical recall for known wording variants
-Handoff missing blockers
-keyed update failing to suppress stale state
+B1 — Retrieval Precision & Abstention
+     READY / AUTHORIZED
+
+B2 — Extraction Generalization & Transient Rejection
+     NOT AUTHORIZED
+
+B3 — Core / Handoff Pollution Policy
+     NOT AUTHORIZED
+
+B4 — Semantic Dedup / Semantic Retrieval architecture decision
+     OPTIONAL / NOT AUTHORIZED
 ```
 
-Any algorithm/domain change must be separately reviewed against frozen semantics.
+The normative B1 execution spec is:
 
-Stage B is not automatically authorized by creating this spec; stop for review after baseline unless explicitly told to continue.
+```text
+docs/P6_STAGE_B_RETRIEVAL_SPEC.md
+```
+
+B1 completion must stop for code/quality review before B2/B3/B4.
 
 ---
 
-# 4. Fixture design
+# 4. Fixture and ground-truth policy
 
-Prefer deterministic synthetic/project-like fixtures stored under a dedicated quality-eval area, for example:
+Quality fixtures live under `eval/quality/` and contain explicit expected labels rather than deriving answers from the system under test.
+
+Stable logical keys identify expected Memory across random runtime IDs.
+
+The accepted Stage A fixture labels are benchmark contracts for Stage B.
+
+Do not modify existing:
 
 ```text
-eval/quality/
-├── fixtures/
-│   ├── long-horizon-project.json
-│   ├── superseded-decisions.json
-│   ├── retrieval-ground-truth.json
-│   └── handoff-ground-truth.json
-├── metrics.ts
-├── runner.ts
-└── memory-quality.test.ts
+relevantMemoryKeys
+expectedMemories
+shouldBeCore
+expectedInactive
+expected Handoff facts
+duplicate groups
+critical bootstrap keys
 ```
 
-Exact layout may follow repository conventions.
+merely to improve candidate scores.
 
-Fixtures should contain explicit ground truth rather than deriving the expected answer from the system under test.
+Allowed changes are limited to:
 
-A useful scenario item may include:
-
-```ts
-interface QualityStep {
-  session: string;
-  events: ...;
-  explicitMemories?: ...;
-  checkpoint?: boolean;
-  expectedActive?: string[];
-  expectedCore?: string[];
-  expectedHandoff?: ...;
-  queries?: Array<{
-    text: string;
-    relevantMemoryKeys: string[];
-  }>;
-}
-```
-
-This is conceptual, not a frozen schema.
+1. adding new regression cases;
+2. eliminating genuine nondeterministic score ties without changing relevance semantics;
+3. correcting a demonstrably wrong benchmark label through an explicit review note before using the changed score.
 
 ---
 
 # 5. Provider independence
 
-Memory Quality should primarily test the Memory/application behavior, not duplicate provider hook tests.
-
-Use provider-neutral Session/application flows where appropriate, with a smaller integration scenario confirming that P4 provider boundaries still feed the same quality state.
-
-Do not multiply every quality fixture by Codex/Claude unless provider-specific evidence changes the quality property being measured.
+Memory Quality primarily tests provider-neutral Memory/application behavior.
 
 P4 remains the source of truth for provider/session transport independence.
 
+P6 keeps only a smaller integration proof that provider-normalized evidence reaches the same quality state; do not multiply every quality fixture by Codex/Claude.
+
+Stage B retrieval policy must remain provider-neutral. Do not add provider-specific search branches or aliases.
+
 ---
 
-# 6. Reporting
+# 6. Reporting contract
 
-The quality runner should produce a stable machine-readable result and a concise human summary.
+The quality runner must produce deterministic machine-readable output and concise human output.
 
-Suggested shape:
+Stage A report includes:
 
-```json
-{
-  "version": 1,
-  "summary": {
-    "extractionPrecision": 0.0,
-    "extractionRecall": 0.0,
-    "retrieval": {
-      "precisionAt3": 0.0,
-      "recallAt3": 0.0
-    },
-    "corePollutionRate": 0.0,
-    "handoffCompleteness": 0.0,
-    "staleMemoryRate": 0.0,
-    "duplicateMemoryRate": 0.0
-  },
-  "scenarios": []
-}
+```text
+extraction precision / recall
+positive-query P@K / R@K with per-K queryCount
+negative-query FP / abstention
+Core pollution
+bootstrap coverage and size
+Handoff completeness
+stale-memory rate
+duplicate-memory rate
+contradiction checks
+long-horizon Session count
+hard correctness summary
+failure examples
 ```
 
-Exact fields may evolve during implementation, but results must be deterministic enough to compare across commits.
-
-Recommended command after P5 productization:
+CLI:
 
 ```text
 memory-space eval quality
+memory-space eval quality --json
 ```
 
-or an equivalent documented `pnpm` command if the CLI eval surface is intentionally kept narrower.
+Stage B adds a before/after comparison against the accepted Stage A snapshot rather than overwriting Stage A history.
+
+The B1 spec defines the required candidate comparison and result document.
 
 ---
 
-# 7. Regression vs benchmark distinction
+# 7. Correctness invariant vs quality metric
 
-Do not turn every quality metric into a brittle hard failure immediately.
-
-Separate:
+Keep two classes of evaluation distinct.
 
 ```text
 correctness invariant
-→ must pass
+→ hard PASS/FAIL
 
 quality metric
-→ record baseline / compare intentionally
+→ baseline/candidate measurement + reviewed delta
 ```
 
-Examples of correctness invariants:
+Hard invariants include:
 
 - no cross-Space leakage;
 - provenance preserved;
-- bootstrap never includes inactive/archived Memory when contract forbids it;
-- latest Handoff belongs to the latest committed boundary.
+- inactive/archived Memory excluded from bootstrap where contract requires;
+- latest Handoff belongs to latest committed boundary;
+- keyed current-state semantics remain correct;
+- MCP remains exactly the frozen six tools.
 
-Examples of metrics that may initially be below target:
+Quality metrics include:
 
-- lexical Retrieval Recall@K;
+- retrieval P@K/R@K;
+- negative-query false-positive/abstention;
 - duplicate-memory rate;
-- extraction recall.
+- extraction precision/recall;
+- Core pollution.
 
-Introduce thresholds only after a baseline is recorded and accepted.
+Stage B must never accept a quality gain that breaks a hard invariant.
 
 ---
 
-# 8. Initial target policy
+# 8. Target and threshold policy
 
-P6 baseline should record metrics without inventing arbitrary success thresholds.
+Stage A intentionally had no invented target thresholds.
 
-After baseline review, add explicit target thresholds in a separate reviewed update, based on:
+Stage B uses reviewed **delta gates against an accepted synthetic baseline**, not universal product SLOs.
 
-- observed current scores;
-- intended product behavior;
-- realistic fixture difficulty;
-- acceptable bootstrap size/quality tradeoffs.
+For B1, the accepted reference metrics and non-regression/improvement gates are frozen in `P6_STAGE_B_RETRIEVAL_SPEC.md`.
 
-Do not write `PASS` merely because the benchmark executed.
+Do not present benchmark-specific thresholds as generic production guarantees.
+
+Later B2/B3/B4 thresholds must be added through their own reviewed execution specs.
 
 ---
 
 # 9. LLM-as-judge policy
 
-LLM-as-judge is optional and secondary in Memory Quality v1.
+LLM-as-judge remains optional and secondary in Memory Quality v1.
 
-The required benchmark should remain runnable without network model calls.
+The required benchmark must remain runnable without network model calls.
 
 If an LLM judge is later added:
 
-- deterministic labels remain the primary source of truth where possible;
-- judge model/version/prompt must be recorded;
-- judge results must not silently replace deterministic correctness checks;
-- offline baseline remains available.
+- deterministic labels remain primary where possible;
+- judge model/version/prompt are recorded;
+- judge results never silently replace correctness checks;
+- offline deterministic baseline remains available.
+
+B1 does not authorize an LLM judge or LLM query rewriting.
 
 ---
 
-# 10. Non-goals
+# 10. Architecture-change policy
 
-Do not implement during P6 baseline:
+Any Stage B production change must remain inside the currently authorized improvement boundary.
+
+B1 may change provider-neutral retrieval scoring/relevance policy as defined in its execution spec.
+
+B1 does not authorize changes to:
+
+```text
+Memory domain semantics
+Space/Session binding
+storage schema
+checkpoint/Handoff generation
+extractor heuristics
+MCP schemas/tool count
+provider lifecycle semantics
+```
+
+If an implementation appears to require one of those changes, stop and request an architecture review rather than silently broadening Stage B.
+
+---
+
+# 11. Stage A accepted evidence
+
+The deterministic Stage A harness is implemented under `eval/quality/` using explicit JSON ground truth, stable logical Memory keys, isolated temporary SQLite databases, and the unchanged production Memory implementation.
+
+Accepted metrics:
+
+```text
+Extraction precision        0.800000
+Extraction recall           0.666667
+
+P@1                         0.727273
+R@1                         0.681818
+P@3                         0.303030
+R@3                         0.818182
+P@5                         0.180000
+R@5                         0.800000
+P@10                        0.090000
+R@10                        0.800000
+
+Negative FP rate            1.000000
+Negative abstention         0.000000
+
+Core pollution              0.111111
+Bootstrap coverage          1.000000
+Handoff completeness        1.000000
+Stale-memory rate           0.000000
+Duplicate-memory rate       0.500000
+Long-horizon Sessions       20
+```
+
+The corrected metric implementation:
+
+- excludes zero-relevant queries from ordinary P@K/R@K;
+- measures negative queries separately;
+- uses only K values meaningful for each filtered corpus;
+- preserves production search result ordering;
+- keeps fixture logical keys as identity only;
+- produces deterministic repeated reports.
+
+Full evidence: [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md).
+
+Review: [`code-review/CR-PHASE9.md`](./code-review/CR-PHASE9.md).
+
+---
+
+# 12. Stage B1 authorization
+
+The accepted baseline ranks retrieval precision/abstention as the highest-value first improvement:
+
+```text
+1. lexical wording mismatch / broad false positives / current-intent ranking
+2. extraction generalization / transient rejection
+3. Core/Handoff transient pollution
+4. semantic dedup / semantic retrieval architecture
+```
+
+Only item 1 is authorized now.
+
+Stage B1 must:
+
+```text
+freeze a machine-readable Stage A before snapshot
+change provider-neutral lexical relevance/ranking only
+preserve Stage A fixture labels
+produce deterministic before/after metrics
+improve reviewed retrieval signals without recall/correctness regression
+stop for review
+```
+
+See [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md) for the normative execution and acceptance gates.
+
+---
+
+# 13. Later Stage B decisions
+
+After B1 review, the reviewer may authorize one of:
+
+```text
+B2 extraction quality
+B3 Core/Handoff pollution policy
+semantic-recall architecture experiment
+semantic dedup architecture work
+```
+
+Do not infer authorization from roadmap ordering alone.
+
+If B1 shows that remaining retrieval failures have little/no lexical overlap, treat that as evidence of a lexical capability boundary. Stop and compare semantic options before adding embeddings/vector infrastructure.
+
+---
+
+# 14. Cross-stage non-goals
+
+Unless separately reviewed, P6 does not authorize:
 
 - vector database migration;
 - embeddings by default;
-- reranker service;
+- external reranker service;
 - autonomous Memory rewriting;
 - online reinforcement learning;
 - full transcript ingestion;
@@ -358,68 +484,21 @@ Do not implement during P6 baseline:
 - new provider integration;
 - new Memory tiers solely to improve benchmark scores.
 
-These may be considered only after measured evidence justifies them.
-
 ---
 
-# 11. P6 baseline completion gate
+# 15. Review cadence
 
-Before requesting baseline review, report:
-
-1. fixture/scenario inventory;
-2. ground-truth format;
-3. metrics implemented;
-4. long-horizon scenario length;
-5. baseline metric results;
-6. representative failure examples;
-7. correctness regressions that remain hard assertions;
-8. runtime/reproducibility information;
-9. `pnpm run check` result;
-10. `pnpm run check:workspace` result;
-11. whether any production algorithm/domain code changed;
-12. recommended Stage B improvements ranked by measured impact.
-
-Stop after baseline review unless explicitly instructed to implement quality improvements.
-
----
-
-# 12. Stage A implementation evidence
-
-The deterministic Stage A harness is implemented under `eval/quality/`. It
-uses explicit JSON ground truth, stable logical Memory keys, isolated temporary
-SQLite databases, and the unchanged production Memory implementation.
-
-The fixture inventory covers:
+Every improvement stage follows:
 
 ```text
-checkpoint-only extraction with positive and negative evidence
-lexical retrieval with exact, reordered, wording-mismatch, and distractor queries
-keyed decision supersession and inactive-state expectations
-atomic Handoff continuation facts
-one 20-Session long-horizon project history
-one small Codex-to-Claude provider-neutral integration proof
+accepted before-state
+→ scoped execution spec
+→ Coding Agent implementation
+→ deterministic before/after eval
+→ regression suite
+→ code/quality review
+→ status update
+→ explicit next authorization
 ```
 
-The runner records extraction precision/recall, macro Precision@K and Recall@K
-for eligible K values from 1/3/5/10, separate negative-query false-positive and
-abstention rates, Core pollution, bootstrap critical coverage and size, Handoff
-completeness, stale and duplicate rates, and contradiction/supersession
-correctness. Positive-query K eligibility is based on the corpus exposed by the
-same status/family/type/tier filters. Production search ordering is preserved;
-fixture logical keys provide identity only. The machine-readable report remains
-deterministic without exposing random runtime IDs.
-
-Run the baseline with:
-
-```bash
-pnpm memory-space eval quality
-pnpm memory-space eval quality --json
-```
-
-Quality values are observations and have no acceptance thresholds in Stage A.
-Frozen correctness invariants remain hard assertions and control the CLI exit
-code. The recorded values, failure examples, reproducibility evidence, and
-ranked Stage B candidates are in [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md).
-
-No Memory extraction, retrieval, domain, storage, lifecycle, or MCP algorithm
-was changed for the baseline. Stage B has not started.
+Stage B1 is the current authorized next implementation stage. B2/B3/B4 remain blocked until B1 review completes.
