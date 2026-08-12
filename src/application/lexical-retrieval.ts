@@ -77,7 +77,10 @@ function discriminatingTokens(tokens: readonly string[]): string[] {
 
 export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrievalMatch {
   const normalizedQuery = normalizeLexicalText(query);
-  const queryTokens = discriminatingTokens(lexicalTokens(query));
+  const rawQueryTokens = lexicalTokens(query);
+  const queryTokens = discriminatingTokens(rawQueryTokens);
+  const broadOnlyMultiTokenQuery = rawQueryTokens.length > 1
+    && rawQueryTokens.every((token) => BROAD_QUERY_TOKENS.has(token));
   const content = normalizeLexicalText(memory.content);
   const key = normalizeLexicalText(memory.key ?? "");
   const contentMatches = intersection(queryTokens, new Set(lexicalTokens(memory.content)));
@@ -101,11 +104,12 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
   // Type/data-only overlap is diagnostic evidence, but not enough to expose a
   // Memory for a multi-token query. Content and semantic key fields establish
   // provider-neutral relevance; exact phrase/key evidence always qualifies.
-  const relevant = exactContentPhrase
-    || exactKey
-    || contentMatches.length > 0
+  const hasFieldEvidence = contentMatches.length > 0
     || keyMatches.length > 0
     || (queryTokens.length === 1 && (typeMatches.length > 0 || dataMatches.length > 0));
+  const relevant = exactContentPhrase
+    || exactKey
+    || (hasFieldEvidence && (!broadOnlyMultiTokenQuery || coverage === 1));
   const weights = lexicalRetrievalWeights;
   const score = relevant ? (
     (exactKey ? weights.exactKey : 0)

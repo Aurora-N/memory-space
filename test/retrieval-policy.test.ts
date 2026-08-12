@@ -66,6 +66,17 @@ test("mixed broad key terms require the discriminating content value", () => {
   assert.equal(matching.contentMatches, 1);
   assert.equal(conflicting.relevant, false);
   assert.equal(conflicting.score, 0);
+
+  const structuralTail = scoreLexicalMemory("project database", memory({
+    key: "project.api",
+    content: "Current API endpoint is /v2."
+  }));
+  assert.equal(structuralTail.relevant, false, "one broad key token is insufficient");
+  assert.equal(
+    scoreLexicalMemory("project database", current).relevant,
+    true,
+    "complete broad-key coverage remains relevant"
+  );
 });
 
 test("lexical result ties retain updatedAt then id deterministic order", () => {
