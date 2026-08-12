@@ -16,8 +16,9 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - TypeScript application API plus a thin JSON HTTP adapter
 - provider-neutral MCP command plane with six policy-bounded tools
 - Codex and Claude Code lifecycle adapters sharing one provider-neutral integration core
-- parameterized same-provider, cross-provider, restart, isolation, and multi-hop
-  durable-memory evaluation
+- parameterized same-provider, cross-provider, restart, isolation, and multi-hop durable-memory evaluation
+- local product CLI for init/doctor/status/eval
+- accepted deterministic 20-Session Memory Quality Stage A baseline
 
 ## Run locally
 
@@ -33,8 +34,7 @@ pnpm start
 
 The server defaults to `http://127.0.0.1:4310` and persists to `./data/memory-space.db`. The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, or `localhost`; remote/LAN deployment is unsupported. Environment values can be exported from `.env.example`; the server intentionally does not hide configuration loading inside the domain layer.
 
-In another terminal, initialize and inspect the target project with the local
-product CLI:
+In another terminal, initialize and inspect the target project with the local product CLI:
 
 ```bash
 pnpm memory-space init --cwd /absolute/path/to/project --name "My project"
@@ -45,12 +45,7 @@ pnpm memory-space eval quality
 pnpm memory-space eval quality --json
 ```
 
-The package also exposes a `memory-space` bin for linked/installed use, with the
-same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality`
-syntax. `init` creates
-or confirms the Space through the running daemon and then atomically writes the
-v1 project binding. It never edits global Codex or Claude configuration. Use
-`doctor --json` for stable check IDs and machine-readable diagnostics.
+The package also exposes a `memory-space` bin for linked/installed use, with the same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality` syntax. `init` creates or confirms the Space through the running daemon and then atomically writes the v1 project binding. It never edits global Codex or Claude configuration. Use `doctor --json` for stable check IDs and machine-readable diagnostics.
 
 This repository is also a pnpm workspace. The current MVP remains the root package; future deployable applications belong in `apps/*`, reusable packages in `packages/*`, and repository tooling in `tools/*`. Shared toolchain versions use the workspace catalog. Run `pnpm run check:workspace` to execute each workspace package's `check` script when present.
 
@@ -60,9 +55,7 @@ curl -s -X POST http://127.0.0.1:4310/spaces \
   -d '{"name":"My project"}'
 ```
 
-The REST flow remains available as a low-level debugging/reference path. See
-[`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint
-event examples.
+The REST flow remains available as a low-level debugging/reference path. See [`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint event examples.
 
 ## Shared daemon and MCP command plane
 
@@ -81,9 +74,7 @@ MCP:      http://127.0.0.1:4310/mcp
 
 Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. Every daemon route except `GET /health` validates localhost Host and Origin values before routing to reduce DNS-rebinding exposure. JSON body endpoints require `Content-Type: application/json` before any mutation.
 
-The provider-neutral `LifecycleHandler` is composed against the daemon's same
-`MemorySpace`; Codex, Claude Code, REST, checkpoint orchestration, and the MCP
-command plane therefore share the same in-process owner.
+The provider-neutral `LifecycleHandler` is composed against the daemon's same `MemorySpace`; Codex, Claude Code, REST, checkpoint orchestration, and the MCP command plane therefore share the same in-process owner.
 
 For no-Session read tools, `MEMORY_SPACE_SPACE_ID` is the highest-priority trusted explicit Space override. Otherwise, `MEMORY_SPACE_CWD` is the trusted directory used for nearest-ancestor `.memory-space/config.json` resolution; it defaults to daemon cwd only when not configured. One daemon endpoint therefore has one trusted no-Session project context. A supplied Session ID is always authoritative and cannot be rebound by either setting. Neither `cwd` nor `spaceId` is accepted as a tool argument.
 
@@ -103,55 +94,64 @@ Standalone mode owns its SQLite connection. Never point it at a database used by
 
 ## Provider integrations
 
-P2 supports Codex's native `SessionStart`, `UserPromptSubmit`, `Stop`,
-`PreCompact`, and `SessionEnd` hooks through the daemon's local lifecycle
-endpoint. The hook bridge captures conversation-lite evidence, injects
-bootstrap context, checkpoints supported boundaries, and fails open when the
-Memory service is unavailable. Codex connects to the same daemon over MCP for
-explicit Memory commands.
+P2 supports Codex's native `SessionStart`, `UserPromptSubmit`, `Stop`, `PreCompact`, and `SessionEnd` hooks through the daemon's local lifecycle endpoint. The hook bridge captures conversation-lite evidence, injects bootstrap context, checkpoints supported boundaries, and fails open when the Memory service is unavailable. Codex connects to the same daemon over MCP for explicit Memory commands.
 
-Claude Code P3 implements the same provider-neutral lifecycle shape and uses the
-same six-tool MCP command plane. Real Claude hook lifecycle/bootstrap behavior
-has passed; real model-driven MCP execution is currently blocked by the active
-compatibility gateway rewriting Claude MCP tool names. That external limitation
-is recorded as a scoped progression waiver rather than a false PASS or a reason
-to add Claude-only alias tools.
+Claude Code P3 implements the same provider-neutral lifecycle shape and uses the same six-tool MCP command plane. Real Claude hook lifecycle/bootstrap behavior has passed; real model-driven MCP execution is currently blocked by the active compatibility gateway rewriting Claude MCP tool names. That external limitation is recorded as a scoped progression waiver rather than a false PASS or a reason to add Claude-only alias tools.
 
-See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for Codex setup and
-real-provider evidence.
+See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for Codex setup and real-provider evidence.
 
-See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md) for
-Claude Code hook/MCP setup, lifecycle semantics, and the current real-provider
-limitation.
+See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md) for Claude Code hook/MCP setup, lifecycle semantics, and the current real-provider limitation.
 
-P4 is defined in
-[`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md).
-It expands the product proof from one Codex→Claude path to same-provider,
-cross-provider, multi-hop, restart, Space-isolation, progressive-disclosure, and
-provenance validation. P4 implementation, automated eval, and code review now
-PASS at the intended product/automated scope.
+P4 is defined in [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md). It expands the product proof from one Codex→Claude path to same-provider, cross-provider, multi-hop, restart, Space-isolation, progressive-disclosure, and provenance validation. P4 implementation, automated eval, and code review PASS at the intended product/automated scope.
+
+## Memory Quality status
+
+P6 Stage A is an accepted deterministic before-state for future quality work.
+
+Accepted reference:
+
+```text
+9490ebce94928132a2fb16aca247c8ae4888a7cf
+```
+
+Key Stage A observations:
+
+```text
+Extraction precision        0.800000
+Extraction recall           0.666667
+P@1 / R@1                  0.727273 / 0.681818
+P@3 / R@3                  0.303030 / 0.818182
+Negative-query FP rate      1.000000
+Negative-query abstention   0.000000
+Core pollution              0.111111
+Handoff completeness        1.000000
+Duplicate-memory rate       0.500000
+```
+
+The next authorized quality stage is **P6 Stage B1 — Retrieval Precision & Abstention**. It is intentionally limited to provider-neutral deterministic lexical relevance/ranking improvements and before/after measurement. It does not authorize embeddings, vector search, extractor changes, Core/Handoff policy changes, or semantic dedup.
+
+See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md).
 
 ## Next roadmap
 
-Provider breadth is no longer the default next step. The post-integration v1
-roadmap is:
+Provider breadth is no longer the default next step. The current post-integration v1 roadmap is:
 
 ```text
 P5 Productization
-→ implementation, validation, and code review PASS
+→ COMPLETE / REVIEW PASS
 
 P6 Memory Quality v1
-→ Stage A CR-PHASE9 metric hardening complete; awaiting re-review
+→ Stage A deterministic baseline COMPLETE / REVIEW PASS
+→ Stage B1 Retrieval Precision & Abstention READY / AUTHORIZED
+→ B2/B3/B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
-→ Cursor or another provider only if it proves additional compatibility value
+→ only if it proves additional compatibility value
 ```
 
-See [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md),
-[`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md), and
-[`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md). The recorded
-Stage A scores and failure examples are in
-[`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md).
+See [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md), [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md), [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md), and [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md).
+
+The accepted Stage A scores and failure examples are in [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md).
 
 ## Architecture
 
@@ -178,8 +178,9 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md) — accepted P4 cross-session and cross-provider durable-memory eval
 - [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md) — post-integration phase order
 - [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md) — P5 local CLI/productization requirements
-- [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 deterministic memory-quality baseline requirements
-- [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — recorded P6 Stage A metrics, failures, and reproducibility evidence
+- [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 umbrella quality requirements and staged-improvement policy
+- [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) — normative P6 Stage B1 retrieval precision/abstention execution spec
+- [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
 
 ## Status
 
@@ -193,25 +194,17 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **Codex P2: FROZEN after the recorded real-Codex CLI smoke.**
 
-**Claude Code P3: implementation, automated validation, code review, and real
-hook lifecycle PASS. Real model-driven MCP execution remains externally blocked;
-P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully
-FROZEN.**
+**Claude Code P3: implementation, automated validation, code review, and real hook lifecycle PASS. Real model-driven MCP execution remains externally blocked; P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully FROZEN.**
 
-**P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS;
-code review PASS after CR-PHASE7.**
+**P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS; code review PASS after CR-PHASE7.**
 
-**P5 Productization: implementation PASS; automated validation and local CLI
-smoke PASS; code review PASS after CR-PHASE8.**
+**P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A CR-PHASE9 retrieval metric fixes implemented
-and awaiting baseline re-review. Stage B has not started.**
+**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 Retrieval Precision & Abstention is READY / AUTHORIZED under its dedicated spec. B2/B3/B4 have not started.**
 
-P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
-Codex→Claude→Codex→Claude continuity through distinct provider Sessions and
-SQLite reopen while preserving progressive disclosure, provenance, Space
-isolation, Handoff advancement, and the exact shared six-tool command plane.
+P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 
 Real Codex evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
 Claude hook/MCP blocker evidence: [`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
 P4 review evidence: [`docs/code-review/CR-PHASE7.md`](docs/code-review/CR-PHASE7.md).
+P6 Stage A review evidence: [`docs/code-review/CR-PHASE9.md`](docs/code-review/CR-PHASE9.md).
