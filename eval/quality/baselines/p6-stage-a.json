@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "id": "p6-stage-a",
+  "acceptedCommit": "9490ebce94928132a2fb16aca247c8ae4888a7cf",
+  "reportVersion": 1,
+  "retrieval": [
+    { "k": 1, "precision": 0.7272727272727273, "recall": 0.6818181818181818, "queryCount": 11 },
+    { "k": 3, "precision": 0.30303030303030304, "recall": 0.8181818181818182, "queryCount": 11 },
+    { "k": 5, "precision": 0.18, "recall": 0.8, "queryCount": 10 },
+    { "k": 10, "precision": 0.09, "recall": 0.8, "queryCount": 10 }
+  ],
+  "negativeRetrieval": {
+    "queryCount": 1,
+    "falsePositiveQueries": 1,
+    "abstainedQueries": 0,
+    "falsePositiveRate": 1,
+    "abstentionRate": 0,
+    "queries": [
+      {
+        "id": "long-old-sqlite-decision",
+        "query": "project database SQLite",
+        "eligibleCorpusSize": 13,
+        "returned": [
+          "decision.database.postgresql",
+          "decision.api.v2",
+          "progress.migration-complete",
+          "knowledge.database.paraphrase.3",
+          "decision.rate-limit.redis",
+          "decision.auth.jwt",
+          "goal.commerce-api"
+        ],
+        "returnedCount": 7,
+        "abstained": false
+      }
+    ]
+  },
+  "queries": [
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "exact-keyword",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": ["retrieval.decision.database"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "partial-keyword",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": ["retrieval.knowledge.migration-path"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "different-word-order",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": ["retrieval.knowledge.oauth-callback"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "wording-mismatch",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": ["retrieval.distractor.connection-limit", "retrieval.decision.database"],
+      "atK": [
+        { "k": 1, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 3, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 5, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 10, "hits": 0, "precision": 0, "recall": 0 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "multiple-relevant-with-distractor",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": [
+        "retrieval.decision.rate-limit",
+        "retrieval.knowledge.rate-headers",
+        "retrieval.distractor.connection-limit",
+        "retrieval.knowledge.migration-path"
+      ],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 0.5 },
+        { "k": 3, "hits": 2, "precision": 0.6666666666666666, "recall": 1 },
+        { "k": 5, "hits": 2, "precision": 0.4, "recall": 1 },
+        { "k": 10, "hits": 2, "precision": 0.2, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "same-token-wrong-target",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": [
+        "retrieval.decision.jwt-expiry",
+        "retrieval.distractor.design-token",
+        "retrieval.decision.rate-limit"
+      ],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "lexical-retrieval-baseline",
+      "id": "semantic-target-loses-to-overlap",
+      "classification": "positive",
+      "eligibleCorpusSize": 12,
+      "returned": ["retrieval.distractor.storage-bucket", "retrieval.decision.rate-limit"],
+      "atK": [
+        { "k": 1, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "saas-commerce-api-20-session-evolution",
+      "id": "long-current-database",
+      "classification": "positive",
+      "eligibleCorpusSize": 13,
+      "returned": ["decision.database.postgresql"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "saas-commerce-api-20-session-evolution",
+      "id": "long-migration-wording-mismatch",
+      "classification": "positive",
+      "eligibleCorpusSize": 13,
+      "returned": [],
+      "atK": [
+        { "k": 1, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 3, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 5, "hits": 0, "precision": 0, "recall": 0 },
+        { "k": 10, "hits": 0, "precision": 0, "recall": 0 }
+      ]
+    },
+    {
+      "scenarioId": "saas-commerce-api-20-session-evolution",
+      "id": "long-resolved-blocker",
+      "classification": "positive",
+      "eligibleCorpusSize": 4,
+      "returned": ["blocker.migration-script", "task.database-migration"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 }
+      ]
+    },
+    {
+      "scenarioId": "saas-commerce-api-20-session-evolution",
+      "id": "long-old-sqlite-decision",
+      "classification": "negative",
+      "eligibleCorpusSize": 13,
+      "returned": [
+        "decision.database.postgresql",
+        "decision.api.v2",
+        "progress.migration-complete",
+        "knowledge.database.paraphrase.3",
+        "decision.rate-limit.redis",
+        "decision.auth.jwt",
+        "goal.commerce-api"
+      ],
+      "atK": []
+    },
+    {
+      "scenarioId": "saas-commerce-api-20-session-evolution",
+      "id": "long-current-api-endpoint",
+      "classification": "positive",
+      "eligibleCorpusSize": 13,
+      "returned": ["decision.api.v2"],
+      "atK": [
+        { "k": 1, "hits": 1, "precision": 1, "recall": 1 },
+        { "k": 3, "hits": 1, "precision": 0.3333333333333333, "recall": 1 },
+        { "k": 5, "hits": 1, "precision": 0.2, "recall": 1 },
+        { "k": 10, "hits": 1, "precision": 0.1, "recall": 1 }
+      ]
+    }
+  ],
+  "correctness": {
+    "overall": "pass",
+    "checks": [
+      { "id": "long-horizon.latest-handoff-boundary", "status": "pass" },
+      { "id": "long-horizon.inactive-excluded-from-bootstrap", "status": "pass" },
+      { "id": "long-horizon.database-slot.current-active", "status": "pass" },
+      { "id": "long-horizon.database-slot.stale-not-active", "status": "pass" },
+      { "id": "long-horizon.database-slot.bootstrap-current", "status": "pass" },
+      { "id": "long-horizon.database-slot.bootstrap-no-stale", "status": "pass" },
+      { "id": "long-horizon.api-endpoint-slot.current-active", "status": "pass" },
+      { "id": "long-horizon.api-endpoint-slot.stale-not-active", "status": "pass" },
+      { "id": "long-horizon.api-endpoint-slot.bootstrap-current", "status": "pass" },
+      { "id": "long-horizon.api-endpoint-slot.bootstrap-no-stale", "status": "pass" },
+      { "id": "provider.codex-to-claude-bootstrap", "status": "pass" },
+      { "id": "provider.provenance-preserved", "status": "pass" },
+      { "id": "provider.cross-space-isolation", "status": "pass" },
+      { "id": "provider.inactive-bootstrap-exclusion", "status": "pass" },
+      { "id": "provider.exact-six-mcp", "status": "pass" }
+    ]
+  }
+}

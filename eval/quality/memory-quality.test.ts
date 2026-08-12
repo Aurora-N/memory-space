@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Memory, MemorySearchInput, MemorySearchResult } from "../../src/domain/types.ts";
 import type { MemorySpace } from "../../src/application/memory-space.ts";
+import { loadStageABaseline, stageABaselineSchema } from "./baseline.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
 import { LogicalMemoryIndex } from "./identity.ts";
 import {
@@ -231,6 +232,15 @@ test("quality fixtures validate independent ground truth and exactly 20 Sessions
   assert.deepEqual(fixtures.retrieval.ks, [1, 3, 5, 10]);
   assert.ok(fixtures.extraction.expectedMemories.length > 0);
   assert.equal(extractionFixtureSchema.safeParse({ version: 1 }).success, false);
+});
+
+test("accepted Stage A snapshot has the frozen versioned comparison shape", async () => {
+  const baseline = await loadStageABaseline();
+  assert.equal(baseline.acceptedCommit, "9490ebce94928132a2fb16aca247c8ae4888a7cf");
+  assert.equal(baseline.queries.length, 12);
+  assert.equal(baseline.correctness.checks.length, 15);
+  assert.equal(baseline.negativeRetrieval.falsePositiveRate, 1);
+  assert.equal(stageABaselineSchema.safeParse({ ...baseline, version: 2 }).success, false);
 });
 
 test("logical fixture identity remains stable across keyed runtime updates", () => {
