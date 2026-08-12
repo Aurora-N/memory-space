@@ -128,12 +128,12 @@
     },
     {
       "id": "multiple-relevant-with-distractor",
-      "query": "rate limit",
+      "query": "rate limit connection enforcement headers Redis",
       "relevantMemoryKeys": [
         "retrieval.decision.rate-limit",
         "retrieval.knowledge.rate-headers"
       ],
-      "note": "Two relevant memories plus an unrelated connection-limit distractor."
+      "note": "Two relevant memories plus a connection-limit distractor; distinct production scores remove an otherwise random equal-score tie without changing relevance labels."
     },
     {
       "id": "same-token-wrong-target",
