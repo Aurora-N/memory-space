@@ -135,7 +135,7 @@ roadmap is:
 
 ```text
 P5 Productization
-→ implementation and local validation complete; code review pending
+→ CR-PHASE8 fixes implemented; awaiting re-review
 
 P6 Memory Quality v1
 → deterministic benchmark / long-horizon metrics / measured improvements
@@ -195,8 +195,8 @@ FROZEN.**
 **P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS;
 code review PASS after CR-PHASE7.**
 
-**P5 Productization: implementation complete; automated validation and local
-CLI smoke PASS; code review pending. P6 has not started.**
+**P5 Productization: CR-PHASE8 fixes implemented; awaiting re-review. P6 has
+not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
 Codex→Claude→Codex→Claude continuity through distinct provider Sessions and

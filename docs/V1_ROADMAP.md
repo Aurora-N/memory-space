@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P5 — Productization implementation complete; code review pending
+**Current phase:** P5 — CR-PHASE8 fixes implemented; awaiting re-review
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`
 
@@ -46,7 +46,7 @@ P2 — Codex Provider Integration                COMPLETE / FROZEN
 P3 — Claude Code Provider Integration          ACCEPTED WITH SCOPED WAIVER
 P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
-P5 — Productization                            IMPLEMENTATION COMPLETE / REVIEW PENDING
+P5 — Productization                            FIXES IMPLEMENTED / AWAITING RE-REVIEW
 P6 — Memory Quality v1                         AFTER P5
 P7 — Optional MCP-first Provider Validation    OPTIONAL
 ```
@@ -99,8 +99,9 @@ memory-space eval cross-session
 
 The first three commands use one loopback `LocalMemorySpaceClient` and never
 open SQLite. The eval command reuses the canonical P4 runner with isolated
-temporary storage. Automated validation and a local CLI smoke pass; P5 remains
-review-pending and P6 has not started.
+temporary storage. CR-PHASE8 hardening distinguishes local versus inherited
+init bindings and detects supported Claude hook/MCP scopes without exposing
+provider secrets. P5 is awaiting re-review and P6 has not started.
 
 ---
 

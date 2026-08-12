@@ -1,9 +1,45 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { SpaceResolver, type SpaceBinding } from "../binding/space-resolver.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
 import { CliError } from "./errors.ts";
+
+function invalidBinding(cause?: unknown): CliError {
+  return new CliError("BINDING_INVALID", "Project Memory Space binding is invalid.", {
+    remediation: "Repair .memory-space/config.json; the existing file was preserved.",
+    cause
+  });
+}
+
+export async function readLocalProjectBinding(
+  cwd: string
+): Promise<SpaceBinding | undefined> {
+  const configPath = join(resolve(cwd), ".memory-space", "config.json");
+  let raw: string;
+  try {
+    raw = await readFile(configPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw invalidBinding(error);
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch (error) {
+    throw invalidBinding(error);
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw invalidBinding();
+  }
+  const config = value as Record<string, unknown>;
+  if (config.version !== 1 || typeof config.spaceId !== "string"
+    || config.spaceId.trim() === "") {
+    throw invalidBinding();
+  }
+  return { spaceId: config.spaceId.trim(), source: "config", configPath };
+}
 
 export async function resolveOptionalBinding(cwd: string): Promise<SpaceBinding | undefined> {
   try {
@@ -11,10 +47,7 @@ export async function resolveOptionalBinding(cwd: string): Promise<SpaceBinding 
   } catch (error) {
     if (error instanceof SpaceNotBoundError) return undefined;
     if (error instanceof SpaceBindingInvalidError) {
-      throw new CliError("BINDING_INVALID", "Project Memory Space binding is invalid.", {
-        remediation: "Repair .memory-space/config.json; the existing file was preserved.",
-        cause: error
-      });
+      throw invalidBinding(error);
     }
     throw error;
   }

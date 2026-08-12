@@ -1,6 +1,6 @@
 # P5 — Productization Spec
 
-**Status:** Implementation complete; local validation PASS; code review pending
+**Status:** CR-PHASE8 fixes implemented; awaiting re-review
 **Phase:** P5  
 **Depends on:** Provider Integration P0–P4 complete at their recorded acceptance levels  
 **Related:** `V1_ROADMAP.md`, `PROVIDER_INTEGRATION_GUARDRAILS.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
@@ -493,6 +493,24 @@ Final local verification on 2026-08-12:
 pnpm run check           PASS — 93/93
 pnpm run check:workspace PASS — 93/93
 ```
+
+CR-PHASE8 hardening verification on 2026-08-12:
+
+```text
+focused CLI tests         PASS — 17/17
+pnpm run check            PASS — 98/98
+pnpm run check:workspace  PASS — 98/98
+Codex P2 runner self-test PASS
+Claude P3 runner self-test PASS
+```
+
+The hardening pass adds structured Claude scope detection for project, local,
+and user configuration and separates exact local init bindings from inherited
+nearest bindings. Manual smoke confirmed user-scoped Claude MCP plus project
+local hooks, inherited nested resolution without a shadow file, an explicit
+nested Space override, unchanged root resolution, and the canonical
+cross-session eval. The implementation is awaiting CR-PHASE8 re-review; this
+does not mark P5 code review as PASS.
 
 The manual CLI smoke used one isolated loopback daemon and a temporary project:
 

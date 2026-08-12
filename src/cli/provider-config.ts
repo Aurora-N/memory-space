@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 export interface ProviderConfigState {
   provider: "codex" | "claude-code";
@@ -24,6 +24,63 @@ async function matchingCount(paths: string[], markers: readonly string[]): Promi
     .filter(Boolean).length;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readJsonObject(path: string): Promise<Record<string, unknown> | undefined> {
+  try {
+    const metadata = await stat(path);
+    if (!metadata.isFile() || metadata.size > 1024 * 1024) return undefined;
+    const value: unknown = JSON.parse(await readFile(path, "utf8"));
+    return isRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasMemorySpaceMcpServer(value: unknown): boolean {
+  return isRecord(value)
+    && isRecord(value.mcpServers)
+    && isRecord(value.mcpServers.memory_space);
+}
+
+function hasClaudeHookCommand(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasClaudeHookCommand);
+  if (!isRecord(value)) return false;
+  if (typeof value.command === "string"
+    && (value.command.includes("claude-code:hook")
+      || value.command.includes("/providers/claude-code/lifecycle"))) {
+    return true;
+  }
+  return Object.values(value).some(hasClaudeHookCommand);
+}
+
+async function hasClaudeHooks(path: string): Promise<boolean> {
+  const config = await readJsonObject(path);
+  return config !== undefined && hasClaudeHookCommand(config.hooks);
+}
+
+async function claudeMcpCounts(cwd: string, home: string): Promise<number> {
+  const resolvedCwd = resolve(cwd);
+  const projectConfig = await readJsonObject(join(resolvedCwd, ".mcp.json"));
+  const globalConfig = await readJsonObject(join(home, ".claude.json"));
+  let count = hasMemorySpaceMcpServer(projectConfig) ? 1 : 0;
+
+  if (!globalConfig) return count;
+  if (hasMemorySpaceMcpServer(globalConfig)) count += 1;
+
+  if (isRecord(globalConfig.projects)) {
+    const currentProjectConfigured = Object.entries(globalConfig.projects).some(
+      ([projectPath, config]) => isAbsolute(projectPath)
+        && resolve(projectPath) === resolvedCwd
+        && hasMemorySpaceMcpServer(config)
+    );
+    if (currentProjectConfigured) count += 1;
+  }
+  return count;
+}
+
 export async function detectProviderConfigs(
   cwd: string,
   home: string
@@ -36,13 +93,12 @@ export async function detectProviderConfigs(
     join(cwd, ".codex", "config.toml"),
     join(home, ".codex", "config.toml")
   ], ["mcp_servers.memory_space", "memory_space"]);
-  const claudeHooks = await matchingCount([
+  const claudeHooks = (await Promise.all([
     join(cwd, ".claude", "settings.json"),
+    join(cwd, ".claude", "settings.local.json"),
     join(home, ".claude", "settings.json")
-  ], ["claude-code:hook", "/providers/claude-code/lifecycle"]);
-  const claudeMcp = await matchingCount([
-    join(cwd, ".mcp.json")
-  ], ["memory_space", "/mcp"]);
+  ].map(hasClaudeHooks))).filter(Boolean).length;
+  const claudeMcp = await claudeMcpCounts(cwd, home);
 
   return [
     providerState("codex", codexHooks, codexMcp),

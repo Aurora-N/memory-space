@@ -79,13 +79,18 @@ trusted daemon `MEMORY_SPACE_SPACE_ID` override must match an existing binding.
 ## 2. Configure Claude hooks
 
 Merge [`examples/claude-code/settings.json`](../examples/claude-code/settings.json)
-into either the target project's `.claude/settings.json` or the user-level
+into the target project's `.claude/settings.json` or
+`.claude/settings.local.json`, or into the user-level
 `~/.claude/settings.json`. Replace `/absolute/path/to/memory-space` in every
 command with this checkout's absolute path.
 
-Use exactly one active Memory Space hook source. Claude Code merges hook
-definitions from active settings sources, so installing the same bridge at
-both user and project scope can duplicate Conversation-lite evidence.
+Claude Code merges hooks from all active settings scopes. Identical handlers
+are currently deduplicated; command hooks are deduplicated by command string
+and arguments. Non-identical Memory Space definitions may still both execute.
+Prefer one canonical active definition so lifecycle ownership and diagnostics
+remain clear. `memory-space doctor` therefore warns when it finds Memory Space
+definitions in multiple active scopes, even when Claude would deduplicate the
+identical handlers.
 
 The native mapping follows the current official lifecycle contract:
 
@@ -110,7 +115,10 @@ an eight-second per-hook timeout, which Claude Code uses to raise that budget.
 
 Copy [`examples/claude-code/mcp.json`](../examples/claude-code/mcp.json) to the
 target project root as `.mcp.json`, or merge its `memory_space` entry into an
-existing file. Run `/mcp` and verify that `memory_space` is connected.
+existing file. Claude also supports project-local MCP configuration under the
+current project's entry in `~/.claude.json` and user-scoped MCP configuration
+at the top level of that file; `memory-space doctor` recognizes all three
+scopes. Run `/mcp` and verify that `memory_space` is connected.
 
 Claude uses the same six tools as every other provider:
 

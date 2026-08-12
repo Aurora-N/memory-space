@@ -5,7 +5,11 @@ import type {
 } from "../../eval/support/cross-session-runner.ts";
 import type { Space } from "../domain/types.ts";
 import { CliError } from "./errors.ts";
-import { resolveOptionalBinding, writeBindingAtomically } from "./binding.ts";
+import {
+  readLocalProjectBinding,
+  resolveOptionalBinding,
+  writeBindingAtomically
+} from "./binding.ts";
 import {
   MEMORY_MCP_TOOLS,
   type LocalMemorySpaceClientPort
@@ -71,21 +75,33 @@ export async function runInit(
   }
   const requestedSpaceId = required(options.spaceId, "--space-id");
   const requestedName = required(options.name, "--name") ?? basename(cwd);
-  const binding = await resolveOptionalBinding(cwd);
+  const localBinding = await readLocalProjectBinding(cwd);
 
-  if (binding) {
-    if (requestedSpaceId !== undefined && requestedSpaceId !== binding.spaceId) {
+  if (localBinding) {
+    if (requestedSpaceId !== undefined && requestedSpaceId !== localBinding.spaceId) {
       throw new CliError(
         "BINDING_CONFLICT",
-        `Project is already bound to Space ${binding.spaceId}; it was not rebound.`,
+        `Project is already bound to Space ${localBinding.spaceId}; it was not rebound.`,
         { remediation: "Use the existing Space or update the binding explicitly after review." }
       );
     }
     await context.client.health();
-    const space = await context.client.getSpace(binding.spaceId);
+    const space = await context.client.getSpace(localBinding.spaceId);
     context.write("Memory Space already initialized");
     context.write(`Space:   ${space.name} (${space.id})`);
-    context.write(`Binding: ${binding.configPath ?? binding.source}`);
+    context.write(`Binding: ${localBinding.configPath ?? localBinding.source}`);
+    providerNextSteps(context.write);
+    return;
+  }
+
+  const inheritedBinding = await resolveOptionalBinding(cwd);
+  if (inheritedBinding
+    && (requestedSpaceId === undefined || requestedSpaceId === inheritedBinding.spaceId)) {
+    await context.client.health();
+    const space = await context.client.getSpace(inheritedBinding.spaceId);
+    context.write("Memory Space already initialized (inherited binding)");
+    context.write(`Space:   ${space.name} (${space.id})`);
+    context.write(`Binding: ${inheritedBinding.configPath ?? inheritedBinding.source}`);
     providerNextSteps(context.write);
     return;
   }

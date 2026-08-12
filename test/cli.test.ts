@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -13,12 +14,14 @@ import test from "node:test";
 import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
 import { runCli, type CliDependencies } from "../src/cli/main.ts";
 import { CliError } from "../src/cli/errors.ts";
+import { detectProviderConfigs } from "../src/cli/provider-config.ts";
 import {
   LocalMemorySpaceClient,
   MEMORY_MCP_TOOLS,
   type LocalMemorySpaceClientPort
 } from "../src/cli/local-client.ts";
 import type { HandoffSnapshot, Space } from "../src/domain/types.ts";
+import { SpaceResolver } from "../src/binding/space-resolver.ts";
 import { createDefaultMemorySpace, createMemorySpaceDaemon } from "../src/index.ts";
 
 class FakeClient implements LocalMemorySpaceClientPort {
@@ -121,6 +124,31 @@ function addSpace(client: FakeClient, id: string, name = "CLI Space"): void {
   client.spaces.set(id, { id, name, createdAt: now, updatedAt: now });
 }
 
+function claudeHook(command = "pnpm claude-code:hook"): object {
+  return {
+    hooks: {
+      SessionStart: [{ hooks: [{ type: "command", command }] }]
+    }
+  };
+}
+
+function claudeMcp(secret?: string): object {
+  return {
+    mcpServers: {
+      memory_space: {
+        type: "http",
+        url: "http://127.0.0.1:4310/mcp",
+        headers: secret ? { authorization: secret } : undefined
+      }
+    }
+  };
+}
+
+async function claudeConfigState(project: string, home: string): Promise<string> {
+  return (await detectProviderConfigs(project, home))
+    .find((provider) => provider.provider === "claude-code")?.state ?? "missing";
+}
+
 test("init creates an atomic v1 binding and is idempotent for the same Space", async () => {
   const { directory, project } = temporaryProject("init");
   const client = new FakeClient();
@@ -170,6 +198,63 @@ test("init rejects conflicting and malformed bindings without changing them", as
     assert.equal(invalid.code, 1);
     assert.match(invalid.stderr, /BINDING_INVALID/u);
     assert.equal(readFileSync(path, "utf8"), malformed);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("nested init preserves inherited binding unless a different Space is explicit", async () => {
+  const { directory, project } = temporaryProject("nested-init");
+  const nested = join(project, "apps", "web");
+  const client = new FakeClient();
+  const resolver = new SpaceResolver();
+  try {
+    mkdirSync(nested, { recursive: true });
+    const rootConfigPath = bind(project, { version: 1, spaceId: "space-a" });
+    const rootConfigBefore = readFileSync(rootConfigPath, "utf8");
+    addSpace(client, "space-a", "Root Space A");
+
+    assert.equal((await resolver.resolve({ cwd: nested })).spaceId, "space-a");
+    const inherited = await cli(["init", "--cwd", nested], { cwd: nested, client });
+    assert.equal(inherited.code, 0, inherited.stderr);
+    assert.match(inherited.stdout, /inherited binding/u);
+    assert.equal(client.createCalls, 0);
+    assert.equal(existsSync(join(nested, ".memory-space", "config.json")), false);
+    assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
+
+    const explicitSame = await cli([
+      "init", "--cwd", nested, "--space-id", "space-a"
+    ], { cwd: nested, client });
+    assert.equal(explicitSame.code, 0, explicitSame.stderr);
+    assert.match(explicitSame.stdout, /inherited binding/u);
+    assert.equal(client.createCalls, 0);
+    assert.equal(existsSync(join(nested, ".memory-space", "config.json")), false);
+
+    const override = await cli([
+      "init", "--cwd", nested, "--space-id", "space-b", "--name", "Nested Space B"
+    ], { cwd: nested, client });
+    assert.equal(override.code, 0, override.stderr);
+    assert.equal(client.createCalls, 1);
+    assert.equal((await resolver.resolve({ cwd: project })).spaceId, "space-a");
+    assert.equal((await resolver.resolve({ cwd: nested })).spaceId, "space-b");
+    assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
+
+    const repeated = await cli([
+      "init", "--cwd", nested, "--space-id", "space-b"
+    ], { cwd: nested, client });
+    assert.equal(repeated.code, 0, repeated.stderr);
+    assert.match(repeated.stdout, /already initialized/u);
+    assert.equal(client.createCalls, 1);
+
+    const nestedConfigPath = join(nested, ".memory-space", "config.json");
+    const nestedConfigBefore = readFileSync(nestedConfigPath, "utf8");
+    const conflict = await cli([
+      "init", "--cwd", nested, "--space-id", "space-c"
+    ], { cwd: nested, client });
+    assert.equal(conflict.code, 1);
+    assert.match(conflict.stderr, /BINDING_CONFLICT/u);
+    assert.equal(readFileSync(nestedConfigPath, "utf8"), nestedConfigBefore);
+    assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -259,13 +344,12 @@ test("doctor reports a healthy exact-six project without exposing credentials", 
       "token = 'codex-mcp-secret'"
     ].join("\n"));
     writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify({
-      command: "pnpm claude-code:hook",
+      ...claudeHook(),
       apiKey: "claude-super-secret"
     }));
-    writeFileSync(join(project, ".mcp.json"), JSON.stringify({
-      mcpServers: { memory_space: { url: "http://127.0.0.1:4310/mcp" } },
-      token: "claude-mcp-secret"
-    }));
+    writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp(
+      "Bearer claude-mcp-secret"
+    )));
     const result = await cli([
       "doctor", "--cwd", project, "--json"
     ], { cwd: project, home, client });
@@ -278,6 +362,99 @@ test("doctor reports a healthy exact-six project without exposing credentials", 
       (item) => item.id === "claude-real-mcp-waiver"
     )?.status, "warn");
     assert.doesNotMatch(result.stdout, /super-secret|mcp-secret/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Claude detection supports project MCP and settings.local.json hooks", async () => {
+  const { directory, project } = temporaryProject("claude-project-scope");
+  const home = join(directory, "home");
+  try {
+    mkdirSync(join(project, ".claude"), { recursive: true });
+    writeFileSync(join(project, ".claude", "settings.local.json"), JSON.stringify(
+      claudeHook("pnpm claude-code:hook --local")
+    ));
+    writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp()));
+    assert.equal(await claudeConfigState(project, home), "detected");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Claude local MCP detection reads only the resolved current project", async () => {
+  const { directory, project } = temporaryProject("claude-local-scope");
+  const home = join(directory, "home");
+  const unrelated = join(directory, "另一个 project");
+  try {
+    mkdirSync(join(project, ".claude"), { recursive: true });
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(claudeHook()));
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({
+      projects: {
+        [unrelated]: claudeMcp("Bearer unrelated-secret"),
+        [join(project, ".")]: claudeMcp("Bearer current-project-secret")
+      }
+    }));
+    assert.equal(await claudeConfigState(project, home), "detected");
+
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({
+      projects: { [unrelated]: claudeMcp("Bearer unrelated-secret") }
+    }));
+    assert.equal(await claudeConfigState(project, home), "partial");
+
+    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
+    assert.equal(await claudeConfigState(project, home), "not-configured");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Claude user MCP scope is detected without disclosing parsed secrets", async () => {
+  const { directory, project } = temporaryProject("claude-user-scope");
+  const home = join(directory, "home");
+  const client = new FakeClient();
+  try {
+    bind(project, { version: 1, spaceId: "space-user-scope" });
+    addSpace(client, "space-user-scope");
+    mkdirSync(join(project, ".claude"), { recursive: true });
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(claudeHook()));
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({
+      ...claudeMcp("Bearer user-scope-api-key"),
+      env: { ANTHROPIC_API_KEY: "user-scope-env-secret" }
+    }));
+
+    const result = await cli(["doctor", "--cwd", project, "--json"], {
+      cwd: project,
+      home,
+      client
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout) as {
+      checks: Array<{ id: string; status: string }>;
+    };
+    assert.equal(parsed.checks.find((item) => item.id === "claude-code")?.status, "ok");
+    assert.doesNotMatch(result.stdout, /user-scope-api-key|user-scope-env-secret/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Claude detection reports multiple active Memory Space scopes as ambiguous", async () => {
+  const { directory, project } = temporaryProject("claude-ambiguous");
+  const home = join(directory, "home");
+  try {
+    mkdirSync(join(project, ".claude"), { recursive: true });
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(
+      claudeHook("pnpm claude-code:hook --project")
+    ));
+    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify(
+      claudeHook("pnpm claude-code:hook --user")
+    ));
+    writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp()));
+    assert.equal(await claudeConfigState(project, home), "ambiguous");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
