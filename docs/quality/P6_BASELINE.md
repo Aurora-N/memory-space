@@ -6,12 +6,13 @@
 **Initial implementation commit:** `0c0ad5a875bc3f92ac181b7f4e9c719159e4124b`
 **CR-PHASE9 metric hardening commit:** `1fab987197fb46618769c601b898d80d6ef6fd87`
 **CR-PHASE9 tie-fixture commit:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`
-**Status:** CR-PHASE9 fixes implemented; awaiting baseline re-review
-**Stage B:** Not started
+**Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
+**Status:** ACCEPTED — CR-PHASE9 REVIEW PASS
+**Next authorized stage:** P6 Stage B1 Retrieval Precision & Abstention
 
-This document records the deterministic baseline produced by the current
-Memory implementation. It is measurement evidence, not a claim that every
-quality score passes a target. No target thresholds have been adopted.
+This document is the immutable historical Stage A before-state for later quality comparisons. It records the current production Memory implementation before Stage B product retrieval changes.
+
+The values below are measurement evidence, not universal product SLOs.
 
 ## Scope and fixture inventory
 
@@ -25,18 +26,11 @@ The harness lives under `eval/quality/` and uses independent JSON ground truth:
 | `handoff.json` | Nine required atomic continuation facts across goal, progress, tasks, decisions, blockers, questions, and next steps |
 | `long-horizon.json` | Exactly 20 logical Sessions with evolving decisions, completed work, repeated evidence, local detail, blockers, checkpoints, and explicit plus extracted Memory |
 
-A smaller provider-neutral proof normalizes Codex lifecycle evidence, commits a
-checkpoint, starts a distinct Claude Session in the same Space, and verifies
-bootstrap/search continuity. It also hard-checks provenance, cross-Space
-isolation, inactive bootstrap exclusion, and the unchanged exact six MCP tools.
+A smaller provider-neutral proof normalizes Codex lifecycle evidence, commits a checkpoint, starts a distinct Claude Session in the same Space, and verifies bootstrap/search continuity. It also hard-checks provenance, cross-Space isolation, inactive bootstrap exclusion, and the unchanged exact six MCP tools.
 
-Ground truth refers to stable logical keys. A run-local identity map translates
-the production store's random Memory IDs to those keys, including keyed
-in-place evolution. Reports contain no random UUIDs.
+Ground truth refers to stable logical keys. A run-local identity map translates production random Memory IDs to those keys, including keyed in-place evolution. Reports contain no random UUIDs.
 
 ## Metric policy
-
-The implemented formulas are:
 
 ```text
 Extraction precision = TP / (TP + FP)
@@ -49,31 +43,25 @@ Stale rate           = stale active Memory / active Memory
 Duplicate rate       = avoidable active duplicates / active duplicate-group members
 ```
 
-Queries with at least one relevant logical key contribute to macro P@K/R@K.
-The zero-relevant query is excluded from those aggregates and measured
-separately by false-positive and abstention rates. For each query, K contributes
-only when `K <= eligibleCorpusSize`; the eligible corpus is counted through
-`MemorySpace.search()` with an empty query and the same status/family/type/tier
-filters. Aggregate `queryCount` therefore varies by K.
+Queries with at least one relevant logical key contribute to macro P@K/R@K. Zero-relevant queries are excluded and measured separately by false-positive and abstention rates.
 
-The evaluator preserves the exact order returned by production
-`MemorySpace.search()`. Logical fixture keys translate identity only and never
-act as a ranking or tie-breaking signal. One query-only fixture correction was
-required after removing evaluator reordering: the multi-relevant rate-limit
-query now includes existing relevant/distractor terms whose production scores
-are 4/3/2/1. This removes a random equal-score ordering while retaining the
-same relevant set, returned set, and hits at every eligible K.
+For each query, K contributes only when:
 
-Empty relevant sets are not valid inputs to ordinary retrieval P@K/R@K. An
-empty negative-query set has false-positive rate 0 and abstention rate 1.
-Empty expected completeness sets retain value 1; empty pollution/stale/
-duplicate denominators retain rate 0. This makes edge behavior explicit and
-stable instead of producing `NaN`.
+```text
+K <= eligibleCorpusSize
+```
 
-Quality metrics do not control the CLI exit status. Only frozen correctness
-invariants do.
+The eligible corpus is counted through `MemorySpace.search()` with an empty query and the same status/family/type/tier filters. Aggregate `queryCount` therefore varies by K.
 
-## Recorded baseline
+The evaluator preserves the exact order returned by production `MemorySpace.search()`. Logical fixture keys translate identity only and never act as ranking or tie-breaking signals.
+
+One query-only fixture correction was required after removing evaluator reordering: the multi-relevant rate-limit query uses existing relevant/distractor terms whose production scores are distinct. This removed random equal-score ordering without changing relevance labels or the intended failure class.
+
+Empty relevant sets are invalid ordinary P@K/R@K inputs. An empty negative-query set has false-positive rate 0 and abstention rate 1. Empty expected completeness sets retain value 1; empty pollution/stale/duplicate denominators retain rate 0.
+
+Quality metrics do not control the CLI exit status. Frozen correctness invariants do.
+
+## Accepted baseline
 
 | Dimension | Result |
 | --- | ---: |
@@ -97,9 +85,9 @@ invariants do.
 | Latest Handoff facts | 11 |
 | Bootstrap size | 1,654 characters / 1,674 UTF-8 bytes |
 
-The resolved-only query has an eligible corpus of four Memories, so it
-contributes at K=1 and K=3 but is omitted at K=5 and K=10. The negative SQLite
-query has an eligible active corpus of 13 and returns seven logical keys:
+The resolved-only query has an eligible corpus of four Memories, so it contributes at K=1 and K=3 but is omitted at K=5 and K=10.
+
+The negative SQLite query has an eligible active corpus of 13 and returns seven logical keys:
 
 ```text
 decision.database.postgresql
@@ -111,59 +99,42 @@ decision.auth.jwt
 goal.commerce-api
 ```
 
-It is therefore one false-positive query and not an artificial Recall@K=1 /
-Precision@K=0 sample.
+It is one false-positive query and is not represented as an artificial Recall@K=1 / Precision@K=0 sample.
 
-Handoff completeness is 1.0 because all nine required facts are present. The
-report separately identifies two unexpected facts: the temporary debug cleanup
-appears in both `activeTasks` and `nextSteps`.
+Handoff completeness is 1.0 because all nine required facts are present. The report separately identifies two unexpected facts: the temporary debug cleanup appears in both `activeTasks` and `nextSteps`.
 
-The stale rate and supersession score are also honest current results: keyed
-updates and explicit status transitions keep the obsolete SQLite/API v1 state
-out of active/default context in this fixture. They are not synthetic PASS
-labels or thresholds.
+The stale rate and supersession score are also honest current results: keyed updates and explicit status transitions keep obsolete SQLite/API v1 state out of active/default context in this fixture.
 
 ## Hard correctness evidence
 
-All 15 hard checks pass:
+All accepted hard checks pass, including:
 
 - latest Handoff belongs to the final committed S20 boundary;
 - inactive/resolved Core Memory is excluded from bootstrap;
-- both keyed decision slots expose the current state and exclude stale state;
+- keyed decision slots expose current state and exclude stale state;
 - Codex evidence reaches a distinct Claude Session in the same Space;
 - original Session provenance is preserved;
 - cross-Space search remains isolated;
 - archived Core Memory remains absent from bootstrap;
 - MCP remains exactly the six shared tools.
 
-These checks control `memory-space eval quality` exit status. The lower quality
-scores above remain observations.
+These checks control `memory-space eval quality` exit status. Lower quality scores remain observations.
 
 ## Representative observed failures
 
-1. Checkpoint extraction promotes a temporary debug-cleanup task, producing one
-   extraction false positive and the single polluted Core item.
-2. Natural wording for the hosted PostgreSQL decision and API compatibility
-   constraint is not recognized, producing two extraction false negatives.
-3. Lexical wording variants can completely miss the migration-path Memory and
-   rank database keyword distractors instead.
-4. Three unkeyed paraphrases of the same database rationale remain durable,
-   producing two avoidable duplicates. Keyed database evolution itself remains
-   one runtime Memory and is not counted as a duplicate.
-5. The zero-relevant query phrased around obsolete SQLite state returns seven
-   currently active but semantically different items. Its dedicated negative
-   metric records false-positive rate 1.0 and abstention rate 0.0.
+1. Checkpoint extraction promotes a temporary debug-cleanup task, producing one extraction false positive and the single polluted Core item.
+2. Natural wording for the hosted PostgreSQL decision and API compatibility constraint is not recognized, producing two extraction false negatives.
+3. Lexical wording variants can completely miss the migration-path Memory and rank database keyword distractors instead.
+4. Three unkeyed paraphrases of the same database rationale remain durable, producing two avoidable duplicates. Keyed database evolution itself remains one runtime Memory and is not counted as a duplicate.
+5. The zero-relevant query phrased around obsolete SQLite state returns seven currently active but semantically different items. Its dedicated negative metric records false-positive rate 1.0 and abstention rate 0.0.
 
 ## Reproducibility and isolation
 
-The runner creates isolated temporary SQLite files for extraction, retrieval,
-long-horizon, and provider-proof scenarios and removes them after each run. It
-does not contact the daemon and never opens the daemon's configured database.
-It performs no network model calls.
+The runner creates isolated temporary SQLite files for extraction, retrieval, long-horizon, and provider-proof scenarios and removes them after each run. It does not contact the daemon and never opens the daemon's configured database. It performs no network model calls.
 
-Two consecutive runner executions produced deep-equal reports after production
-ordering was restored, and the report contains no runtime UUID. The CLI exposes
-the same runner:
+Two consecutive runner executions produced deep-equal reports after production ordering was restored, and the report contains no runtime UUID.
+
+CLI:
 
 ```bash
 pnpm memory-space eval quality
@@ -189,35 +160,43 @@ GitHub CI was not independently confirmed in this local pass.
 
 ## Production boundary audit
 
-Stage A adds fixtures, evaluator code, tests, report formatting, and the thin
-`eval quality` CLI route. It does not modify production extraction, retrieval,
-Memory/domain, persistence, lifecycle, provider adapter, or MCP behavior. It
-does not add a seventh tool, provider-specific alias, embeddings, a vector
-store, a new tier, or direct CLI access to daemon SQLite.
+Stage A added fixtures, evaluator code, tests, report formatting, and the thin `eval quality` CLI route. It did not modify production extraction, retrieval, Memory/domain, persistence, lifecycle, provider adapter, or MCP behavior.
 
-The P3 real Claude model-driven MCP compatibility blocker remains under the
-existing scoped progression waiver. This baseline does not report it as PASS.
+It did not add a seventh tool, provider-specific alias, embeddings, vector store, new tier, or direct CLI access to daemon SQLite.
 
-## Ranked Stage B candidates
+The P3 real Claude model-driven MCP compatibility blocker remains under the existing scoped progression waiver. This baseline does not report it as PASS.
 
-These are recommendations for later review, not implemented work:
+## Accepted Stage B ranking
 
-1. **Lexical wording mismatch, negative-query false positives, and
-   current-intent ranking — high measured impact, medium implementation risk.**
-   Two positive query families miss relevant content, while the negative query
-   returns seven active results instead of abstaining.
-2. **Extraction generalization with transient-evidence rejection — high impact,
-   medium risk.** The baseline records two false negatives and one false
-   positive, with the false positive also reaching default context.
-3. **Core/Handoff transient pollution control — high impact, low-to-medium
-   risk.** One of nine Core items is over-local, and two unexpected Handoff
-   facts repeat it.
-4. **Semantic dedup for unkeyed paraphrases — visible impact, high semantic and
-   migration risk.** The measured rate is 2/4, but keyed dedup is already
-   correct; any broader merge rule needs separate domain review.
+The measured risks rank as:
 
-Stage B has not started. Selecting targets, thresholds, or algorithm changes
-requires explicit baseline review and authorization.
+1. **Lexical wording mismatch, negative-query false positives, and current-intent ranking — high measured impact, medium implementation risk.** Two positive query families miss relevant content, while the negative query returns seven active results instead of abstaining.
+2. **Extraction generalization with transient-evidence rejection — high impact, medium risk.** Two false negatives and one false positive are recorded; the false positive also reaches default context.
+3. **Core/Handoff transient pollution control — high impact, low-to-medium risk.** One of nine Core items is over-local, and two unexpected Handoff facts repeat it.
+4. **Semantic dedup for unkeyed paraphrases — visible impact, high semantic and migration risk.** The measured rate is 2/4, while keyed dedup is already correct.
 
-The corrected retrieval values strengthen the evidence for the existing first
-candidate but do not change the Stage B ranking order.
+This ranking authorizes only Stage B1 now. See:
+
+```text
+docs/P6_STAGE_B_RETRIEVAL_SPEC.md
+```
+
+Stage B1 must preserve this document as the accepted before-state. Candidate metrics belong in a separate B1 result/comparison document rather than replacing these values.
+
+## Review acceptance
+
+CR-PHASE9 accepted this baseline after verifying:
+
+```text
+zero-relevant queries do not bias positive P/R
+negative-query behavior is measured separately
+only meaningful K values enter each aggregate
+filtered corpus size is respected
+production ranking is preserved
+reports remain deterministic
+baseline numbers are regenerated truthfully
+production retrieval/extraction remain unchanged
+P3 scoped Claude MCP waiver remains unchanged
+```
+
+Review evidence: [`../code-review/CR-PHASE9.md`](../code-review/CR-PHASE9.md).
