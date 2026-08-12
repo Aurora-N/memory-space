@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage A baseline implemented — awaiting review
+**Current phase:** P6 Stage A CR-PHASE9 fixes implemented — awaiting re-review
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`
 
@@ -141,13 +141,16 @@ memory-space eval quality
 memory-space eval quality --json
 ```
 
-It evaluates checkpoint extraction, lexical retrieval at K = 1/3/5/10, Core
-pollution, bootstrap critical coverage and size, Handoff completeness, stale
-and duplicate Memory, supersession correctness, a 20-Session horizon, and a
-small provider-neutral continuity proof. Quality scores are recorded without
-invented thresholds; frozen correctness invariants remain hard assertions.
+It evaluates checkpoint extraction, positive-query lexical retrieval at each
+eligible K from 1/3/5/10, negative-query false-positive/abstention behavior,
+Core pollution, bootstrap critical coverage and size, Handoff completeness,
+stale and duplicate Memory, supersession correctness, a 20-Session horizon,
+and a small provider-neutral continuity proof. Quality scores are recorded
+without invented thresholds; frozen correctness invariants remain hard
+assertions. CR-PHASE9 hardening preserves production ranking and excludes
+zero-relevant queries from ordinary P@K/R@K.
 
-Stage A is awaiting baseline review. The recorded evidence and ranked measured
+Stage A is awaiting baseline re-review. The corrected evidence and ranked measured
 risks are in [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md). Stage B has
 not started and requires explicit post-review authorization.
 

@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A baseline implemented; awaiting baseline review
+**Status:** CR-PHASE9 fixes implemented; awaiting baseline re-review
 **Phase:** P6  
 **Primary goal:** Measure whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -401,10 +401,13 @@ one small Codex-to-Claude provider-neutral integration proof
 ```
 
 The runner records extraction precision/recall, macro Precision@K and Recall@K
-for K = 1/3/5/10, Core pollution, bootstrap critical coverage and size, Handoff
+for eligible K values from 1/3/5/10, separate negative-query false-positive and
+abstention rates, Core pollution, bootstrap critical coverage and size, Handoff
 completeness, stale and duplicate rates, and contradiction/supersession
-correctness. Equal lexical scores are normalized by fixture logical key so the
-machine-readable report is deterministic without exposing random runtime IDs.
+correctness. Positive-query K eligibility is based on the corpus exposed by the
+same status/family/type/tier filters. Production search ordering is preserved;
+fixture logical keys provide identity only. The machine-readable report remains
+deterministic without exposing random runtime IDs.
 
 Run the baseline with:
 

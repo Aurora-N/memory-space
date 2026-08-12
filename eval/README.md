@@ -55,13 +55,15 @@ pnpm memory-space eval quality --json
 Each invocation creates and removes its own temporary SQLite databases; it does
 not connect to the daemon or open the daemon database. Fixture ground truth is
 declared independently of extractor/search output using stable logical keys.
-The report covers checkpoint-only extraction, macro retrieval Precision@K and
-Recall@K for K = 1/3/5/10, Core pollution, bootstrap critical coverage and
-size, Handoff completeness, stale and duplicate Memory, supersession, one
-20-Session history, and a small provider-neutral proof.
+The report covers checkpoint-only extraction, positive-query macro retrieval
+Precision@K and Recall@K for meaningful K values from 1/3/5/10, a separate
+negative-query false-positive/abstention metric, Core pollution, bootstrap
+critical coverage and size, Handoff completeness, stale and duplicate Memory,
+supersession, one 20-Session history, and a small provider-neutral proof.
 
 Quality metrics are baseline observations. The CLI exits non-zero only when a
-hard correctness invariant fails. Equal-score lexical results are ordered by
-fixture logical key for reproducible reporting; production ranking is not
-modified. See [`../docs/quality/P6_BASELINE.md`](../docs/quality/P6_BASELINE.md)
+hard correctness invariant fails. Per-query K eligibility uses the corpus from
+the same status/family/type/tier filters. Results retain the exact production
+search order; logical fixture keys never re-rank equal-score results. See
+[`../docs/quality/P6_BASELINE.md`](../docs/quality/P6_BASELINE.md)
 for recorded Stage A evidence and observed limitations.

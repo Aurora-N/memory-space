@@ -11,7 +11,10 @@
 
 ## 1. Review conclusion
 
-P5 is close to acceptance. The implementation correctly keeps the product CLI outside the durable-store ownership boundary, reuses the canonical P4 eval instead of copying it, preserves the exact six-tool MCP contract, and keeps the P3 Claude real-MCP waiver honest.
+The initial P5 review found the implementation close to acceptance. It already
+kept the product CLI outside the durable-store ownership boundary, reused the
+canonical P4 eval instead of copying it, preserved the exact six-tool MCP
+contract, and kept the P3 Claude real-MCP waiver honest.
 
 The following are accepted:
 
@@ -28,20 +31,23 @@ runtime MCP dependency placement                 PASS
 P3 scoped waiver preservation                    PASS
 ```
 
-Two issues block P5 review completion:
+The initial review identified two blockers. Both were closed by the re-reviewed
+commit recorded above:
 
 ```text
-FIX-01 Claude Code config-scope detection        REQUIRED
-FIX-02 nested Space init semantics                REQUIRED
+FIX-01 Claude Code config-scope detection        CLOSED
+FIX-02 nested Space init semantics                CLOSED
 ```
 
-A documentation cleanup is also requested but is not independently blocking:
+The initial review also requested a non-blocking documentation cleanup; it was
+closed in the same hardening pass:
 
 ```text
-DOC-03 Claude identical-hook dedup wording        SHOULD FIX
+DOC-03 Claude identical-hook dedup wording        CLOSED
 ```
 
-Do not expand P5 with unrelated CLI features while addressing this review.
+That hardening pass was intentionally limited to these findings and did not
+expand P5 with unrelated CLI features.
 
 ---
 

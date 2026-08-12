@@ -141,7 +141,7 @@ P5 Productization
 → implementation, validation, and code review PASS
 
 P6 Memory Quality v1
-→ Stage A deterministic baseline complete; awaiting review
+→ Stage A CR-PHASE9 metric hardening complete; awaiting re-review
 
 P7 Optional MCP-first provider validation
 → Cursor or another provider only if it proves additional compatibility value
@@ -204,8 +204,8 @@ code review PASS after CR-PHASE7.**
 **P5 Productization: implementation PASS; automated validation and local CLI
 smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A deterministic baseline implemented and awaiting
-review. Stage B has not started.**
+**P6 Memory Quality v1: Stage A CR-PHASE9 retrieval metric fixes implemented
+and awaiting baseline re-review. Stage B has not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
 Codex→Claude→Codex→Claude continuity through distinct provider Sessions and
