@@ -16,14 +16,16 @@ import {
   type HandoffSnapshot,
   type Memory,
   type MemorySpace,
-  type MemoryStatus
+  type MemorySearchInput
 } from "../../src/index.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
 import { LogicalMemoryIndex } from "./identity.ts";
 import {
+  aggregateNegativeRetrieval,
   aggregateRetrieval,
   countedRatio,
   duplicateRate,
+  eligibleRetrievalKs,
   extractionMetric,
   pollutionRate,
   retrievalAtK,
@@ -204,34 +206,52 @@ async function runExtractionScenario(
   }
 }
 
-async function evaluateQueries(
-  memorySpace: MemorySpace,
+export async function evaluateRetrievalQueries(
+  memorySpace: Pick<MemorySpace, "search">,
   spaceId: string,
   index: LogicalMemoryIndex,
   queries: readonly RetrievalQueryFixture[],
   ks: readonly number[]
 ): Promise<RetrievalQueryResult[]> {
-  const maxK = Math.max(...ks);
   const results: RetrievalQueryResult[] = [];
   for (const query of queries) {
+    const filters: Pick<
+      MemorySearchInput,
+      "families" | "types" | "tiers" | "statuses"
+    > = {
+      families: query.families,
+      types: query.types,
+      tiers: query.tiers,
+      statuses: query.statuses
+    };
+    const eligibleCorpus = await memorySpace.search({
+      spaceId,
+      query: "",
+      ...filters,
+      limit: 100
+    });
     const returned = await memorySpace.search({
       spaceId,
       query: query.query,
-      statuses: query.statuses as MemoryStatus[] | undefined,
-      limit: maxK
+      ...filters,
+      limit: 100
     });
-    const normalized = returned.map((item) => ({
-      logicalKey: index.logicalKey(item.memory.id) ?? stableUnknown(item.memory),
-      score: item.score
-    })).sort((left, right) => right.score - left.score
-      || left.logicalKey.localeCompare(right.logicalKey));
-    const returnedKeys = normalized.map((item) => item.logicalKey);
+    const returnedKeys = returned.map((item) =>
+      index.logicalKey(item.memory.id) ?? stableUnknown(item.memory)
+    );
+    const classification = query.relevantMemoryKeys.length > 0 ? "positive" : "negative";
+    const eligibleKs = classification === "positive"
+      ? eligibleRetrievalKs(ks, eligibleCorpus.length)
+      : [];
     results.push({
       id: query.id,
       query: query.query,
+      classification,
       expected: [...query.relevantMemoryKeys].sort(),
       returned: returnedKeys,
-      atK: ks.map((k) => retrievalAtK(query.relevantMemoryKeys, returnedKeys, k)),
+      returnedCount: returnedKeys.length,
+      eligibleCorpusSize: eligibleCorpus.length,
+      atK: eligibleKs.map((k) => retrievalAtK(query.relevantMemoryKeys, returnedKeys, k)),
       note: query.note
     });
   }
@@ -244,7 +264,29 @@ function retrievalFailures(
 ): QualityFailureExample[] {
   const failures: QualityFailureExample[] = [];
   for (const result of results) {
+    if (result.classification === "negative") {
+      if (result.returnedCount > 0) {
+        failures.push(fail(
+          `${scenario}:${result.id}`,
+          "negative-query-false-positive",
+          "no active result",
+          result.returned,
+          result.note
+        ));
+      }
+      continue;
+    }
     const metric = result.atK.find((item) => item.k === 3) ?? result.atK[0];
+    if (!metric) {
+      failures.push(fail(
+        `${scenario}:${result.id}`,
+        "retrieval-eligible-corpus",
+        "at least one meaningful K",
+        { eligibleCorpusSize: result.eligibleCorpusSize },
+        result.note
+      ));
+      continue;
+    }
     const observed = result.returned.slice(0, metric.k);
     const missing = result.expected.filter((key) => !observed.includes(key));
     if (missing.length > 0) {
@@ -252,15 +294,6 @@ function retrievalFailures(
         `${scenario}:${result.id}`,
         `Recall@${metric.k}`,
         result.expected,
-        observed,
-        result.note
-      ));
-    }
-    if (result.expected.length === 0 && observed.length > 0) {
-      failures.push(fail(
-        `${scenario}:${result.id}`,
-        `Precision@${metric.k}`,
-        [],
         observed,
         result.note
       ));
@@ -294,7 +327,7 @@ async function runRetrievalScenario(
       });
       index.register(groundTruth.logicalKey, memory);
     }
-    const queryResults = await evaluateQueries(
+    const queryResults = await evaluateRetrievalQueries(
       memorySpace,
       space.id,
       index,
@@ -308,7 +341,7 @@ async function runRetrievalScenario(
         kind: "retrieval",
         observations: {
           corpusSize: fixture.memories.length,
-          tieHandling: "equal lexical scores ordered by fixture logical key",
+          rankingOrder: "preserved exactly as returned by MemorySpace.search",
           queries: queryResults
         }
       },
@@ -584,7 +617,7 @@ async function runLongHorizonScenario(
       ));
     }
 
-    const queryResults = await evaluateQueries(
+    const queryResults = await evaluateRetrievalQueries(
       memorySpace,
       space.id,
       index,
@@ -621,6 +654,7 @@ async function runLongHorizonScenario(
     const summary: MemoryQualityReport["summary"] = {
       extraction: extractionMetric(0, 0, 0),
       retrieval: [],
+      negativeRetrieval: aggregateNegativeRetrieval([]),
       corePollution: { ...corePollution, pollutedKeys },
       bootstrap: {
         criticalCoverage: countedRatio(
@@ -871,7 +905,8 @@ export async function runMemoryQualityEval(
     const summary: MemoryQualityReport["summary"] = {
       ...longHorizon.value.summary,
       extraction: extraction.value.metric,
-      retrieval: aggregateRetrieval(queryResults, fixtures.retrieval.ks)
+      retrieval: aggregateRetrieval(queryResults, fixtures.retrieval.ks),
+      negativeRetrieval: aggregateNegativeRetrieval(queryResults)
     };
     return {
       version: 1,

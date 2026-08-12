@@ -585,6 +585,14 @@ function qualityEvalReport(status: "pass" | "fail"): MemoryQualityReport {
     summary: {
       extraction: { tp: 1, fp: 0, fn: 0, precision: 1, recall: 1 },
       retrieval: [{ k: 1, precision: 1, recall: 1, queryCount: 1 }],
+      negativeRetrieval: {
+        queryCount: 0,
+        falsePositiveQueries: 0,
+        abstainedQueries: 0,
+        falsePositiveRate: 0,
+        abstentionRate: 1,
+        queries: []
+      },
       corePollution: {
         numerator: 0, denominator: 1, value: 0, pollutedKeys: []
       },

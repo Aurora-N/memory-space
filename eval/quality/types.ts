@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 
 const nonEmpty = z.string().trim().min(1);
 const memoryFamily = z.enum(["knowledge", "state", "episode", "procedure"]);
+const memoryTier = z.enum(["core", "indexed"]);
 const memoryStatus = z.enum(["active", "resolved", "superseded", "archived"]);
 
 export const groundTruthMemorySchema = z.object({
@@ -30,6 +31,9 @@ const retrievalQuerySchema = z.object({
   id: nonEmpty,
   query: z.string(),
   relevantMemoryKeys: z.array(nonEmpty),
+  families: z.array(memoryFamily).min(1).optional(),
+  types: z.array(nonEmpty).min(1).optional(),
+  tiers: z.array(memoryTier).min(1).optional(),
   statuses: z.array(memoryStatus).min(1).optional(),
   note: nonEmpty
 }).strict();
@@ -132,8 +136,11 @@ export interface RetrievalAtKMetric {
 export interface RetrievalQueryResult {
   id: string;
   query: string;
+  classification: "positive" | "negative";
   expected: string[];
   returned: string[];
+  returnedCount: number;
+  eligibleCorpusSize: number;
   atK: RetrievalAtKMetric[];
   note: string;
 }
@@ -143,6 +150,24 @@ export interface RetrievalAggregate {
   precision: number;
   recall: number;
   queryCount: number;
+}
+
+export interface NegativeRetrievalQueryResult {
+  id: string;
+  query: string;
+  eligibleCorpusSize: number;
+  returned: string[];
+  returnedCount: number;
+  abstained: boolean;
+}
+
+export interface NegativeRetrievalAggregate {
+  queryCount: number;
+  falsePositiveQueries: number;
+  abstainedQueries: number;
+  falsePositiveRate: number;
+  abstentionRate: number;
+  queries: NegativeRetrievalQueryResult[];
 }
 
 export interface QualityFailureExample {
@@ -170,6 +195,7 @@ export interface MemoryQualityReport {
   summary: {
     extraction: ExtractionMetric;
     retrieval: RetrievalAggregate[];
+    negativeRetrieval: NegativeRetrievalAggregate;
     corePollution: CountedRatio & { pollutedKeys: string[] };
     bootstrap: {
       criticalCoverage: CountedRatio;

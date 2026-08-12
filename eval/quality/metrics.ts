@@ -1,6 +1,7 @@
 import type {
   CountedRatio,
   ExtractionMetric,
+  NegativeRetrievalAggregate,
   RetrievalAggregate,
   RetrievalAtKMetric,
   RetrievalQueryResult
@@ -38,14 +39,25 @@ export function retrievalAtK(
   k: number
 ): RetrievalAtKMetric {
   const relevant = new Set(relevantKeys);
+  if (relevant.size === 0) {
+    throw new Error("Retrieval P@K/R@K requires at least one relevant Memory");
+  }
+  if (!Number.isInteger(k) || k < 1) throw new Error("Retrieval K must be a positive integer");
   const topK = returnedKeys.slice(0, k);
   const hits = new Set(topK.filter((key) => relevant.has(key))).size;
   return {
     k,
     hits,
     precision: ratio(hits, k, 1),
-    recall: ratio(hits, relevant.size, 1)
+    recall: hits / relevant.size
   };
+}
+
+export function eligibleRetrievalKs(
+  requestedKs: readonly number[],
+  eligibleCorpusSize: number
+): number[] {
+  return requestedKs.filter((k) => Number.isInteger(k) && k > 0 && k <= eligibleCorpusSize);
 }
 
 export function aggregateRetrieval(
@@ -53,7 +65,9 @@ export function aggregateRetrieval(
   ks: readonly number[]
 ): RetrievalAggregate[] {
   return ks.map((k) => {
-    const metrics = results.flatMap((result) => result.atK.filter((item) => item.k === k));
+    const metrics = results
+      .filter((result) => result.classification === "positive")
+      .flatMap((result) => result.atK.filter((item) => item.k === k));
     return {
       k,
       precision: ratio(
@@ -69,6 +83,31 @@ export function aggregateRetrieval(
       queryCount: metrics.length
     };
   });
+}
+
+export function aggregateNegativeRetrieval(
+  results: readonly RetrievalQueryResult[]
+): NegativeRetrievalAggregate {
+  const queries = results
+    .filter((result) => result.classification === "negative")
+    .map((result) => ({
+      id: result.id,
+      query: result.query,
+      eligibleCorpusSize: result.eligibleCorpusSize,
+      returned: [...result.returned],
+      returnedCount: result.returnedCount,
+      abstained: result.returnedCount === 0
+    }));
+  const falsePositiveQueries = queries.filter((query) => !query.abstained).length;
+  const abstainedQueries = queries.filter((query) => query.abstained).length;
+  return {
+    queryCount: queries.length,
+    falsePositiveQueries,
+    abstainedQueries,
+    falsePositiveRate: ratio(falsePositiveQueries, queries.length, 0),
+    abstentionRate: ratio(abstainedQueries, queries.length, 1),
+    queries
+  };
 }
 
 export function setCompleteness(

@@ -20,10 +20,20 @@ export function formatMemoryQualityReport(report: MemoryQualityReport): string[]
     "Retrieval"
   ];
   for (const item of report.summary.retrieval) {
-    lines.push(`  P@${String(item.k).padEnd(2)}             ${metric(item.precision)}`);
-    lines.push(`  R@${String(item.k).padEnd(2)}             ${metric(item.recall)}`);
+    lines.push(
+      `  P@${String(item.k).padEnd(2)}             ${metric(item.precision)} (${item.queryCount} positive queries)`
+    );
+    lines.push(
+      `  R@${String(item.k).padEnd(2)}             ${metric(item.recall)} (${item.queryCount} positive queries)`
+    );
   }
+  const negative = report.summary.negativeRetrieval;
   lines.push(
+    "",
+    "Negative retrieval",
+    `  Queries          ${negative.queryCount}`,
+    `  False positives  ${metric(negative.falsePositiveRate)} (${negative.falsePositiveQueries}/${negative.queryCount})`,
+    `  Abstention       ${metric(negative.abstentionRate)} (${negative.abstainedQueries}/${negative.queryCount})`,
     "",
     `Core pollution     ${metric(report.summary.corePollution.value)} (${report.summary.corePollution.numerator}/${report.summary.corePollution.denominator})`,
     `Bootstrap coverage ${metric(report.summary.bootstrap.criticalCoverage.value)} (${report.summary.bootstrap.criticalCoverage.numerator}/${report.summary.bootstrap.criticalCoverage.denominator})`,
