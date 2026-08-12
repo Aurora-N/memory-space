@@ -1,0 +1,356 @@
+{
+  "version": 1,
+  "id": "saas-commerce-api-20-session-evolution",
+  "spaceId": "quality-long-horizon",
+  "steps": [
+    {
+      "id": "S01",
+      "label": "Establish the project goal",
+      "events": ["Goal: Deliver a production-ready SaaS commerce API."],
+      "expectedExtracted": [{
+        "logicalKey": "goal.commerce-api",
+        "family": "state",
+        "type": "goal",
+        "key": "project.goal.primary",
+        "content": "Deliver a production-ready SaaS commerce API.",
+        "shouldBeCore": true,
+        "rationale": "Current project goal."
+      }]
+    },
+    {
+      "id": "S02",
+      "label": "Choose SQLite for the early phase",
+      "events": ["数据库确定使用 SQLite。"],
+      "expectedExtracted": [{
+        "logicalKey": "decision.database.sqlite",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.database",
+        "content": "数据库使用 SQLite",
+        "shouldBeCore": true,
+        "rationale": "Early canonical database decision."
+      }]
+    },
+    {
+      "id": "S03",
+      "label": "Choose JWT authentication",
+      "explicitMemories": [{
+        "logicalKey": "decision.auth.jwt",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.auth.strategy",
+        "content": "Authentication uses signed JWT access tokens.",
+        "shouldBeCore": true,
+        "rationale": "Stable project-wide authentication decision.",
+        "promote": true
+      }]
+    },
+    {
+      "id": "S04",
+      "label": "Record the migration helper path",
+      "events": ["Fact: Migration helper lives in scripts/db/migrate.ts."],
+      "expectedExtracted": [{
+        "logicalKey": "knowledge.migration.path",
+        "family": "knowledge",
+        "type": "fact",
+        "content": "Migration helper lives in scripts/db/migrate.ts.",
+        "shouldBeCore": false,
+        "rationale": "Durable local detail for explicit recall."
+      }]
+    },
+    {
+      "id": "S05",
+      "label": "Open the rate limiting blocker",
+      "events": ["Blocker: Rate limiting strategy is undecided."],
+      "expectedExtracted": [{
+        "logicalKey": "blocker.rate-limit",
+        "family": "state",
+        "type": "blocker",
+        "content": "Rate limiting strategy is undecided.",
+        "shouldBeCore": true,
+        "rationale": "Active project blocker."
+      }]
+    },
+    {
+      "id": "S06",
+      "label": "Publish API v1",
+      "explicitMemories": [{
+        "logicalKey": "decision.api.v1",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.api.endpoint",
+        "content": "Public API endpoint is /v1/orders.",
+        "shouldBeCore": true,
+        "rationale": "Early canonical API endpoint.",
+        "promote": true
+      }]
+    },
+    {
+      "id": "S07",
+      "label": "Resolve rate limiting and record the decision",
+      "statusChanges": [{
+        "logicalKey": "blocker.rate-limit",
+        "status": "resolved",
+        "reason": "Redis token bucket selected."
+      }],
+      "explicitMemories": [{
+        "logicalKey": "decision.rate-limit.redis",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.rate-limit",
+        "content": "Rate limiting uses a Redis token bucket.",
+        "shouldBeCore": true,
+        "rationale": "Current project-wide rate limiting decision.",
+        "promote": true
+      }]
+    },
+    {
+      "id": "S08",
+      "label": "Supersede SQLite with PostgreSQL",
+      "events": ["数据库确定使用 PostgreSQL。"],
+      "expectedExtracted": [{
+        "logicalKey": "decision.database.postgresql",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.database",
+        "content": "数据库使用 PostgreSQL",
+        "shouldBeCore": true,
+        "rationale": "Current canonical database decision."
+      }]
+    },
+    {
+      "id": "S09",
+      "label": "Start the production data migration",
+      "events": ["Task: Migrate production data from SQLite to PostgreSQL."],
+      "expectedExtracted": [{
+        "logicalKey": "task.database-migration",
+        "family": "state",
+        "type": "task",
+        "content": "Migrate production data from SQLite to PostgreSQL.",
+        "shouldBeCore": true,
+        "rationale": "Active high-level migration task."
+      }]
+    },
+    {
+      "id": "S10",
+      "label": "Repeat keyed PostgreSQL evidence and add a paraphrase",
+      "events": ["数据库确定使用 PostgreSQL。"],
+      "expectedExtracted": [{
+        "logicalKey": "decision.database.postgresql",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.database",
+        "content": "数据库使用 PostgreSQL",
+        "shouldBeCore": true,
+        "rationale": "Repeated equivalent keyed evidence."
+      }],
+      "explicitMemories": [{
+        "logicalKey": "knowledge.database.paraphrase.1",
+        "family": "knowledge",
+        "type": "fact",
+        "content": "Production storage runs on PostgreSQL.",
+        "shouldBeCore": false,
+        "rationale": "Unkeyed paraphrase retained as Indexed Memory.",
+        "duplicateGroup": "unkeyed-database-paraphrases"
+      }]
+    },
+    {
+      "id": "S11",
+      "label": "Capture a one-off debug cleanup task",
+      "events": ["Task: Remove the temporary debug log after this run."],
+      "expectedExtracted": [{
+        "logicalKey": "task.temporary-debug-cleanup",
+        "family": "state",
+        "type": "task",
+        "content": "Remove the temporary debug log after this run.",
+        "shouldBeCore": false,
+        "rationale": "One-off local cleanup should not pollute default Core."
+      }]
+    },
+    {
+      "id": "S12",
+      "label": "Open the migration script blocker",
+      "events": ["Blocker: Migration script fails on empty databases."],
+      "expectedExtracted": [{
+        "logicalKey": "blocker.migration-script",
+        "family": "state",
+        "type": "blocker",
+        "content": "Migration script fails on empty databases.",
+        "shouldBeCore": true,
+        "rationale": "Active migration blocker."
+      }]
+    },
+    {
+      "id": "S13",
+      "label": "Resolve the migration blocker and repeat database evidence",
+      "statusChanges": [{
+        "logicalKey": "blocker.migration-script",
+        "status": "resolved",
+        "reason": "Empty database migration path fixed."
+      }],
+      "explicitMemories": [{
+        "logicalKey": "knowledge.database.paraphrase.2",
+        "family": "knowledge",
+        "type": "fact",
+        "content": "We decided to keep PostgreSQL for production.",
+        "shouldBeCore": false,
+        "rationale": "Unkeyed semantic paraphrase.",
+        "duplicateGroup": "unkeyed-database-paraphrases"
+      }]
+    },
+    {
+      "id": "S14",
+      "label": "Complete migration and add another paraphrase",
+      "statusChanges": [{
+        "logicalKey": "task.database-migration",
+        "status": "resolved",
+        "reason": "Production migration completed."
+      }],
+      "explicitMemories": [{
+        "logicalKey": "knowledge.database.paraphrase.3",
+        "family": "knowledge",
+        "type": "fact",
+        "content": "The production database remains PostgreSQL.",
+        "shouldBeCore": false,
+        "rationale": "Unkeyed semantic paraphrase.",
+        "duplicateGroup": "unkeyed-database-paraphrases"
+      }]
+    },
+    {
+      "id": "S15",
+      "label": "Record migration completion progress",
+      "events": ["Progress: PostgreSQL migration is complete."],
+      "expectedExtracted": [{
+        "logicalKey": "progress.migration-complete",
+        "family": "state",
+        "type": "progress",
+        "key": "project.progress.current",
+        "content": "PostgreSQL migration is complete.",
+        "shouldBeCore": true,
+        "rationale": "Current project-wide progress."
+      }]
+    },
+    {
+      "id": "S16",
+      "label": "Supersede API v1 with API v2",
+      "explicitMemories": [{
+        "logicalKey": "decision.api.v2",
+        "family": "knowledge",
+        "type": "decision",
+        "key": "project.api.endpoint",
+        "content": "Public API endpoint is /v2/orders.",
+        "shouldBeCore": true,
+        "rationale": "Current canonical API endpoint.",
+        "promote": true
+      }]
+    },
+    {
+      "id": "S17",
+      "label": "Adopt order idempotency keys",
+      "events": ["Decision: Order idempotency keys are required for writes."],
+      "expectedExtracted": [{
+        "logicalKey": "decision.order-idempotency",
+        "family": "knowledge",
+        "type": "decision",
+        "content": "Order idempotency keys are required for writes.",
+        "shouldBeCore": true,
+        "rationale": "Stable write-safety decision."
+      }]
+    },
+    {
+      "id": "S18",
+      "label": "Open the canary metrics blocker",
+      "events": ["Blocker: Canary metrics dashboard is unavailable."],
+      "expectedExtracted": [{
+        "logicalKey": "blocker.canary-metrics",
+        "family": "state",
+        "type": "blocker",
+        "content": "Canary metrics dashboard is unavailable.",
+        "shouldBeCore": true,
+        "rationale": "Active rollout blocker."
+      }]
+    },
+    {
+      "id": "S19",
+      "label": "Resolve the canary metrics blocker",
+      "statusChanges": [{
+        "logicalKey": "blocker.canary-metrics",
+        "status": "resolved",
+        "reason": "Dashboard access restored."
+      }]
+    },
+    {
+      "id": "S20",
+      "label": "Define the next rollout task",
+      "events": ["Task: Prepare the canary rollout checklist."],
+      "expectedExtracted": [{
+        "logicalKey": "task.canary-rollout",
+        "family": "state",
+        "type": "task",
+        "content": "Prepare the canary rollout checklist.",
+        "shouldBeCore": true,
+        "rationale": "Current high-level next step."
+      }]
+    }
+  ],
+  "criticalBootstrapKeys": [
+    "goal.commerce-api",
+    "decision.database.postgresql",
+    "decision.auth.jwt",
+    "decision.rate-limit.redis",
+    "decision.api.v2",
+    "progress.migration-complete",
+    "task.canary-rollout"
+  ],
+  "duplicateGroups": [
+    {
+      "id": "keyed-database-decision",
+      "memberKeys": ["decision.database.sqlite", "decision.database.postgresql"],
+      "expectedCanonicalCount": 1,
+      "note": "Repeated and changed keyed evidence should retain one active canonical Memory."
+    },
+    {
+      "id": "unkeyed-database-paraphrases",
+      "memberKeys": [
+        "knowledge.database.paraphrase.1",
+        "knowledge.database.paraphrase.2",
+        "knowledge.database.paraphrase.3"
+      ],
+      "expectedCanonicalCount": 1,
+      "note": "Semantic paraphrase dedup is not promised by the current implementation."
+    }
+  ],
+  "finalQueries": [
+    {
+      "id": "long-current-database",
+      "query": "project.database",
+      "relevantMemoryKeys": ["decision.database.postgresql"],
+      "note": "Current canonical database slot."
+    },
+    {
+      "id": "long-migration-wording-mismatch",
+      "query": "schema upgrade utility location",
+      "relevantMemoryKeys": ["knowledge.migration.path"],
+      "note": "Historical implementation detail using related but non-overlapping wording."
+    },
+    {
+      "id": "long-resolved-blocker",
+      "query": "Migration script fails on empty databases",
+      "relevantMemoryKeys": ["blocker.migration-script"],
+      "statuses": ["resolved"],
+      "note": "Explicit historical recall of a resolved blocker."
+    },
+    {
+      "id": "long-old-sqlite-decision",
+      "query": "project database SQLite",
+      "relevantMemoryKeys": [],
+      "note": "The superseded SQLite value should not appear as active current state."
+    },
+    {
+      "id": "long-current-api-endpoint",
+      "query": "project.api.endpoint",
+      "relevantMemoryKeys": ["decision.api.v2"],
+      "note": "Current canonical API endpoint slot."
+    }
+  ]
+}

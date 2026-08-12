@@ -2,9 +2,10 @@
 
 **Reviewed branch:** `agent/productization-v1`  
 **Reviewed commit:** `a5dccaf24ca17d21c80509a6e97ea2bc1443a3cd`  
-**Status:** CHANGES REQUESTED  
-**Phase result:** architecture direction accepted; two P5 product-semantics blockers remain  
-**Next phase:** P6 MUST NOT start until this review is closed
+**Re-reviewed commit:** `e57095ce363afdbe4bb24ddf597f3933760a2ba6`
+**Status:** PASS — FIX-01, FIX-02, and DOC-03 closed
+**Phase result:** P5 implementation, validation, and code review PASS
+**Next phase:** P6 Stage A ready
 
 ---
 
@@ -402,9 +403,7 @@ Stop after these fixes and documentation updates. Do not begin P6 before re-revi
 
 ---
 
-## 9. Expected re-review outcome
-
-If FIX-01 and FIX-02 are implemented without weakening the accepted boundaries, the expected next review decision is:
+## 9. Re-review outcome
 
 ```text
 P5 implementation     COMPLETE
@@ -414,9 +413,8 @@ P5 code review        PASS
 P6                     READY
 ```
 
-Until then:
-
-```text
-P5 code review        CHANGES REQUESTED
-P6                     DO NOT START
-```
+FIX-01, FIX-02, and DOC-03 were implemented without weakening the accepted
+boundaries. The recorded hardening verification passed 98/98 tests in both
+`pnpm run check` and `pnpm run check:workspace`; the nested binding and Claude
+configuration scope smoke checks passed. P3 real Claude model-driven MCP
+remains externally blocked under its existing scoped waiver.

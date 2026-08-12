@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "id": "lexical-retrieval-baseline",
+  "ks": [1, 3, 5, 10],
+  "memories": [
+    {
+      "logicalKey": "retrieval.decision.database",
+      "family": "knowledge",
+      "type": "decision",
+      "key": "project.database",
+      "content": "Production database is PostgreSQL.",
+      "shouldBeCore": true,
+      "rationale": "Current database decision."
+    },
+    {
+      "logicalKey": "retrieval.knowledge.migration-path",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Migration helper lives in scripts/db/migrate.ts.",
+      "shouldBeCore": false,
+      "rationale": "Indexed implementation detail."
+    },
+    {
+      "logicalKey": "retrieval.knowledge.oauth-callback",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "OAuth callback handler lives in src/auth/callback.ts.",
+      "shouldBeCore": false,
+      "rationale": "Indexed implementation detail."
+    },
+    {
+      "logicalKey": "retrieval.decision.rate-limit",
+      "family": "knowledge",
+      "type": "decision",
+      "content": "Rate limit enforcement uses a Redis token bucket.",
+      "shouldBeCore": true,
+      "rationale": "Project-wide rate limiting decision."
+    },
+    {
+      "logicalKey": "retrieval.knowledge.rate-headers",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "API responses publish rate limit headers.",
+      "shouldBeCore": false,
+      "rationale": "Relevant protocol detail."
+    },
+    {
+      "logicalKey": "retrieval.distractor.connection-limit",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Database connection limit is twenty.",
+      "shouldBeCore": false,
+      "rationale": "Same keyword but different semantic target."
+    },
+    {
+      "logicalKey": "retrieval.decision.jwt-expiry",
+      "family": "knowledge",
+      "type": "decision",
+      "content": "Authentication JWT token expiry is fifteen minutes.",
+      "shouldBeCore": true,
+      "rationale": "Authentication expiry decision."
+    },
+    {
+      "logicalKey": "retrieval.distractor.storage-bucket",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Asset uploads use a storage bucket.",
+      "shouldBeCore": false,
+      "rationale": "Shares bucket wording with rate limiting."
+    },
+    {
+      "logicalKey": "retrieval.distractor.design-token",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Design token colors live in theme.css.",
+      "shouldBeCore": false,
+      "rationale": "Shares token wording with authentication."
+    },
+    {
+      "logicalKey": "retrieval.decision.api-endpoint",
+      "family": "knowledge",
+      "type": "decision",
+      "content": "Public API endpoint is /v2/orders.",
+      "shouldBeCore": true,
+      "rationale": "Current public API decision."
+    },
+    {
+      "logicalKey": "retrieval.knowledge.canary-region",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Canary deployment begins in eu-west-1.",
+      "shouldBeCore": false,
+      "rationale": "Deployment detail."
+    },
+    {
+      "logicalKey": "retrieval.distractor.debug-port",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Temporary debug port is 9229.",
+      "shouldBeCore": false,
+      "rationale": "Transient local detail."
+    }
+  ],
+  "queries": [
+    {
+      "id": "exact-keyword",
+      "query": "PostgreSQL",
+      "relevantMemoryKeys": ["retrieval.decision.database"],
+      "note": "Exact keyword match."
+    },
+    {
+      "id": "partial-keyword",
+      "query": "migration helper",
+      "relevantMemoryKeys": ["retrieval.knowledge.migration-path"],
+      "note": "Partial keyword match."
+    },
+    {
+      "id": "different-word-order",
+      "query": "handler callback OAuth",
+      "relevantMemoryKeys": ["retrieval.knowledge.oauth-callback"],
+      "note": "Same terms in a different order."
+    },
+    {
+      "id": "wording-mismatch",
+      "query": "database upgrade utility location",
+      "relevantMemoryKeys": ["retrieval.knowledge.migration-path"],
+      "note": "Related phrase without exact migration/helper token overlap."
+    },
+    {
+      "id": "multiple-relevant-with-distractor",
+      "query": "rate limit",
+      "relevantMemoryKeys": [
+        "retrieval.decision.rate-limit",
+        "retrieval.knowledge.rate-headers"
+      ],
+      "note": "Two relevant memories plus an unrelated connection-limit distractor."
+    },
+    {
+      "id": "same-token-wrong-target",
+      "query": "authentication token expiry",
+      "relevantMemoryKeys": ["retrieval.decision.jwt-expiry"],
+      "note": "Token distractors exist for design and rate limiting."
+    },
+    {
+      "id": "semantic-target-loses-to-overlap",
+      "query": "storage bucket throttling",
+      "relevantMemoryKeys": ["retrieval.decision.rate-limit"],
+      "note": "The semantically relevant token bucket competes with a literal storage bucket."
+    }
+  ]
+}

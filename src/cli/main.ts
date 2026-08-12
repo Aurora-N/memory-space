@@ -3,7 +3,8 @@
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
-import { runDoctor, runEval, runInit, runStatus } from "./commands.ts";
+import type { MemoryQualityReport } from "../../eval/quality/types.ts";
+import { runDoctor, runEval, runInit, runQualityEval, runStatus } from "./commands.ts";
 import { asCliError, CliError } from "./errors.ts";
 import {
   DEFAULT_DAEMON_ENDPOINT,
@@ -30,6 +31,7 @@ export interface CliDependencies {
   stderr?: (line: string) => void;
   clientFactory?: (endpoint: string) => LocalMemorySpaceClientPort;
   evalRunner?: () => Promise<CrossSessionEvalReport>;
+  qualityEvalRunner?: () => Promise<MemoryQualityReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
 }
 
@@ -40,6 +42,7 @@ Usage:
   memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
   memory-space status [--cwd <path>] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
+  memory-space eval quality [--json]
 
 Development invocation:
   pnpm memory-space <command>`;
@@ -87,6 +90,11 @@ async function defaultEvalRunner(): Promise<CrossSessionEvalReport> {
   return module.runCrossSessionEval();
 }
 
+async function defaultQualityEvalRunner(): Promise<MemoryQualityReport> {
+  const module = await import("../../eval/quality/runner.ts");
+  return module.runMemoryQualityEval();
+}
+
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {}
@@ -104,14 +112,21 @@ export async function runCli(
     }
     const command = argv[0];
     if (command === "eval") {
-      if (argv[1] !== "cross-session") {
-        throw new CliError("USAGE_ERROR", "eval requires the cross-session target.", {
+      const target = argv[1];
+      if (target !== "cross-session" && target !== "quality") {
+        throw new CliError("USAGE_ERROR", "eval requires the cross-session or quality target.", {
           exitCode: 2,
-          remediation: "Run: memory-space eval cross-session"
+          remediation: "Run: memory-space eval cross-session or memory-space eval quality"
         });
       }
       const options = parseOptions(argv.slice(2), [], ["json"]);
-      return await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner);
+      return target === "cross-session"
+        ? await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner)
+        : await runQualityEval(
+          options,
+          write,
+          dependencies.qualityEvalRunner ?? defaultQualityEvalRunner
+        );
     }
 
     const allowedValues: ValueOption[] = command === "init"

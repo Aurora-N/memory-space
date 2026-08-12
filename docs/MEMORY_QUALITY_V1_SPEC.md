@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Planned after P5 Productization  
+**Status:** Stage A baseline implemented; awaiting baseline review
 **Phase:** P6  
 **Primary goal:** Measure whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -380,3 +380,43 @@ Before requesting baseline review, report:
 12. recommended Stage B improvements ranked by measured impact.
 
 Stop after baseline review unless explicitly instructed to implement quality improvements.
+
+---
+
+# 12. Stage A implementation evidence
+
+The deterministic Stage A harness is implemented under `eval/quality/`. It
+uses explicit JSON ground truth, stable logical Memory keys, isolated temporary
+SQLite databases, and the unchanged production Memory implementation.
+
+The fixture inventory covers:
+
+```text
+checkpoint-only extraction with positive and negative evidence
+lexical retrieval with exact, reordered, wording-mismatch, and distractor queries
+keyed decision supersession and inactive-state expectations
+atomic Handoff continuation facts
+one 20-Session long-horizon project history
+one small Codex-to-Claude provider-neutral integration proof
+```
+
+The runner records extraction precision/recall, macro Precision@K and Recall@K
+for K = 1/3/5/10, Core pollution, bootstrap critical coverage and size, Handoff
+completeness, stale and duplicate rates, and contradiction/supersession
+correctness. Equal lexical scores are normalized by fixture logical key so the
+machine-readable report is deterministic without exposing random runtime IDs.
+
+Run the baseline with:
+
+```bash
+pnpm memory-space eval quality
+pnpm memory-space eval quality --json
+```
+
+Quality values are observations and have no acceptance thresholds in Stage A.
+Frozen correctness invariants remain hard assertions and control the CLI exit
+code. The recorded values, failure examples, reproducibility evidence, and
+ranked Stage B candidates are in [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md).
+
+No Memory extraction, retrieval, domain, storage, lifecycle, or MCP algorithm
+was changed for the baseline. Stage B has not started.

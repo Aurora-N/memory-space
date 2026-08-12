@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P5 — CR-PHASE8 fixes implemented; awaiting re-review
+**Current phase:** P6 Stage A baseline implemented — awaiting review
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`
 
@@ -46,8 +46,8 @@ P2 — Codex Provider Integration                COMPLETE / FROZEN
 P3 — Claude Code Provider Integration          ACCEPTED WITH SCOPED WAIVER
 P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
-P5 — Productization                            FIXES IMPLEMENTED / AWAITING RE-REVIEW
-P6 — Memory Quality v1                         AFTER P5
+P5 — Productization                            COMPLETE / REVIEW PASS
+P6 — Memory Quality v1                         STAGE A COMPLETE / REVIEW PENDING
 P7 — Optional MCP-first Provider Validation    OPTIONAL
 ```
 
@@ -101,7 +101,7 @@ The first three commands use one loopback `LocalMemorySpaceClient` and never
 open SQLite. The eval command reuses the canonical P4 runner with isolated
 temporary storage. CR-PHASE8 hardening distinguishes local versus inherited
 init bindings and detects supported Claude hook/MCP scopes without exposing
-provider secrets. P5 is awaiting re-review and P6 has not started.
+provider secrets. P5 implementation, validation, and code review are complete.
 
 ---
 
@@ -130,6 +130,26 @@ Long-horizon continuity
 ```
 
 P6 should first establish benchmark fixtures and baseline metrics. Algorithm changes should follow measured failure modes rather than precede them.
+
+## P6 Stage A implementation status
+
+The deterministic baseline is implemented under `eval/quality/` and is exposed
+through both human-readable and JSON CLI output:
+
+```text
+memory-space eval quality
+memory-space eval quality --json
+```
+
+It evaluates checkpoint extraction, lexical retrieval at K = 1/3/5/10, Core
+pollution, bootstrap critical coverage and size, Handoff completeness, stale
+and duplicate Memory, supersession correctness, a 20-Session horizon, and a
+small provider-neutral continuity proof. Quality scores are recorded without
+invented thresholds; frozen correctness invariants remain hard assertions.
+
+Stage A is awaiting baseline review. The recorded evidence and ranked measured
+risks are in [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md). Stage B has
+not started and requires explicit post-review authorization.
 
 ---
 

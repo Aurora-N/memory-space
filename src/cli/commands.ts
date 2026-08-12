@@ -3,6 +3,8 @@ import { stat } from "node:fs/promises";
 import type {
   CrossSessionEvalReport
 } from "../../eval/support/cross-session-runner.ts";
+import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
+import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { Space } from "../domain/types.ts";
 import { CliError } from "./errors.ts";
 import {
@@ -345,4 +347,18 @@ export async function runEval(
     write(`Overall                            ${report.overall.toUpperCase()}`);
   }
   return report.overall === "pass" ? 0 : 1;
+}
+
+export async function runQualityEval(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<MemoryQualityReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of formatMemoryQualityReport(report)) write(line);
+  }
+  return report.correctness.overall === "pass" ? 0 : 1;
 }

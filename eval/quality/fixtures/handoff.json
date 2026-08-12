@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "expected": {
+    "goal": "Deliver a production-ready SaaS commerce API.",
+    "completed": ["Migrate production data from SQLite to PostgreSQL."],
+    "activeTasks": ["Prepare the canary rollout checklist."],
+    "decisions": [
+      "数据库使用 PostgreSQL",
+      "Authentication uses signed JWT access tokens.",
+      "Rate limiting uses a Redis token bucket.",
+      "Public API endpoint is /v2/orders.",
+      "Order idempotency keys are required for writes."
+    ],
+    "blockers": [],
+    "openQuestions": [],
+    "nextSteps": ["Prepare the canary rollout checklist."]
+  }
+}

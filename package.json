@@ -21,10 +21,10 @@
     "smoke:claude:p3": "node scripts/claude-p3-real-smoke.mjs",
     "smoke:codex:p2": "node scripts/codex-p2-real-smoke.mjs",
     "mcp:standalone": "node --experimental-strip-types src/mcp/standalone-stdio.ts",
-    "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts",
     "lint": "node scripts/lint.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test",
+    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test",
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {

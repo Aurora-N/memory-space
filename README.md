@@ -41,10 +41,13 @@ pnpm memory-space init --cwd /absolute/path/to/project --name "My project"
 pnpm memory-space doctor --cwd /absolute/path/to/project
 pnpm memory-space status --cwd /absolute/path/to/project
 pnpm memory-space eval cross-session
+pnpm memory-space eval quality
+pnpm memory-space eval quality --json
 ```
 
 The package also exposes a `memory-space` bin for linked/installed use, with the
-same `init`, `doctor`, `status`, and `eval cross-session` syntax. `init` creates
+same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality`
+syntax. `init` creates
 or confirms the Space through the running daemon and then atomically writes the
 v1 project binding. It never edits global Codex or Claude configuration. Use
 `doctor --json` for stable check IDs and machine-readable diagnostics.
@@ -135,10 +138,10 @@ roadmap is:
 
 ```text
 P5 Productization
-→ CR-PHASE8 fixes implemented; awaiting re-review
+→ implementation, validation, and code review PASS
 
 P6 Memory Quality v1
-→ deterministic benchmark / long-horizon metrics / measured improvements
+→ Stage A deterministic baseline complete; awaiting review
 
 P7 Optional MCP-first provider validation
 → Cursor or another provider only if it proves additional compatibility value
@@ -146,7 +149,9 @@ P7 Optional MCP-first provider validation
 
 See [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md),
 [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md), and
-[`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md).
+[`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md). The recorded
+Stage A scores and failure examples are in
+[`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md).
 
 ## Architecture
 
@@ -174,6 +179,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md) — post-integration phase order
 - [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md) — P5 local CLI/productization requirements
 - [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 deterministic memory-quality baseline requirements
+- [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — recorded P6 Stage A metrics, failures, and reproducibility evidence
 
 ## Status
 
@@ -195,8 +201,11 @@ FROZEN.**
 **P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS;
 code review PASS after CR-PHASE7.**
 
-**P5 Productization: CR-PHASE8 fixes implemented; awaiting re-review. P6 has
-not started.**
+**P5 Productization: implementation PASS; automated validation and local CLI
+smoke PASS; code review PASS after CR-PHASE8.**
+
+**P6 Memory Quality v1: Stage A deterministic baseline implemented and awaiting
+review. Stage B has not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
 Codex→Claude→Codex→Claude continuity through distinct provider Sessions and

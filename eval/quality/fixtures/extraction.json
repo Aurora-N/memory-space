@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "id": "checkpoint-derived-extraction-baseline",
+  "events": [
+    "Goal: Ship the deterministic Memory Quality baseline.",
+    "Decision: SQLite remains the zero-configuration default.",
+    "Fact: Migration helper lives in scripts/db/migrate.ts.",
+    "Blocker: Production migration credentials are unavailable.",
+    "Task: Remove the temporary debug log after this command.",
+    "We selected PostgreSQL for hosted deployments.",
+    "All public APIs must remain backward compatible.",
+    "Scratch note: inspect local command output only."
+  ],
+  "expectedMemories": [
+    {
+      "logicalKey": "extraction.goal.quality-baseline",
+      "family": "state",
+      "type": "goal",
+      "key": "project.goal.primary",
+      "content": "Ship the deterministic Memory Quality baseline.",
+      "shouldBeCore": true,
+      "rationale": "Stable project-wide goal."
+    },
+    {
+      "logicalKey": "extraction.decision.sqlite-default",
+      "family": "knowledge",
+      "type": "decision",
+      "content": "SQLite remains the zero-configuration default.",
+      "shouldBeCore": true,
+      "rationale": "Stable project-wide storage decision."
+    },
+    {
+      "logicalKey": "extraction.knowledge.migration-path",
+      "family": "knowledge",
+      "type": "fact",
+      "content": "Migration helper lives in scripts/db/migrate.ts.",
+      "shouldBeCore": false,
+      "rationale": "Durable but local implementation detail."
+    },
+    {
+      "logicalKey": "extraction.blocker.credentials",
+      "family": "state",
+      "type": "blocker",
+      "content": "Production migration credentials are unavailable.",
+      "shouldBeCore": true,
+      "rationale": "Active blocker that affects continuation."
+    },
+    {
+      "logicalKey": "extraction.decision.hosted-postgresql",
+      "family": "knowledge",
+      "type": "decision",
+      "content": "We selected PostgreSQL for hosted deployments.",
+      "shouldBeCore": true,
+      "rationale": "Natural-language stable decision without a fixture-specific prefix."
+    },
+    {
+      "logicalKey": "extraction.constraint.api-compatibility",
+      "family": "knowledge",
+      "type": "constraint",
+      "content": "All public APIs must remain backward compatible.",
+      "shouldBeCore": true,
+      "rationale": "Stable project-wide compatibility constraint."
+    }
+  ],
+  "negativeEvidence": [
+    {
+      "text": "Task: Remove the temporary debug log after this command.",
+      "reason": "One-off cleanup local to the current command should not become durable project state."
+    },
+    {
+      "text": "Scratch note: inspect local command output only.",
+      "reason": "Transient scratch evidence should not become Memory."
+    }
+  ]
+}

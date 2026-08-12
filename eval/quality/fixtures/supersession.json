@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "currentSlots": [
+    {
+      "id": "database-slot",
+      "currentLogicalKey": "decision.database.postgresql",
+      "staleContents": ["数据库使用 SQLite", "Production database is SQLite."],
+      "searchQuery": "project.database"
+    },
+    {
+      "id": "api-endpoint-slot",
+      "currentLogicalKey": "decision.api.v2",
+      "staleContents": ["Public API endpoint is /v1/orders."],
+      "searchQuery": "project.api.endpoint"
+    }
+  ],
+  "expectedInactive": [
+    { "logicalKey": "blocker.rate-limit", "status": "resolved" },
+    { "logicalKey": "blocker.migration-script", "status": "resolved" },
+    { "logicalKey": "task.database-migration", "status": "resolved" },
+    { "logicalKey": "blocker.canary-metrics", "status": "resolved" }
+  ]
+}

@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
+import type { MemoryQualityReport } from "../eval/quality/types.ts";
 import { runCli, type CliDependencies } from "../src/cli/main.ts";
 import { CliError } from "../src/cli/errors.ts";
 import { detectProviderConfigs } from "../src/cli/provider-config.ts";
@@ -578,6 +579,40 @@ function evalReport(status: "pass" | "fail"): CrossSessionEvalReport {
   };
 }
 
+function qualityEvalReport(status: "pass" | "fail"): MemoryQualityReport {
+  return {
+    version: 1,
+    summary: {
+      extraction: { tp: 1, fp: 0, fn: 0, precision: 1, recall: 1 },
+      retrieval: [{ k: 1, precision: 1, recall: 1, queryCount: 1 }],
+      corePollution: {
+        numerator: 0, denominator: 1, value: 0, pollutedKeys: []
+      },
+      bootstrap: {
+        criticalCoverage: { numerator: 1, denominator: 1, value: 1 },
+        missingCriticalKeys: [],
+        unexpectedDefaultKeys: [],
+        coreItemCount: 1,
+        handoffFactCount: 1,
+        chars: 100,
+        bytes: 100
+      },
+      handoff: {
+        numerator: 1, denominator: 1, value: 1, missingFacts: [], unexpectedFacts: []
+      },
+      staleMemory: { numerator: 0, denominator: 1, value: 0, staleKeys: [] },
+      duplicateMemory: {
+        numerator: 0, denominator: 1, value: 0, groups: []
+      },
+      contradiction: { numerator: 1, denominator: 1, value: 1, checks: [] },
+      longHorizonSessions: 20
+    },
+    correctness: { overall: status, checks: [] },
+    scenarios: [],
+    failures: []
+  };
+}
+
 test("eval CLI uses the injected canonical runner and maps overall status to exit code", async () => {
   const { directory, project } = temporaryProject("eval");
   try {
@@ -602,6 +637,44 @@ test("eval CLI uses the injected canonical runner and maps overall status to exi
     });
     assert.equal(failure.code, 1);
     assert.match(failure.stdout, /"overall": "fail"/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("quality eval CLI is daemon-independent and separates metrics from correctness exit", async () => {
+  const { directory, project } = temporaryProject("quality-eval");
+  try {
+    let calls = 0;
+    const success = await cli(["eval", "quality"], {
+      cwd: project,
+      dependencies: {
+        qualityEvalRunner: async () => {
+          calls += 1;
+          return qualityEvalReport("pass");
+        },
+        clientFactory: () => {
+          throw new Error("quality eval must not construct a daemon client");
+        }
+      }
+    });
+    assert.equal(success.code, 0, success.stderr);
+    assert.equal(calls, 1);
+    assert.match(success.stdout, /Memory Quality v1 — Baseline/u);
+    assert.match(success.stdout, /baseline observations, not PASS\/FAIL thresholds/u);
+
+    const json = await cli(["eval", "quality", "--json"], {
+      cwd: project,
+      dependencies: { qualityEvalRunner: async () => qualityEvalReport("pass") }
+    });
+    assert.equal(json.code, 0, json.stderr);
+    assert.equal((JSON.parse(json.stdout) as { version: number }).version, 1);
+
+    const correctnessFailure = await cli(["eval", "quality"], {
+      cwd: project,
+      dependencies: { qualityEvalRunner: async () => qualityEvalReport("fail") }
+    });
+    assert.equal(correctnessFailure.code, 1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
