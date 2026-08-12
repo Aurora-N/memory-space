@@ -59,7 +59,7 @@ clear
 compact
 ```
 
-Claude CLI session forking is a distinct CLI/session feature and is not a documented `SessionStart.source = "fork"` payload. If the current adapter/tests/examples still accept or advertise `fork`, remove that extra value before P4 review readiness. This cleanup is provider-local and must not change the common `ProviderLifecycleEvent` contract.
+Claude CLI session forking is a distinct CLI/session feature and is not a documented `SessionStart.source = "fork"` payload. The Pre-P4 cleanup removed that extra value from adapter validation, examples, tests, docs, and smoke-generated settings without changing the common `ProviderLifecycleEvent` contract.
 
 Current SessionEnd reasons and both manual/automatic PreCompact triggers remain provider-local validation concerns. `prompt_id`, effort, permissions, task data, and background work metadata are non-authoritative and intentionally dropped.
 

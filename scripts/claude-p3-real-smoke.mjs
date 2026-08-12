@@ -197,7 +197,7 @@ function hookSettings() {
   return {
     hooks: {
       SessionStart: [{
-        matcher: "startup|resume|clear|compact|fork",
+        matcher: "startup|resume|clear|compact",
         hooks: [hook]
       }],
       UserPromptSubmit: [{ hooks: [hook] }],

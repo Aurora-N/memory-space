@@ -1,6 +1,7 @@
 # P4 — Cross-Session & Cross-Provider Durable Memory Eval
 
-**Status:** Ready for implementation  
+**Status:** Implementation complete; automated eval PASS; code review pending
+
 **Applies after:** P2 Codex Frozen; P3 Claude Code implementation/code review accepted with a scoped real-MCP execution waiver  
 **Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PROVIDER_INTEGRATION_PLAN.md`, `PROVIDER_INTEGRATION_GUARDRAILS.md`, `code-review/CR-PHASE6.md`
 
@@ -495,3 +496,53 @@ Do not claim the external Claude MCP check passed until it actually does.
 P4 succeeds at the product/automated level when the repository can prove:
 
 > A durable Memory written by one Session remains Space-owned and can be consumed by another distinct Session regardless of whether the reader uses the same provider or a different provider; Core/Handoff state is available by default, Indexed detail remains progressive, provenance is preserved, state survives durable-store reopen, and later Sessions can advance the shared Handoff without provider-pair-specific logic.
+
+---
+
+## 17. Implementation evidence
+
+Implemented in:
+
+```text
+eval/cross-session-provider-memory.test.ts
+```
+
+The parameterized eval passes all four required combinations:
+
+| Source | Target | Distinct Session | SQLite reopen | Core + Handoff bootstrap | Indexed recall |
+|---|---|---:|---:|---:|---:|
+| Codex | Codex | PASS | PASS | PASS | PASS |
+| Claude Code | Claude Code | PASS | PASS | PASS | PASS |
+| Codex | Claude Code | PASS | PASS | PASS | PASS |
+| Claude Code | Codex | PASS | PASS | PASS | PASS |
+
+The same eval also passes:
+
+- exact shared six-tool MCP discovery and protocol calls;
+- Indexed absence from bootstrap plus explicit `memory_search/context` recall;
+- source provenance preservation after target reads;
+- changed-cwd no-migration and trusted explicit conflict;
+- provider-namespaced identity for the same external ID;
+- Space Y bootstrap/search/context isolation;
+- repeated clean checkpoint `noop`;
+- `Codex A → Claude B → Codex C → Claude D` Handoff advancement.
+
+The Pre-P4 Claude cleanup now accepts only `startup`, `resume`, `clear`, and
+`compact` as native `SessionStart.source` values. The provider-neutral
+lifecycle contract and frozen Memory/MCP contracts were not changed.
+
+P3's scoped progression waiver remains unchanged: real Claude hook lifecycle
+is accepted, while real Claude model-driven MCP invocation remains externally
+blocked/waived because the active compatibility gateway rewrites tool names.
+
+Recorded local verification on 2026-08-12:
+
+```text
+pnpm run check           PASS — 80/80 tests
+pnpm run check:workspace PASS — 80/80 tests
+```
+
+No new real-provider P4 smoke was executed in this implementation turn. The
+recorded real Codex P2 and real Claude P3 hook-only evidence remain applicable;
+real Claude model-driven MCP remains waived. GitHub CI status was not
+independently confirmed.

@@ -1,7 +1,7 @@
 # Provider Integration v1 — Implementation Plan
 
-**Status:** P3 implementation and automated validation complete; real-Claude
-MCP execution smoke blocked by the active compatibility gateway
+**Status:** P4 implementation and automated cross-session/cross-provider eval
+complete; code review pending
 
 **P0 status:** Frozen after CR-PHASE3
 
@@ -9,9 +9,12 @@ MCP execution smoke blocked by the active compatibility gateway
 
 **P2 status:** FROZEN — real-Codex smoke passed
 
-**P3 status:** NOT YET FROZEN — real Claude Code lifecycle/bootstrap evidence
-exists, but the active gateway rewrites `mcp__memory_space__*` tool names and
-prevents real MCP tool execution
+**P3 status:** ACCEPTED WITH A SCOPED PROGRESSION WAIVER — implementation,
+automated validation, code review, and real hook lifecycle pass; real
+model-driven MCP execution remains externally blocked and is not marked PASS
+
+**P4 status:** IMPLEMENTATION COMPLETE — automated durable-memory eval PASS;
+code review pending
 
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 
@@ -45,7 +48,7 @@ P0 — Integration Foundation
 P1 — MCP Command Plane
 P2 — Codex Provider Integration
 P3 — Claude Code Provider Integration
-P4 — Cross-provider Durable Eval
+P4 — Cross-Session & Cross-Provider Durable Memory Eval
 P5 — Optional Cursor MCP-first validation
 ```
 
@@ -849,8 +852,8 @@ parity tests, and the automated lifecycle eval are complete. A real Claude Code
 six-tool discovery, UserPromptSubmit, Stop final capture, and SessionEnd. The
 active compatibility gateway rewrites Claude's double-underscore MCP names, so
 real `memory_remember/search` execution is blocked outside Memory Space. See
-[`validation/CLAUDE_P3_SMOKE.md`](./validation/CLAUDE_P3_SMOKE.md). P3 remains
-NOT YET FROZEN.
+[`validation/CLAUDE_P3_SMOKE.md`](./validation/CLAUDE_P3_SMOKE.md). P3 is
+accepted with a scoped progression waiver and is not fully Frozen.
 
 ## Objective
 
@@ -912,67 +915,51 @@ P3 is complete when Claude Code can use the same Memory Space daemon/MCP tools a
 
 ---
 
-# 8. P4 — Cross-provider Durable Eval
+# 8. P4 — Cross-Session & Cross-Provider Durable Memory Eval
+
+**Normative execution spec:**
+[`P4_CROSS_SESSION_PROVIDER_EVAL.md`](./P4_CROSS_SESSION_PROVIDER_EVAL.md)
+
+**Implementation status:** Complete; automated eval PASS; code review pending.
 
 ## Objective
 
-Prove the actual product promise: cross-provider Handoff and progressive recall.
+Prove that durable Memory belongs to a Space rather than a provider or one
+Session, without adding provider-pair business logic.
 
-Use a persistent SQLite temp database and two distinct provider sessions.
+## Implemented proof
 
----
+`eval/cross-session-provider-memory.test.ts` uses provider-native payloads and
+the real Codex/Claude lifecycle integrations to create distinct Sessions. It
+uses the shared MCP protocol surface for remember, promote, search, context,
+checkpoint, and exact-six discovery.
 
-## Required eval scenario
-
-### Session A — Codex
-
-```text
-Bind working directory → Space X
-Start Codex Session A
-Append user/assistant Conversation-lite events
-Remember one low-level Indexed detail
-Remember/promote one project-wide Core item
-Checkpoint through latest event
-Close/reopen durable store if possible
-```
-
-Example semantic content:
+The parameterized matrix passes:
 
 ```text
-Core decision:
-"Use PostgreSQL as the production database"
-
-Indexed detail:
-"Migration helper lives in scripts/db/migrate.ts"
+Codex A  → Codex B
+Claude A → Claude B
+Codex A  → Claude B
+Claude A → Codex B
 ```
 
-### Session B — Claude Code
+Every matrix case closes and reopens SQLite before starting the target Session
+and verifies Core/latest-Handoff bootstrap, Indexed progressive recall,
+provenance preservation, provider Session mappings, changed-cwd binding
+freeze, explicit Space conflict, clean-checkpoint noop, and Space isolation.
+
+The multi-hop case passes:
 
 ```text
-Same Space binding
-Different provider native Session
-Start Claude Session B
-Bootstrap
+Codex A → Claude B → Codex C → Claude D
 ```
 
-Assert:
+Later Sessions advance the latest Handoff while the original Core remains
+durable and Indexed origin remains attached to its writer Session.
 
-- Core decision appears in default bootstrap;
-- latest Handoff points to Session A checkpoint;
-- Indexed migration detail is absent from default bootstrap;
-- `memory_context`/`memory_search` can recover Indexed detail;
-- Session B is distinct from Session A;
-- no provider-specific object is required by Memory Core.
-
-### Reverse direction
-
-If implementation cost is low, repeat:
-
-```text
-Claude Session → checkpoint → Codex Session bootstrap/recall
-```
-
-This is recommended but may follow the first cross-provider proof.
+P3's real Claude model-driven MCP item remains blocked under the scoped waiver.
+P4 does not add aliases, rename tools, add a seventh tool, or claim that
+external check passed.
 
 ---
 

@@ -95,7 +95,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     if (hookEventName === "SessionStart") {
       oneOf(input.source, "Claude Code SessionStart source", [
-        "startup", "resume", "clear", "compact", "fork"
+        "startup", "resume", "clear", "compact"
       ]);
       return { ...common, type: "session_start" };
     }

@@ -63,7 +63,7 @@ curl --fail --silent \
 ```
 
 The first `SessionStart` resolves the nearest binding. Later startup re-entry,
-resume, fork, and post-compact starts first resolve the durable
+resume, clear, and post-compact starts first resolve the durable
 `(provider, externalSessionId)` identity. The existing internal Session and its
 Space are authoritative, so a changed `cwd` cannot migrate the Session. A
 trusted daemon `MEMORY_SPACE_SPACE_ID` override must match an existing binding.

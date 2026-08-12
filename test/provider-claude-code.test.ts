@@ -56,9 +56,6 @@ test("ClaudeAdapter normalizes the supported official lifecycle surface", () => 
       locator: "/opaque/claude-code/transcript.jsonl"
     }
   });
-  assert.equal(adapter.normalizeEvent(nativePayload("SessionStart", {
-    source: "fork"
-  }))?.type, "session_start");
   assert.deepEqual(adapter.normalizeEvent(nativePayload("UserPromptSubmit", {
     prompt_id: "prompt-1",
     prompt: "\n  Keep exact Claude prompt whitespace\n"
@@ -157,6 +154,10 @@ test("ClaudeAdapter enforces native shape while treating privilege fields as ine
 
   assert.throws(
     () => adapter.normalizeEvent(nativePayload("SessionStart", { source: "unknown" })),
+    (error: unknown) => error instanceof ValidationError
+  );
+  assert.throws(
+    () => adapter.normalizeEvent(nativePayload("SessionStart", { source: "fork" })),
     (error: unknown) => error instanceof ValidationError
   );
   assert.throws(

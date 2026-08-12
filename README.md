@@ -16,7 +16,8 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - TypeScript application API plus a thin JSON HTTP adapter
 - provider-neutral MCP command plane with six policy-bounded tools
 - Codex and Claude Code lifecycle adapters sharing one provider-neutral integration core
-- data-driven cross-agent handoff evaluation
+- parameterized same-provider, cross-provider, restart, isolation, and multi-hop
+  durable-memory evaluation
 
 ## Run locally
 
@@ -148,8 +149,13 @@ hook lifecycle PASS. Real model-driven MCP execution remains externally blocked;
 P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully
 FROZEN.**
 
-**P4: READY — implement cross-session + cross-provider durable-memory eval per
-`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`.**
+**P4 implementation: COMPLETE. Automated cross-session/cross-provider eval:
+PASS. Code review: pending.**
+
+P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
+Codex→Claude→Codex→Claude continuity through distinct provider Sessions and
+SQLite reopen while preserving progressive disclosure, provenance, Space
+isolation, Handoff advancement, and the exact shared six-tool command plane.
 
 Real Codex evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
 Claude hook/MCP blocker evidence: [`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
