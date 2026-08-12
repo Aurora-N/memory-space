@@ -1,19 +1,19 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage A CR-PHASE9 fixes implemented — awaiting re-review
+**Current phase:** P6 Stage B1 Retrieval Precision & Abstention — READY / AUTHORIZED  
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
-**Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`
+**Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`
 
 ---
 
 ## 1. Why the roadmap changes after P4
 
-P0–P4 have already proved the architectural claim that matters most:
+P0–P4 proved the architectural claim that matters most:
 
 > Durable Memory belongs to a Space and can survive Session, process, and provider boundaries.
 
-The repository now has deterministic evidence for:
+The repository has deterministic evidence for:
 
 ```text
 Codex → Codex
@@ -28,12 +28,7 @@ Indexed explicit recall
 provenance preservation
 ```
 
-That means adding more providers immediately has lower marginal value than proving two new properties:
-
-1. the system is practical to install, diagnose, and demonstrate;
-2. the memories it keeps remain useful and accurate over long horizons.
-
-The next roadmap therefore shifts from horizontal provider breadth to product usability and memory quality.
+After that proof, adding providers has lower marginal value than improving usability and long-horizon Memory quality.
 
 ---
 
@@ -47,11 +42,17 @@ P3 — Claude Code Provider Integration          ACCEPTED WITH SCOPED WAIVER
 P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
 P5 — Productization                            COMPLETE / REVIEW PASS
-P6 — Memory Quality v1                         STAGE A COMPLETE / REVIEW PENDING
+P6 — Memory Quality v1
+     Stage A deterministic baseline            COMPLETE / REVIEW PASS
+     Stage B1 Retrieval Precision & Abstention READY / AUTHORIZED
+     Stage B2 Extraction Quality               NOT AUTHORIZED
+     Stage B3 Core/Handoff Pollution            NOT AUTHORIZED
+     Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
+
 P7 — Optional MCP-first Provider Validation    OPTIONAL
 ```
 
-P3's remaining real Claude model-driven MCP check is still an external blocker. It remains visible and must not be converted into a synthetic PASS. P5/P6 must not add Claude-specific MCP aliases to work around it.
+P3's real Claude model-driven MCP check remains externally blocked under the existing scoped waiver. P6 must not add Claude-specific aliases or otherwise weaken the exact shared MCP contract.
 
 ---
 
@@ -59,11 +60,7 @@ P3's remaining real Claude model-driven MCP check is still an external blocker. 
 
 **Normative spec:** [`PRODUCTIZATION_SPEC.md`](./PRODUCTIZATION_SPEC.md)
 
-## Goal
-
-Turn the proven architecture into a local product workflow that another developer can understand and operate without manually stitching together REST calls, binding files, provider configuration, and eval commands.
-
-P5 focuses on:
+P5 is complete. The repository exposes:
 
 ```text
 memory-space init
@@ -72,93 +69,125 @@ memory-space status
 memory-space eval cross-session
 ```
 
-The exact executable/package shape may follow repository conventions, but the user-facing capabilities and safety boundaries in the Productization Spec are required.
-
-## P5 success statement
-
-P5 succeeds when a developer can:
-
-1. initialize a project binding safely;
-2. diagnose daemon/binding/provider/MCP state from one command;
-3. inspect concise current Space/runtime state without raw database access;
-4. run the existing cross-session durability proof from one documented command;
-5. receive deterministic exit codes/output useful for both humans and scripts.
-
-P5 must not redesign Memory semantics.
-
-## P5 implementation status
-
-The repository now exposes:
-
-```text
-memory-space init
-memory-space doctor
-memory-space status
-memory-space eval cross-session
-```
-
-The first three commands use one loopback `LocalMemorySpaceClient` and never
-open SQLite. The eval command reuses the canonical P4 runner with isolated
-temporary storage. CR-PHASE8 hardening distinguishes local versus inherited
-init bindings and detects supported Claude hook/MCP scopes without exposing
-provider secrets. P5 implementation, validation, and code review are complete.
+The CLI remains a loopback daemon client rather than a second SQLite owner. CR-PHASE8 closed the Claude config-scope and nested-binding findings.
 
 ---
 
 # 4. P6 — Memory Quality v1
 
-**Normative spec:** [`MEMORY_QUALITY_V1_SPEC.md`](./MEMORY_QUALITY_V1_SPEC.md)
+**Umbrella spec:** [`MEMORY_QUALITY_V1_SPEC.md`](./MEMORY_QUALITY_V1_SPEC.md)
 
-## Goal
+## 4.1 Stage A — Deterministic baseline — COMPLETE / REVIEW PASS
 
-Move from proving that Memory persists to measuring whether the resulting Memory remains useful over time.
-
-The first deliverable is a reproducible deterministic quality baseline, not speculative retrieval architecture.
-
-Required quality dimensions include:
-
-```text
-Extraction precision / recall
-Retrieval Precision@K / Recall@K
-Core pollution rate
-Handoff completeness
-Stale-memory rate
-Duplicate-memory rate
-Contradiction/supersession correctness
-Bootstrap size/cost
-Long-horizon continuity
-```
-
-P6 should first establish benchmark fixtures and baseline metrics. Algorithm changes should follow measured failure modes rather than precede them.
-
-## P6 Stage A implementation status
-
-The deterministic baseline is implemented under `eval/quality/` and is exposed
-through both human-readable and JSON CLI output:
+The accepted deterministic baseline lives under `eval/quality/` and is exposed through:
 
 ```text
 memory-space eval quality
 memory-space eval quality --json
 ```
 
-It evaluates checkpoint extraction, positive-query lexical retrieval at each
-eligible K from 1/3/5/10, negative-query false-positive/abstention behavior,
-Core pollution, bootstrap critical coverage and size, Handoff completeness,
-stale and duplicate Memory, supersession correctness, a 20-Session horizon,
-and a small provider-neutral continuity proof. Quality scores are recorded
-without invented thresholds; frozen correctness invariants remain hard
-assertions. CR-PHASE9 hardening preserves production ranking and excludes
-zero-relevant queries from ordinary P@K/R@K.
+It measures:
 
-Stage A is awaiting baseline re-review. The corrected evidence and ranked measured
-risks are in [`quality/P6_BASELINE.md`](./quality/P6_BASELINE.md). Stage B has
-not started and requires explicit post-review authorization.
+```text
+Extraction precision / recall
+positive-query Retrieval P@K / R@K
+negative-query false-positive / abstention
+Core pollution
+bootstrap critical coverage and size
+Handoff completeness
+stale-memory rate
+duplicate-memory rate
+contradiction/supersession correctness
+20-Session long-horizon continuity
+provider-neutral continuity correctness
+```
+
+Accepted reference:
+
+```text
+9490ebce94928132a2fb16aca247c8ae4888a7cf
+```
+
+Review:
+
+```text
+docs/code-review/CR-PHASE9.md — PASS
+```
+
+Evidence:
+
+```text
+docs/quality/P6_BASELINE.md
+```
+
+The accepted retrieval baseline includes:
+
+```text
+P@1                         0.727273
+R@1                         0.681818
+P@3                         0.303030
+R@3                         0.818182
+P@5                         0.180000
+R@5                         0.800000
+P@10                        0.090000
+R@10                        0.800000
+Negative FP rate            1.000000
+Negative abstention         0.000000
+```
+
+Stage A deliberately did not modify production extraction/retrieval algorithms.
+
+## 4.2 Stage B1 — Retrieval Precision & Abstention — NEXT
+
+**Normative execution spec:** [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md)
+
+B1 is the only currently authorized production quality change.
+
+It targets:
+
+```text
+broad lexical false positives
+missing abstention
+ranking precision
+generic key-token overlap
+```
+
+B1 should first improve the existing deterministic lexical policy rather than jump directly to embeddings/vector search.
+
+Expected implementation shape:
+
+```text
+accepted Stage A machine-readable snapshot
+→ provider-neutral field-aware lexical scoring
+→ explicit relevance/abstention gate
+→ deterministic candidate eval
+→ before/after report
+→ code/quality review
+```
+
+B1 must preserve accepted Stage A ground-truth labels and hard correctness invariants.
+
+B1 completes only after reviewer approval. The Coding Agent must stop before B2/B3/B4.
+
+## 4.3 Later quality stages
+
+Later work may be authorized separately:
+
+```text
+B2 — Extraction Generalization & Transient Rejection
+B3 — Core / Handoff Pollution Policy
+B4 — Semantic Dedup / Semantic Retrieval architecture decision
+```
+
+Changing corpus creation and search ranking in the same stage is intentionally avoided so quality deltas remain attributable.
+
+If B1 demonstrates that remaining retrieval failures have effectively no lexical overlap, write an architecture decision before adding embeddings/vector infrastructure.
 
 ---
 
 # 5. P7 — Optional MCP-first Provider Validation
 
-Cursor or another MCP-capable agent may be added after P5/P6 when it proves a genuinely new compatibility property.
+Cursor or another MCP-capable agent may be added after the quality work when it proves a genuinely new compatibility property.
 
 Minimum useful proof:
 
@@ -172,8 +201,6 @@ capability differences documented honestly
 
 Do not build polling or fake lifecycle emulation solely to claim provider parity.
 
-A new provider is optional because P4 has already proved provider independence with two lifecycle-capable providers and same-provider/cross-provider multi-session evaluation.
-
 ---
 
 ## 6. Cross-phase invariants
@@ -184,26 +211,27 @@ P5+ must continue to preserve:
 - one Session belongs to exactly one frozen Space;
 - provider identity is Session provenance, not Memory ownership;
 - one daemon owns the active SQLite store;
-- MCP remains exactly six policy-bounded Memory tools unless a separately reviewed contract revision is approved;
+- MCP remains exactly six policy-bounded Memory tools unless separately reviewed;
 - lifecycle failures remain fail-open;
 - explicit Memory commands remain fail-visible;
 - provider evidence cannot choose Space, tier, status, actor, checkpoint boundary, or idempotency identity;
 - Indexed Memory remains progressive rather than default bootstrap content;
-- frozen MVP domain/product semantics are not silently changed by productization or eval work.
+- frozen MVP domain/product semantics are not silently changed by productization, eval, or quality optimization.
 
 ---
 
 ## 7. Review cadence
 
-Use the same architecture-first workflow for each new phase:
+Use the architecture-first workflow for every new quality stage:
 
 ```text
-spec / acceptance criteria
+accepted before-state
+→ scoped spec / acceptance criteria
 → Coding Agent implementation
-→ automated verification
+→ deterministic verification + before/after metrics
 → code review
 → status update
-→ next phase
+→ explicit authorization for the next stage
 ```
 
-Do not start P6 implementation before P5 code review unless the reviewer explicitly allows overlap. Do not start P7 merely because it is listed; choose it only if additional provider coverage remains useful after Productization and Memory Quality work.
+Current next implementation is P6 Stage B1 only.
