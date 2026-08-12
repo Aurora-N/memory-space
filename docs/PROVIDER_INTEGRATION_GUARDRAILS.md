@@ -326,7 +326,7 @@ real-provider smoke complete
 phase frozen
 ```
 
-If a manual/real-provider acceptance test is required but cannot be run in the current environment, document it as pending and stop before claiming the phase is frozen.
+If a manual/real-provider acceptance test is required but cannot be run in the current environment, document it as pending instead of claiming it passed.
 
 Never infer GitHub Actions success merely because local tests exist or a workflow file is present.
 
@@ -374,6 +374,45 @@ Provider-specific examples must not imply unsupported runtime modes.
 
 ---
 
+# G14 — Acceptance waivers are scoped progression decisions, never synthetic PASS
+
+An external dependency may prevent one real-provider acceptance check even when the implementation, automated validation, and unaffected real-provider paths are already proven.
+
+A phase may proceed under an explicit waiver only when all of the following are true:
+
+1. the blocker is demonstrated to be outside the code under review;
+2. the blocked property can be isolated from the next phase's deterministic implementation work;
+3. working around the blocker would violate a frozen invariant or public contract;
+4. the blocked check remains visible in documentation as `BLOCKED`, `PENDING`, or `WAIVED`;
+5. the phase is not mislabeled `FROZEN` or fully verified;
+6. the next phase has an alternative deterministic way to validate the shared internal contract without pretending to validate the blocked external path.
+
+Example:
+
+```text
+real provider hooks             PASS
+shared MCP discovery            PASS
+real model-driven MCP execution BLOCKED by external gateway rewrite
+
+→ do not add provider-only MCP aliases
+→ keep real MCP execution visibly blocked
+→ automated next-phase eval may use the unchanged shared MCP gateway/protocol
+→ progression may be allowed under a scoped waiver
+```
+
+Forbidden waiver behavior:
+
+```text
+external blocker → mark PASS
+external blocker → weaken exact shared tool contract
+external blocker → add provider-pair special cases
+external blocker → hide the missing real-provider evidence
+```
+
+A waiver must name the exact missing evidence and the condition that would close it later.
+
+---
+
 # Coding Agent completion checklist
 
 Before asking for the next phase review, report:
@@ -386,6 +425,6 @@ Before asking for the next phase review, report:
 6. `pnpm run check:workspace` result when applicable;
 7. actual CI status if observable;
 8. actual real-provider smoke status if required;
-9. any accepted/deferred limitation.
+9. any accepted/deferred limitation or scoped acceptance waiver.
 
 If a requested implementation would violate one of these guardrails or the frozen domain spec, stop that part of the work and report the conflict instead of silently changing the architecture.
