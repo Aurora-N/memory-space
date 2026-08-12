@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 READY / AUTHORIZED  
+**Status:** Stage A ACCEPTED; Stage B1 IMPLEMENTED / AWAITING REVIEW
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -195,7 +195,7 @@ It is decomposed so one change class can be attributed to one measured outcome:
 
 ```text
 B1 — Retrieval Precision & Abstention
-     READY / AUTHORIZED
+     IMPLEMENTED / AWAITING REVIEW
 
 B2 — Extraction Generalization & Transient Rejection
      NOT AUTHORIZED
@@ -435,7 +435,8 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Only item 1 is authorized now.
+Only item 1 was authorized for the current implementation. Its candidate is now
+implemented and awaiting review; this does not authorize items 2–4.
 
 Stage B1 must:
 
@@ -501,4 +502,6 @@ accepted before-state
 → explicit next authorization
 ```
 
-Stage B1 is the current authorized next implementation stage. B2/B3/B4 remain blocked until B1 review completes.
+Stage B1 implementation evidence is in
+[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). B2/B3/B4
+remain blocked until B1 review completes.

@@ -1,12 +1,17 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Spec
 
-**Status:** READY / AUTHORIZED AFTER STAGE A REVIEW PASS  
+**Status:** IMPLEMENTED / AWAITING CODE AND QUALITY REVIEW
 **Phase:** P6 Stage B1  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
+**Stage B1 implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
 **Depends on:** `MEMORY_QUALITY_V1_SPEC.md`, `quality/P6_BASELINE.md`, `code-review/CR-PHASE9.md`  
 **Primary goal:** Improve deterministic lexical retrieval precision, ranking, and abstention without changing Memory semantics or introducing semantic infrastructure.
 
 > Stage B1 changes the product retrieval policy, but it does not change what a Memory is, who owns it, how Spaces/Sessions bind, or the six-tool MCP contract.
+
+Implementation and local comparison evidence are recorded in
+[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). This status is
+not a review PASS; B2/B3/B4 remain unstarted and unauthorized.
 
 ---
 

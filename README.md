@@ -12,13 +12,14 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - retry-safe, transactional checkpoints with isolated candidate extraction
 - keyed update/dedup with provenance and mutation history
 - checkpoint-time Handoff Snapshots
-- Space-isolated lexical search and structured agent context
+- Space-isolated, field-aware lexical search with explicit abstention and structured agent context
 - TypeScript application API plus a thin JSON HTTP adapter
 - provider-neutral MCP command plane with six policy-bounded tools
 - Codex and Claude Code lifecycle adapters sharing one provider-neutral integration core
 - parameterized same-provider, cross-provider, restart, isolation, and multi-hop durable-memory evaluation
 - local product CLI for init/doctor/status/eval
 - accepted deterministic 20-Session Memory Quality Stage A baseline
+- deterministic Stage B1 retrieval before/after comparison awaiting review
 
 ## Run locally
 
@@ -43,6 +44,8 @@ pnpm memory-space status --cwd /absolute/path/to/project
 pnpm memory-space eval cross-session
 pnpm memory-space eval quality
 pnpm memory-space eval quality --json
+pnpm memory-space eval quality --compare-stage-a
+pnpm memory-space eval quality --compare-stage-a --json
 ```
 
 The package also exposes a `memory-space` bin for linked/installed use, with the same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality` syntax. `init` creates or confirms the Space through the running daemon and then atomically writes the v1 project binding. It never edits global Codex or Claude configuration. Use `doctor --json` for stable check IDs and machine-readable diagnostics.
@@ -128,9 +131,15 @@ Handoff completeness        1.000000
 Duplicate-memory rate       0.500000
 ```
 
-The next authorized quality stage is **P6 Stage B1 — Retrieval Precision & Abstention**. It is intentionally limited to provider-neutral deterministic lexical relevance/ranking improvements and before/after measurement. It does not authorize embeddings, vector search, extractor changes, Core/Handoff policy changes, or semantic dedup.
+**P6 Stage B1 — Retrieval Precision & Abstention** is implemented and awaiting
+code/quality review. The candidate uses provider-neutral field-aware lexical
+evidence and explicit abstention. Against the accepted Stage A snapshot, P@1/R@1
+improve to 0.818182/0.772727, negative false positives fall from 1.0 to 0, and
+negative abstention rises from 0 to 1.0. This does not authorize embeddings,
+vector search, extractor changes, Core/Handoff policy changes, or semantic dedup.
 
-See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md).
+See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) and
+[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md).
 
 ## Next roadmap
 
@@ -142,7 +151,7 @@ P5 Productization
 
 P6 Memory Quality v1
 → Stage A deterministic baseline COMPLETE / REVIEW PASS
-→ Stage B1 Retrieval Precision & Abstention READY / AUTHORIZED
+→ Stage B1 Retrieval Precision & Abstention IMPLEMENTED / AWAITING REVIEW
 → B2/B3/B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
@@ -181,6 +190,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 umbrella quality requirements and staged-improvement policy
 - [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) — normative P6 Stage B1 retrieval precision/abstention execution spec
 - [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
+- [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md) — Stage B1 candidate metrics, deltas, and local validation evidence
 
 ## Status
 
@@ -200,7 +210,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 Retrieval Precision & Abstention is READY / AUTHORIZED under its dedicated spec. B2/B3/B4 have not started.**
+**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 Retrieval Precision & Abstention is implemented and awaiting code/quality review. B2/B3/B4 have not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 

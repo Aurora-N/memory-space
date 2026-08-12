@@ -28,6 +28,9 @@ The runner owns isolated temporary SQLite files and never opens the daemon's con
 
 ```text
 quality/
+├── baselines/      immutable accepted Stage A machine-readable snapshot
+├── baseline.ts     strict snapshot schema/version validation
+├── comparison.ts   Stage A versus B1 delta report and acceptance gate
 ├── fixtures/       independent JSON inputs and expected logical Memory keys
 ├── fixtures.ts     schema validation and loading
 ├── identity.ts     random runtime ID to stable fixture-key mapping
@@ -42,6 +45,8 @@ Run the accepted benchmark surface through:
 ```bash
 pnpm memory-space eval quality
 pnpm memory-space eval quality --json
+pnpm memory-space eval quality --compare-stage-a
+pnpm memory-space eval quality --compare-stage-a --json
 ```
 
 Each invocation creates and removes its own temporary SQLite databases; it does not connect to the daemon or open the daemon database.
@@ -63,11 +68,12 @@ Evidence:
 
 ## P6 Stage B1 comparison rule
 
-Stage B1 is the only currently authorized quality optimization and is defined by:
+Stage B1 is the only implemented quality optimization and is defined by:
 
 [`../docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](../docs/P6_STAGE_B_RETRIEVAL_SPEC.md)
 
-Before production retrieval changes, the implementation must freeze an immutable machine-readable Stage A snapshot, preferably:
+Before production retrieval changes, the implementation froze the immutable
+machine-readable Stage A snapshot at:
 
 ```text
 eval/quality/baselines/p6-stage-a.json
@@ -75,7 +81,7 @@ eval/quality/baselines/p6-stage-a.json
 
 The snapshot must be generated from the accepted Stage A reference and contain stable summary/per-query evidence without runtime UUIDs.
 
-Stage B1 candidate evaluation must compare that immutable before-state with the new deterministic runner output and report:
+Stage B1 candidate evaluation compares that immutable before-state with the new deterministic runner output and reports:
 
 ```text
 baseline P@K/R@K
@@ -90,3 +96,9 @@ hard correctness result
 Do not overwrite Stage A baseline evidence with candidate values, and do not change accepted fixture relevance labels merely to improve scores.
 
 Stage B1 changes lexical relevance/ranking only. Extraction, Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers remain out of scope until separate review.
+
+The comparison command exits non-zero when the Stage B1 delta gate or accepted
+hard-correctness checks fail. Regular `eval quality` still separates observational
+quality scores from its hard-correctness exit status.
+
+Candidate evidence: [`../docs/quality/P6_STAGE_B1_RESULT.md`](../docs/quality/P6_STAGE_B1_RESULT.md).

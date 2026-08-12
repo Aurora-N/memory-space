@@ -8,7 +8,7 @@
 **CR-PHASE9 tie-fixture commit:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`
 **Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Status:** ACCEPTED — CR-PHASE9 REVIEW PASS
-**Next authorized stage:** P6 Stage B1 Retrieval Precision & Abstention
+**Follow-up:** P6 Stage B1 candidate implemented; awaiting code/quality review
 
 This document is the immutable historical Stage A before-state for later quality comparisons. It records the current production Memory implementation before Stage B product retrieval changes.
 
@@ -182,6 +182,10 @@ docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
 Stage B1 must preserve this document as the accepted before-state. Candidate metrics belong in a separate B1 result/comparison document rather than replacing these values.
+
+The candidate evidence is recorded separately in
+[`P6_STAGE_B1_RESULT.md`](./P6_STAGE_B1_RESULT.md). The historical values above
+remain unchanged.
 
 ## Review acceptance
 
