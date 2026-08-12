@@ -107,7 +107,28 @@ P4 is defined in
 [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md).
 It expands the product proof from one Codex→Claude path to same-provider,
 cross-provider, multi-hop, restart, Space-isolation, progressive-disclosure, and
-provenance validation.
+provenance validation. P4 implementation, automated eval, and code review now
+PASS at the intended product/automated scope.
+
+## Next roadmap
+
+Provider breadth is no longer the default next step. The post-integration v1
+roadmap is:
+
+```text
+P5 Productization
+→ init / doctor / status / one-command cross-session eval
+
+P6 Memory Quality v1
+→ deterministic benchmark / long-horizon metrics / measured improvements
+
+P7 Optional MCP-first provider validation
+→ Cursor or another provider only if it proves additional compatibility value
+```
+
+See [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md),
+[`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md), and
+[`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md).
 
 ## Architecture
 
@@ -126,11 +147,15 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 ## Specs
 
-- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — product goals, MVP scope, behaviors, success criteria, non-goals
-- [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — Space / Session / SessionEvent / Memory / Checkpoint / HandoffSnapshot contracts and invariants
-- [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — AI-coding-oriented vertical slices, acceptance criteria, test strategy, and implementation order
+- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — frozen MVP product goals, scope, behaviors, success criteria, non-goals
+- [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — frozen Space / Session / SessionEvent / Memory / Checkpoint / HandoffSnapshot contracts and invariants
+- [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — original MVP vertical slices and acceptance strategy
+- [`docs/PROVIDER_INTEGRATION_PLAN.md`](docs/PROVIDER_INTEGRATION_PLAN.md) — P0–P4 provider-integration execution history and completion criteria
 - [`docs/PROVIDER_INTEGRATION_GUARDRAILS.md`](docs/PROVIDER_INTEGRATION_GUARDRAILS.md) — normative provider/runtime implementation constraints
-- [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md) — normative P4 cross-session and cross-provider durable-memory eval
+- [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md) — accepted P4 cross-session and cross-provider durable-memory eval
+- [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md) — post-integration phase order
+- [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md) — P5 local CLI/productization requirements
+- [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 deterministic memory-quality baseline requirements
 
 ## Status
 
@@ -149,8 +174,10 @@ hook lifecycle PASS. Real model-driven MCP execution remains externally blocked;
 P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully
 FROZEN.**
 
-**P4 implementation: COMPLETE. Automated cross-session/cross-provider eval:
-PASS. Code review: pending.**
+**P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS;
+code review PASS after CR-PHASE7.**
+
+**Next: P5 Productization.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
 Codex→Claude→Codex→Claude continuity through distinct provider Sessions and
@@ -159,3 +186,4 @@ isolation, Handoff advancement, and the exact shared six-tool command plane.
 
 Real Codex evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
 Claude hook/MCP blocker evidence: [`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
+P4 review evidence: [`docs/code-review/CR-PHASE7.md`](docs/code-review/CR-PHASE7.md).
