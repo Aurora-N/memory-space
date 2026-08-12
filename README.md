@@ -33,6 +33,22 @@ pnpm start
 
 The server defaults to `http://127.0.0.1:4310` and persists to `./data/memory-space.db`. The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, or `localhost`; remote/LAN deployment is unsupported. Environment values can be exported from `.env.example`; the server intentionally does not hide configuration loading inside the domain layer.
 
+In another terminal, initialize and inspect the target project with the local
+product CLI:
+
+```bash
+pnpm memory-space init --cwd /absolute/path/to/project --name "My project"
+pnpm memory-space doctor --cwd /absolute/path/to/project
+pnpm memory-space status --cwd /absolute/path/to/project
+pnpm memory-space eval cross-session
+```
+
+The package also exposes a `memory-space` bin for linked/installed use, with the
+same `init`, `doctor`, `status`, and `eval cross-session` syntax. `init` creates
+or confirms the Space through the running daemon and then atomically writes the
+v1 project binding. It never edits global Codex or Claude configuration. Use
+`doctor --json` for stable check IDs and machine-readable diagnostics.
+
 This repository is also a pnpm workspace. The current MVP remains the root package; future deployable applications belong in `apps/*`, reusable packages in `packages/*`, and repository tooling in `tools/*`. Shared toolchain versions use the workspace catalog. Run `pnpm run check:workspace` to execute each workspace package's `check` script when present.
 
 ```bash
@@ -41,7 +57,9 @@ curl -s -X POST http://127.0.0.1:4310/spaces \
   -d '{"name":"My project"}'
 ```
 
-See [`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint event examples.
+The REST flow remains available as a low-level debugging/reference path. See
+[`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint
+event examples.
 
 ## Shared daemon and MCP command plane
 
@@ -117,7 +135,7 @@ roadmap is:
 
 ```text
 P5 Productization
-→ init / doctor / status / one-command cross-session eval
+→ implementation and local validation complete; code review pending
 
 P6 Memory Quality v1
 → deterministic benchmark / long-horizon metrics / measured improvements
@@ -177,7 +195,8 @@ FROZEN.**
 **P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS;
 code review PASS after CR-PHASE7.**
 
-**Next: P5 Productization.**
+**P5 Productization: implementation complete; automated validation and local
+CLI smoke PASS; code review pending. P6 has not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and
 Codex→Claude→Codex→Claude continuity through distinct provider Sessions and

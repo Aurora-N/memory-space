@@ -1,0 +1,155 @@
+#!/usr/bin/env -S node --experimental-strip-types
+
+import { homedir } from "node:os";
+import { pathToFileURL } from "node:url";
+import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
+import { runDoctor, runEval, runInit, runStatus } from "./commands.ts";
+import { asCliError, CliError } from "./errors.ts";
+import {
+  DEFAULT_DAEMON_ENDPOINT,
+  LocalMemorySpaceClient,
+  type LocalMemorySpaceClientPort
+} from "./local-client.ts";
+
+type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
+type BooleanOption = "json";
+
+interface ParsedOptions {
+  cwd?: string;
+  name?: string;
+  spaceId?: string;
+  endpoint?: string;
+  json?: boolean;
+}
+
+export interface CliDependencies {
+  cwd?: string;
+  home?: string;
+  env?: NodeJS.ProcessEnv;
+  stdout?: (line: string) => void;
+  stderr?: (line: string) => void;
+  clientFactory?: (endpoint: string) => LocalMemorySpaceClientPort;
+  evalRunner?: () => Promise<CrossSessionEvalReport>;
+  writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
+}
+
+const usage = `memory-space local product CLI
+
+Usage:
+  memory-space init [--cwd <path>] [--name <name>] [--space-id <id>] [--endpoint <url>]
+  memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
+  memory-space status [--cwd <path>] [--endpoint <url>] [--json]
+  memory-space eval cross-session [--json]
+
+Development invocation:
+  pnpm memory-space <command>`;
+
+function parseOptions(
+  args: string[],
+  allowedValues: readonly ValueOption[],
+  allowedBooleans: readonly BooleanOption[]
+): ParsedOptions {
+  const result: ParsedOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (!argument.startsWith("--")) {
+      throw new CliError("USAGE_ERROR", `Unexpected argument: ${argument}`, {
+        exitCode: 2,
+        remediation: "Run memory-space --help."
+      });
+    }
+    const name = argument.slice(2) as ValueOption | BooleanOption;
+    if (allowedBooleans.includes(name as BooleanOption)) {
+      result[name as BooleanOption] = true;
+      continue;
+    }
+    if (!allowedValues.includes(name as ValueOption)) {
+      throw new CliError("USAGE_ERROR", `Unknown option: ${argument}`, {
+        exitCode: 2,
+        remediation: "Run memory-space --help."
+      });
+    }
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      throw new CliError("USAGE_ERROR", `${argument} requires a value.`, { exitCode: 2 });
+    }
+    index += 1;
+    if (name === "space-id") result.spaceId = value;
+    else if (name === "cwd") result.cwd = value;
+    else if (name === "name") result.name = value;
+    else result.endpoint = value;
+  }
+  return result;
+}
+
+async function defaultEvalRunner(): Promise<CrossSessionEvalReport> {
+  const module = await import("../../eval/support/cross-session-runner.ts");
+  return module.runCrossSessionEval();
+}
+
+export async function runCli(
+  argv: string[],
+  dependencies: CliDependencies = {}
+): Promise<number> {
+  const write = dependencies.stdout ?? ((line: string) => console.log(line));
+  const writeError = dependencies.stderr ?? ((line: string) => console.error(line));
+  const environment = dependencies.env ?? process.env;
+  const cwd = dependencies.cwd ?? process.cwd();
+  const home = dependencies.home ?? homedir();
+
+  try {
+    if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
+      write(usage);
+      return 0;
+    }
+    const command = argv[0];
+    if (command === "eval") {
+      if (argv[1] !== "cross-session") {
+        throw new CliError("USAGE_ERROR", "eval requires the cross-session target.", {
+          exitCode: 2,
+          remediation: "Run: memory-space eval cross-session"
+        });
+      }
+      const options = parseOptions(argv.slice(2), [], ["json"]);
+      return await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner);
+    }
+
+    const allowedValues: ValueOption[] = command === "init"
+      ? ["cwd", "name", "space-id", "endpoint"]
+      : ["cwd", "endpoint"];
+    const options = parseOptions(
+      argv.slice(1),
+      allowedValues,
+      command === "doctor" || command === "status" ? ["json"] : []
+    );
+    const endpoint = options.endpoint
+      ?? environment.MEMORY_SPACE_URL
+      ?? DEFAULT_DAEMON_ENDPOINT;
+    const client = (dependencies.clientFactory ?? ((value) =>
+      new LocalMemorySpaceClient({ endpoint: value })))(endpoint);
+    const context = { cwd, home, client, write, writeBinding: dependencies.writeBinding };
+
+    if (command === "init") {
+      await runInit(options, context);
+      return 0;
+    }
+    if (command === "doctor") return await runDoctor(options, context);
+    if (command === "status") {
+      await runStatus(options, context);
+      return 0;
+    }
+    throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, {
+      exitCode: 2,
+      remediation: "Run memory-space --help."
+    });
+  } catch (error) {
+    const value = asCliError(error);
+    writeError(`${value.code}: ${value.message}`);
+    if (value.remediation) writeError(value.remediation);
+    return value.exitCode;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = await runCli(process.argv.slice(2));
+}

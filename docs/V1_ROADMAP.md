@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current next phase:** P5 — Productization  
+**Current phase:** P5 — Productization implementation complete; code review pending
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`
 
@@ -46,7 +46,7 @@ P2 — Codex Provider Integration                COMPLETE / FROZEN
 P3 — Claude Code Provider Integration          ACCEPTED WITH SCOPED WAIVER
 P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
-P5 — Productization                            NEXT
+P5 — Productization                            IMPLEMENTATION COMPLETE / REVIEW PENDING
 P6 — Memory Quality v1                         AFTER P5
 P7 — Optional MCP-first Provider Validation    OPTIONAL
 ```
@@ -85,6 +85,22 @@ P5 succeeds when a developer can:
 5. receive deterministic exit codes/output useful for both humans and scripts.
 
 P5 must not redesign Memory semantics.
+
+## P5 implementation status
+
+The repository now exposes:
+
+```text
+memory-space init
+memory-space doctor
+memory-space status
+memory-space eval cross-session
+```
+
+The first three commands use one loopback `LocalMemorySpaceClient` and never
+open SQLite. The eval command reuses the canonical P4 runner with isolated
+temporary storage. Automated validation and a local CLI smoke pass; P5 remains
+review-pending and P6 has not started.
 
 ---
 

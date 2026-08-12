@@ -4,6 +4,9 @@
   "description": "Agent-independent, cross-session durable memory layer",
   "type": "module",
   "private": true,
+  "bin": {
+    "memory-space": "./src/cli/main.ts"
+  },
   "packageManager": "pnpm@11.21.0",
   "engines": {
     "node": ">=22.13.0",
@@ -12,6 +15,7 @@
   "exports": "./src/index.ts",
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
+    "memory-space": "node --experimental-strip-types src/cli/main.ts",
     "claude-code:hook": "node --experimental-strip-types src/adapters/providers/claude-code/hook.ts",
     "codex:hook": "node --experimental-strip-types src/adapters/providers/codex/hook.ts",
     "smoke:claude:p3": "node scripts/claude-p3-real-smoke.mjs",
@@ -24,11 +28,11 @@
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
+    "@modelcontextprotocol/client": "catalog:",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "hono": "catalog:",

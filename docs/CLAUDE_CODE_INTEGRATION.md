@@ -1,7 +1,8 @@
 # Claude Code Provider Integration
 
-**Status:** P3 implementation and automated validation complete; real Claude
-Code smoke must pass before P3 is Frozen.
+**Status:** P3 implementation, automated validation, code review, and real hook
+lifecycle PASS; real model-driven MCP remains externally blocked. P3 is
+accepted with a scoped progression waiver and is not Frozen.
 
 Official references:
 
@@ -43,8 +44,15 @@ timeout defaults to 2500 ms and can be changed with
 `MEMORY_SPACE_HOOK_TIMEOUT_MS`. Events are not retried automatically because a
 replay could duplicate Conversation-lite evidence.
 
-Create a Space once through the local API and add a trusted binding to the
-target project:
+With the daemon running, prefer the product CLI from the Memory Space checkout:
+
+```bash
+pnpm memory-space init --cwd /absolute/path/to/project --name "My Project"
+```
+
+This creates/confirms the Space through the daemon and safely writes the v1
+project binding. It does not edit Claude configuration. The equivalent manual
+API flow remains available for debugging:
 
 ```bash
 curl --fail --silent \

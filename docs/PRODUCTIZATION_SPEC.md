@@ -1,6 +1,6 @@
 # P5 — Productization Spec
 
-**Status:** Ready for implementation  
+**Status:** Implementation complete; local validation PASS; code review pending
 **Phase:** P5  
 **Depends on:** Provider Integration P0–P4 complete at their recorded acceptance levels  
 **Related:** `V1_ROADMAP.md`, `PROVIDER_INTEGRATION_GUARDRAILS.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
@@ -446,3 +446,64 @@ Before requesting P5 review, report:
 12. P3 Claude real-MCP waiver remains unchanged/resolved status.
 
 P5 ends after code review. Do not start Memory Quality implementation in the same pass unless explicitly requested.
+
+---
+
+# 13. Implementation evidence
+
+P5 adds a real TypeScript CLI entrypoint at `src/cli/main.ts` and a thin
+`LocalMemorySpaceClient` at `src/cli/local-client.ts`.
+
+Supported invocation:
+
+```bash
+pnpm memory-space init --cwd /absolute/path/to/project --name "My project"
+pnpm memory-space doctor --cwd /absolute/path/to/project
+pnpm memory-space doctor --cwd /absolute/path/to/project --json
+pnpm memory-space status --cwd /absolute/path/to/project
+pnpm memory-space eval cross-session
+```
+
+`init`, `doctor`, and `status` communicate only with the loopback daemon over
+HTTP/MCP. They do not import or construct `MemorySpace`/`SqliteMemoryStore`.
+No new read API was required: status uses existing health, Space, and latest
+Handoff endpoints, deriving the latest checkpoint ID from the Handoff.
+
+Binding creation uses an atomic no-clobber write after daemon Space creation or
+confirmation. Existing equal bindings are idempotent; conflicting/malformed
+bindings are preserved and reported. Global provider configuration is never
+modified.
+
+`eval/cross-session-provider-memory.test.ts` and the CLI both reuse
+`eval/support/cross-session-runner.ts`, preserving the complete P4 matrix,
+multi-hop, restart, isolation, progressive-disclosure, provenance, binding,
+checkpoint-noop, and exact-six assertions. Its temporary SQLite database is
+isolated from daemon state.
+
+Recorded local validation on 2026-08-12:
+
+```text
+pre-change pnpm run check           PASS — 80/80
+pre-change pnpm run check:workspace PASS — 80/80
+```
+
+Final local verification on 2026-08-12:
+
+```text
+pnpm run check           PASS — 93/93
+pnpm run check:workspace PASS — 93/93
+```
+
+The manual CLI smoke used one isolated loopback daemon and a temporary project:
+
+```text
+doctor before init       expected non-zero / actionable binding errors
+init                     PASS
+repeated init            PASS / idempotent
+doctor after init        PASS with provider/Claude-waiver warnings
+status                   PASS
+eval cross-session       PASS
+```
+
+GitHub CI was not independently confirmed. P3 real Claude model-driven MCP
+remains externally blocked / waived and is not reported as PASS.

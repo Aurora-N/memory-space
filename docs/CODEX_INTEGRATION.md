@@ -41,7 +41,15 @@ duplicate evidence.
 
 ## 2. Bind the project to a Space
 
-Create the Space once through the local API:
+With the daemon running, prefer the product CLI from the Memory Space checkout:
+
+```bash
+pnpm memory-space init --cwd /absolute/path/to/project --name "My Project"
+```
+
+This creates/confirms the Space through the daemon and safely writes the v1
+project binding. It does not edit Codex configuration. The equivalent manual
+API flow remains available for debugging:
 
 ```bash
 curl --fail --silent \
