@@ -1,20 +1,26 @@
 # CR-PHASE9 — P6 Memory Quality v1 Stage A Baseline Review
 
 **Reviewed branch:** `agent/memory-quality-v1`  
-**Reviewed commit:** `0c0ad5a875bc3f92ac181b7f4e9c719159e4124b`  
+**Initial reviewed commit:** `0c0ad5a875bc3f92ac181b7f4e9c719159e4124b`  
+**Metric hardening:** `1fab987197fb46618769c601b898d80d6ef6fd87`  
+**Tie-fixture hardening:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`  
+**Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Base commit:** `e57095ce363afdbe4bb24ddf597f3933760a2ba6`  
-**Status:** CHANGES REQUESTED  
-**Phase result:** P6 Stage A architecture/fixture design accepted; retrieval baseline metrics require correction before baseline acceptance  
-**Stage B:** NOT AUTHORIZED
+**Status:** PASS  
+**Phase result:** P6 Stage A deterministic baseline ACCEPTED  
+**Next:** P6 Stage B1 Retrieval Precision & Abstention may proceed under `P6_STAGE_B_RETRIEVAL_SPEC.md`
 
 ---
 
 ## 1. Review conclusion
 
-P6 Stage A is directionally strong and remains within the benchmark-first scope.
-The implementation correctly keeps production extraction/retrieval/domain/storage/MCP behavior unchanged and concentrates changes in `eval/quality/*`, CLI wiring, tests, and documentation.
+P6 Stage A is accepted as a trustworthy deterministic baseline for the current Memory implementation.
 
-The following areas are accepted:
+The benchmark keeps independent JSON ground truth, stable logical Memory identity, a 20-Session long-horizon scenario, provider-neutral continuity proof, hard correctness assertions, and quality metrics that remain observations rather than arbitrary PASS thresholds.
+
+No production extraction, retrieval, domain, storage, lifecycle, provider, or MCP algorithm was changed to improve the Stage A scores.
+
+Accepted areas:
 
 ```text
 independent fixture ground truth                 PASS
@@ -30,512 +36,204 @@ contradiction/supersession scenario               PASS
 provider-neutral continuity proof                 PASS
 hard correctness vs quality metric separation    PASS
 daemon-independent quality eval                   PASS
-no Stage B production optimization                PASS
-no embeddings/vector DB/new Memory tier           PASS
+production search ordering preserved             PASS
+positive vs negative retrieval split             PASS
+meaningful per-query K eligibility                PASS
+full report determinism                           PASS
+no Stage B optimization during baseline           PASS
 ```
-
-One review group blocks Stage A baseline acceptance:
-
-```text
-FIX-01 Retrieval metric validity                 REQUIRED
-  FIX-01A zero-relevant query aggregation
-  FIX-01B meaningful K eligibility
-  FIX-01C production ranking preservation
-```
-
-Two documentation cleanups should be completed in the same hardening pass:
-
-```text
-DOC-02 P6 baseline implementation commit          REQUIRED FOR EVIDENCE ACCURACY
-DOC-03 CR-PHASE8 stale historical wording         SHOULD FIX
-```
-
-Do not change the production retrieval/extraction algorithm while addressing this review.
 
 ---
 
-# 2. FIX-01 — Retrieval metric validity
+## 2. Initial review findings
 
-## Why this blocks baseline acceptance
+The initial review requested one retrieval-metric hardening group before the baseline could be trusted:
 
-Stage A exists to establish trustworthy measurements of the current implementation.
-A poor product score is acceptable at this stage; a biased or semantically invalid metric is not.
+```text
+FIX-01A zero-relevant query aggregation
+FIX-01B meaningful K eligibility
+FIX-01C production ranking preservation
+```
 
-The current runner computes `Precision@K` / `Recall@K` for every retrieval fixture and then macro-averages all generated values. That currently introduces three validity problems:
+It also requested two evidence/documentation cleanups:
 
-1. zero-relevant queries are folded into positive retrieval precision/recall;
-2. K values larger than the eligible corpus are still scored;
-3. evaluator-only tie ordering replaces production ranking order.
+```text
+DOC-02 record real P6 implementation/hardening commits
+DOC-03 clean stale CR-PHASE8 present-tense blocker wording
+```
 
-As a result, the currently recorded retrieval baseline must be treated as provisional and regenerated after this fix.
+These findings are retained as review history; all are closed by the accepted evidence commit.
 
 ---
 
-# 3. FIX-01A — Zero-relevant queries must not enter ordinary P@K / R@K aggregates
+## 3. FIX-01A — CLOSED
 
-## Current problem
+Zero-relevant queries no longer participate in ordinary positive-query Precision@K / Recall@K aggregation.
 
-`long-horizon.json` intentionally contains a negative query:
-
-```json
-{
-  "id": "long-old-sqlite-decision",
-  "query": "project database SQLite",
-  "relevantMemoryKeys": []
-}
-```
-
-This is useful, but it is not a normal positive-relevance retrieval query.
-
-The current metric implementation gives an empty relevant set:
+They are classified separately and reported with deterministic negative-retrieval metrics:
 
 ```text
-Recall@K = 1
-Precision@K = hits / K = 0
+queryCount
+falsePositiveQueries
+abstainedQueries
+falsePositiveRate
+abstentionRate
 ```
 
-and those values participate in the macro aggregate.
+`retrievalAtK()` now rejects an empty relevant set, preventing accidental reintroduction of the old Recall@K=1 behavior for negative queries.
 
-That causes both directions of distortion:
+Accepted result:
 
 ```text
-negative query with no relevant documents
-→ contributes a perfect Recall sample
-
-perfect abstention
-→ still contributes Precision 0
+Negative-query count        1
+False-positive rate         1.000000
+Abstention rate             0.000000
 ```
 
-Neither value represents ordinary retrieval precision/recall.
-
-## Required behavior
-
-Split retrieval fixtures/results into two evaluation classes:
-
-```text
-positive relevance query
-relevantMemoryKeys.length > 0
-→ eligible for ordinary P@K / R@K
-
-negative relevance query
-relevantMemoryKeys.length === 0
-→ excluded from ordinary P@K / R@K aggregate
-→ evaluated by a dedicated negative-query metric
-```
-
-The exact negative-query report shape may follow repository conventions, but it must be deterministic and machine-readable.
-
-A minimal acceptable shape is conceptually:
-
-```ts
-interface NegativeRetrievalAggregate {
-  queryCount: number;
-  falsePositiveQueries: number;
-  abstainedQueries: number;
-  falsePositiveRate: number;
-  abstentionRate: number;
-}
-```
-
-For each negative query, retain enough diagnostic detail to show whether active results were returned, for example:
-
-```text
-query id
-returned logical keys
-returned count
-abstained: true/false
-```
-
-Do not call the negative-query score `Recall@K`.
-
-## Required tests
-
-Add focused tests proving:
-
-```text
-zero-relevant query is absent from positive P@K/R@K aggregation
-perfect negative-query abstention is not scored as Precision@K = 0
-negative query returning active results increments false-positive behavior
-empty negative-query set has explicit stable denominator behavior
-```
-
-Do not invent an arbitrary PASS threshold for the negative-query metric during Stage A.
+The poor score is an honest product observation, not a benchmark failure.
 
 ---
 
-# 4. FIX-01B — Only compute K values meaningful for the eligible corpus
+## 4. FIX-01B — CLOSED
 
-## Current problem
+Each query now determines its eligible corpus using the same status/family/type/tier filters as the real query.
 
-The normative P6 spec says:
-
-```text
-Use only values meaningful for each fixture size.
-```
-
-The runner currently generates all fixture K values for every query:
-
-```text
-K = 1, 3, 5, 10
-```
-
-However some queries apply status filters, for example:
-
-```json
-{
-  "id": "long-resolved-blocker",
-  "statuses": ["resolved"]
-}
-```
-
-The eligible corpus for that query can be smaller than 5 or 10.
-
-Scoring:
-
-```text
-1 relevant result found from a 4-item eligible corpus
-as Precision@10 = 1/10
-```
-
-is not meaningful and artificially depresses the baseline.
-
-## Required behavior
-
-For every query, determine the eligible corpus size under the same retrieval filters before selecting metric K values.
-
-Only calculate/report a K when:
+A K contributes only when:
 
 ```text
 K <= eligibleCorpusSize
 ```
 
-Preferred behavior:
+The accepted aggregate therefore records different contributing query counts:
 
 ```text
-requested K is not meaningful
-→ omit that K for that query
-→ do not include it in the corresponding macro aggregate
+K=1   11 positive queries
+K=3   11 positive queries
+K=5   10 positive queries
+K=10  10 positive queries
 ```
 
-Do not silently relabel `effectiveK = min(K, corpusSize)` as `P@K` unless the report explicitly distinguishes requested and effective K. Omitting ineligible K values is preferred for Stage A simplicity.
-
-The eligible corpus count must respect query filters such as status/family/type/tier when present. Use the existing application/search boundary; do not reach into raw SQLite/store internals solely for this measurement.
-
-Update `queryCount` in each aggregate so it accurately states how many positive queries actually contributed to that K.
-
-## Required tests
-
-Add tests proving:
-
-```text
-corpus size 10 → K 1/3/5/10 eligible
-corpus size 4  → K 1/3 eligible; K 5/10 omitted
-status-filtered corpus uses filtered corpus size
-aggregate queryCount differs by K when eligibility differs
-ineligible K cannot depress aggregate precision/recall
-```
-
-Update documentation that currently claims every evaluated corpus contains at least ten retrievable items; that statement is not true for status-filtered queries.
+The resolved-only query has four eligible Memories and correctly contributes only at K=1 and K=3.
 
 ---
 
-# 5. FIX-01C — Do not replace production ranking with fixture-only logical-key ordering
+## 5. FIX-01C — CLOSED
 
-## Current problem
+The evaluator now preserves the exact order returned by production `MemorySpace.search()` and only maps runtime IDs to fixture logical keys.
 
-Production `MemorySpace.search()` sorts by its own contract:
+Fixture logical identity is never used as a ranking or tie-breaking signal.
 
-```text
-score DESC
-updatedAt DESC
-id ASC
-```
+A focused regression intentionally uses equal-score returned results whose logical-key lexical order conflicts with production order, proving the evaluator does not reorder them.
 
-The quality evaluator currently receives the production results and then re-sorts them using:
-
-```text
-score DESC
-logicalKey ASC
-```
-
-This makes the benchmark evaluate a hybrid ranking that users do not actually receive.
-
-A fixture logical key is evaluation metadata and must not become a ranking signal.
-
-This can change P@1/P@3 when a relevant item and distractor have equal lexical score near a K boundary.
-
-## Required behavior
-
-Preserve production search result ordering:
-
-```ts
-const returnedKeys = returned.map(...)
-```
-
-Do not reorder production results using logical fixture identity.
-
-If production tie-breaking makes a particular fixture non-deterministic because random runtime IDs decide an equal-score boundary, fix the fixture/query so the relevant baseline comparison does not depend on an unresolved score tie.
-
-Preferred Stage A rule:
-
-```text
-benchmark production ordering as returned
-+
-construct deterministic fixtures around important K boundaries
-```
-
-Do not modify production retrieval ranking to make the benchmark deterministic.
-
-Do not introduce a complex tie-aware ranking metric unless a simple fixture correction cannot remove the ambiguity.
-
-## Required tests
-
-Add a focused regression that would fail if evaluator-only logical-key sorting is reintroduced.
-
-At minimum prove:
-
-```text
-runner preserves the order returned by MemorySpace.search
-logical fixture key cannot reorder equal-score production results
-report remains deterministic across two consecutive complete eval runs
-```
+One query-only fixture adjustment removed an otherwise random production score tie while preserving its relevance labels and intended difficulty. Production ranking was not changed for Stage A.
 
 ---
 
-# 6. Regenerate the retrieval baseline after FIX-01
+## 6. Accepted Stage A baseline
 
-The following currently recorded values are provisional because they were produced by the invalid aggregate described above:
-
-```text
-Retrieval P@1 / R@1
-Retrieval P@3 / R@3
-Retrieval P@5 / R@5
-Retrieval P@10 / R@10
-```
-
-After implementing FIX-01A/B/C, rerun the complete deterministic quality evaluation and update:
+The accepted retrieval baseline is:
 
 ```text
-docs/quality/P6_BASELINE.md
-docs/MEMORY_QUALITY_V1_SPEC.md     if implementation evidence is embedded there
-docs/V1_ROADMAP.md                 only for phase status/evidence accuracy
-eval/README.md                     if report semantics are documented there
-README.md                           only if displayed baseline values changed
+P@1                         0.727273
+R@1                         0.681818
+P@3                         0.303030
+R@3                         0.818182
+P@5                         0.180000
+R@5                         0.800000
+P@10                        0.090000
+R@10                        0.800000
+Negative FP rate            1.000000
+Negative abstention         0.000000
 ```
 
-The regenerated baseline must include:
+Other accepted Stage A observations remain:
 
 ```text
-positive-query P@K / R@K
-per-K contributing queryCount
-negative-query false-positive/abstention measurement
-representative retrieval failures
+Extraction precision        0.800000
+Extraction recall           0.666667
+Core pollution              1 / 9 = 0.111111
+Bootstrap critical coverage 7 / 7 = 1.000000
+Handoff completeness        9 / 9 = 1.000000
+Stale-memory rate           0 / 13 = 0.000000
+Duplicate-memory rate       2 / 4 = 0.500000
+Long-horizon Sessions       20
 ```
 
-Do not change fixtures merely to improve product scores. Fixture edits are allowed only when required to remove metric ambiguity such as non-deterministic equal-score ties; document any such edit and why it improves validity rather than difficulty.
+See `docs/quality/P6_BASELINE.md` for the full recorded evidence and failure examples.
 
 ---
 
-# 7. Preserve all already accepted Stage A evidence
+## 7. Correctness and regression evidence
 
-The hardening pass must not weaken or remove:
+The accepted Stage A run preserves the frozen correctness properties, including:
 
 ```text
-checkpoint-derived extraction fixture
-independent JSON ground truth
-20 logical Sessions
-SQLite-isolated deterministic runner
-Core pollution measurement
-bootstrap critical coverage
-Handoff completeness
-stale-memory measurement
-duplicate-memory measurement
-contradiction/supersession checks
-Codex → Claude provider-neutral proof
-provenance hard check
-cross-Space isolation hard check
-inactive bootstrap exclusion
-exact shared six MCP tools
-quality metric != CLI correctness exit status
+latest committed Handoff boundary               PASS
+inactive/resolved Core excluded from bootstrap   PASS
+current keyed state visible                      PASS
+stale keyed state excluded                       PASS
+Codex → Claude continuity                        PASS
+provenance preservation                          PASS
+cross-Space isolation                            PASS
+archived Core exclusion                          PASS
+exact shared six MCP tools                       PASS
 ```
 
-The quality runner must remain daemon-independent and must not write benchmark state into the user's real project Space/database.
+Repository evidence records:
+
+```text
+focused quality tests        PASS — 8/8
+pnpm run check               PASS — 107/107
+pnpm run check:workspace     PASS — 107/107
+quality CLI human output     PASS
+quality CLI JSON output      PASS
+two-run deterministic JSON  PASS
+```
+
+GitHub CI was not independently confirmed for this review and is not represented as green.
 
 ---
 
-# 8. Production-code boundary remains frozen during this fix
+## 8. Stage B authorization boundary
 
-This review is about the evaluator, not product optimization.
-
-Do not modify production behavior under:
+Stage A review PASS authorizes only the next separately specified improvement stage:
 
 ```text
-src/application/* extraction/retrieval algorithm
-src/domain/*
-src/storage/*
-src/integration/*
-src/adapters/providers/*
-src/mcp/*
+P6 Stage B1 — Retrieval Precision & Abstention
 ```
 
-unless a compilation-only type import adjustment is unavoidable and semantically inert.
-
-Specifically forbidden during this CR pass:
+Normative execution spec:
 
 ```text
-retrieval scoring rewrite
-embeddings
-vector search
-reranking service
-query expansion
+docs/P6_STAGE_B_RETRIEVAL_SPEC.md
+```
+
+Stage B1 must use the accepted Stage A reference `9490ebce94928132a2fb16aca247c8ae4888a7cf` as its immutable before-state and must preserve the accepted fixture ground truth.
+
+Stage B1 does **not** authorize:
+
+```text
+B2 extraction optimization
+B3 Core/Handoff policy changes
 semantic dedup
-extractor heuristic tuning
-checkpoint extraction redesign
-new Memory tier
-new MCP tool
+embeddings/vector search
+new Memory tiers
+new MCP tools
 new provider integration
 ```
 
-A low corrected baseline score is an acceptable Stage A result.
-
-Do not improve the score before the corrected baseline is reviewed.
+Those require later review decisions.
 
 ---
 
-# 9. DOC-02 — Correct P6 baseline implementation evidence
-
-`docs/quality/P6_BASELINE.md` currently says the implementation commit was not created and describes a working tree.
-
-The reviewed implementation commit now exists:
+## 9. Final verdict
 
 ```text
-0c0ad5a875bc3f92ac181b7f4e9c719159e4124b
-```
+P6 Stage A architecture / scope             PASS
+P6 Stage A metric validity                  PASS
+P6 Stage A deterministic baseline           PASS
+P6 Stage A code / quality review            PASS
 
-After the CR fix commit is created, update the baseline evidence to identify the actual implementation/hardening commit(s) used to produce the final recorded metrics.
-
-Do not leave stale "working tree" wording after commits exist.
-
----
-
-# 10. DOC-03 — Clean stale CR-PHASE8 historical wording
-
-`docs/code-review/CR-PHASE8.md` correctly has a PASS header after re-review, but its early conclusion section still reads as though two P5 findings remain blocking.
-
-Preserve the historical review record, but rewrite the stale present-tense wording into historical form, for example:
-
-```text
-Initial review identified FIX-01 and FIX-02 as blockers.
-Both were closed by the re-review commit.
-```
-
-Do not rewrite or erase the detailed historical findings themselves.
-
-This is documentation hygiene and not an excuse for unrelated P5 changes.
-
----
-
-# 11. Tests and verification required before re-review
-
-Run focused quality tests plus the complete repository checks.
-
-At minimum verify:
-
-```text
-metric formula unit tests                         PASS
-zero-relevant positive-aggregate exclusion       PASS
-negative-query metric                             PASS
-meaningful-K filtering                            PASS
-filtered-corpus K eligibility                     PASS
-production-order preservation                     PASS
-two consecutive quality reports deterministic     PASS
-20-Session quality runner                         PASS
-quality CLI human output                          PASS
-quality CLI JSON output                           PASS
-P0–P5 regressions                                 PASS
-```
-
-Then actually run:
-
-```bash
-pnpm run check
-pnpm run check:workspace
-pnpm memory-space eval quality
-pnpm memory-space eval quality --json
-```
-
-Run the quality JSON output twice and verify deterministic equality after the ranking fix.
-
-If GitHub CI is not observable, continue to state:
-
-```text
-GitHub CI not independently confirmed
-```
-
-Do not fabricate a remote CI PASS.
-
----
-
-# 12. Re-review completion report
-
-After fixing this CR, stop and report:
-
-1. files changed;
-2. FIX-01A implementation;
-3. positive vs negative query classification;
-4. negative-query metric definition and corrected result;
-5. FIX-01B K-eligibility implementation;
-6. how eligible corpus size is determined;
-7. per-K aggregate `queryCount`;
-8. FIX-01C production-order preservation;
-9. any fixture changes made only to eliminate score-tie ambiguity;
-10. corrected P@1/R@1;
-11. corrected P@3/R@3;
-12. corrected P@5/R@5;
-13. corrected P@10/R@10;
-14. whether Stage B ranking recommendations changed after corrected metrics;
-15. DOC-02 evidence update;
-16. DOC-03 cleanup;
-17. focused test results;
-18. `pnpm run check` result;
-19. `pnpm run check:workspace` result;
-20. human/JSON quality CLI results;
-21. deterministic two-run result;
-22. production algorithm/domain files changed? expected answer: no;
-23. remaining baseline limitations.
-
-End with:
-
-```text
-P6 Stage A CR-PHASE9 fixes implemented.
-Stage B NOT started.
-Awaiting baseline re-review.
-```
-
-Do not mark CR-PHASE9 PASS yourself.
-
----
-
-# 13. Acceptance gate
-
-CR-PHASE9 can be closed when the reviewer confirms:
-
-```text
-zero-relevant queries no longer bias positive P/R        PASS
-negative-query behavior measured separately              PASS
-only meaningful K values enter metrics                   PASS
-filtered corpus size is respected                        PASS
-evaluator preserves production ranking                   PASS
-full report remains deterministic                        PASS
-baseline numbers regenerated truthfully                  PASS
-production retrieval/extraction unchanged                PASS
-P3 scoped Claude MCP waiver unchanged                    PASS
-Stage B not started                                      PASS
-```
-
-Until then:
-
-```text
-P6 Stage A baseline review      CHANGES REQUESTED
-P6 Stage B                      DO NOT START
+CR-PHASE9                                   CLOSED
+P6 Stage B1                                 READY / AUTHORIZED BY SPEC
 ```
