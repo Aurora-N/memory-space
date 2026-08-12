@@ -1,7 +1,6 @@
 # Provider Integration v1 — Implementation Plan
 
-**Status:** P4 implementation and automated cross-session/cross-provider eval
-complete; code review pending
+**Status:** Provider Integration v1 complete at the intended product/automated scope after P4 code review; P3 real Claude model-driven MCP execution remains an explicitly scoped external waiver
 
 **P0 status:** Frozen after CR-PHASE3
 
@@ -13,14 +12,15 @@ complete; code review pending
 automated validation, code review, and real hook lifecycle pass; real
 model-driven MCP execution remains externally blocked and is not marked PASS
 
-**P4 status:** IMPLEMENTATION COMPLETE — automated durable-memory eval PASS;
-code review pending
+**P4 status:** COMPLETE — automated durable-memory eval PASS; code review PASS after CR-PHASE7
 
 **Spec:** [`PROVIDER_INTEGRATION_SPEC.md`](./PROVIDER_INTEGRATION_SPEC.md)  
 
-**Normative guardrails:** [`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md)
+**Normative guardrails:** [`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md)  
 
-**Target branch:** `agent/provider-integration-v1`  
+**Post-integration roadmap:** [`V1_ROADMAP.md`](./V1_ROADMAP.md)  
+**Next phase:** [`PRODUCTIZATION_SPEC.md`](./PRODUCTIZATION_SPEC.md)
+
 **Delivery model:** Incremental phases with code review between phases
 
 ---
@@ -39,9 +39,7 @@ The implementation must prove that real coding-agent sessions can share one dura
 - fail-open lifecycle hooks;
 - fail-visible MCP errors.
 
-The Coding Agent must not implement all providers in one large pass.
-
-Required delivery order:
+Provider Integration v1 delivery order is complete:
 
 ```text
 P0 — Integration Foundation
@@ -49,20 +47,26 @@ P1 — MCP Command Plane
 P2 — Codex Provider Integration
 P3 — Claude Code Provider Integration
 P4 — Cross-Session & Cross-Provider Durable Memory Eval
-P5 — Optional Cursor MCP-first validation
 ```
 
-Stop for review after P0/P1 and again after P2 before implementing Claude-specific behavior if requested by the reviewer.
+Post-integration work is intentionally tracked outside this plan:
+
+```text
+P5 — Productization
+P6 — Memory Quality v1
+P7 — Optional MCP-first Provider Validation
+```
+
+See `V1_ROADMAP.md` for that sequence. Do not continue adding providers by default merely because P4 has finished.
 
 ---
 
 # 2. Global Constraints
 
-The normative Provider Integration guardrails are required reading before each
-phase. In particular, P3 and P4 must not begin without re-reading
+The normative Provider Integration guardrails are required reading before any future refactor touching P0–P4 boundaries:
 [`PROVIDER_INTEGRATION_GUARDRAILS.md`](./PROVIDER_INTEGRATION_GUARDRAILS.md).
 
-Do not introduce in this implementation plan:
+Do not introduce into the frozen Provider Integration v1 architecture:
 
 - distributed leases/locks;
 - multi-process checkpoint ownership;
@@ -87,15 +91,14 @@ Prefer adapting existing public `MemorySpace` methods instead of duplicating dom
 
 # 3. Pre-flight
 
-Before changing code:
+Before changing Provider Integration code:
 
 1. Read:
    - `docs/PROVIDER_INTEGRATION_SPEC.md`;
+   - `docs/PROVIDER_INTEGRATION_GUARDRAILS.md`;
    - `docs/DOMAIN_MODEL.md`;
    - `docs/PRODUCT_SPEC.md`;
-   - `docs/MVP_PLAN.md`;
-   - `docs/adr/0003-mvp-execution-and-candidate-trust-boundaries.md`;
-   - CR-PHASE1/CR-PHASE2 docs.
+   - relevant provider docs and phase CRs.
 
 2. Run the existing quality gate:
 
@@ -281,7 +284,7 @@ without a durable uniqueness/get-or-create boundary.
 - concurrent identical resolution → one durable Session;
 - different provider → distinct Session;
 - same external ID under different providers → distinct Session;
-- same provider-native session already bound to a conflicting Space → explicit conflict, never silent rebind;
+- same provider-native session already bound to a conflicting trusted explicit Space → explicit conflict, never silent rebind;
 - provider with no external Session ID → create internal Session; no claim of resume identity unless later binding mechanism is added.
 
 ### Store changes
@@ -350,8 +353,8 @@ Recommended behavior matrix:
 
 ```text
 session_start
-→ resolve Space
-→ resolve/create Memory Session
+→ resolve/reuse provider identity
+→ resolve Space only on first binding
 → bootstrap
 → return integration result for Provider renderer
 
@@ -378,10 +381,10 @@ Minimum normalized payload:
 
 ```ts
 {
-  role: "user" | "assistant",
-  content: string,
-  contentMode: "full",
-  transcriptRef?: TranscriptRef
+  role: "user" | "assistant";
+  content: string;
+  contentMode: "full";
+  transcriptRef?: TranscriptRef;
 }
 ```
 
@@ -436,8 +439,6 @@ P0 is complete when:
 - CheckpointPolicy returns completed/noop correctly;
 - `pnpm run check` passes.
 
-Stop and review architecture before provider-specific expansion if implementation required changing frozen invariants.
-
 ---
 
 # 5. P1 — MCP Command Plane
@@ -480,7 +481,7 @@ sessionId present
 → cwd cannot rebind Space
 
 sessionId absent
-→ SpaceResolver from request/runtime cwd
+→ SpaceResolver from trusted request/runtime cwd
 ```
 
 Do not expose `spaceId` as an agent-controlled tool argument.
@@ -719,13 +720,7 @@ P1 is complete when:
 
 # 6. P2 — Codex Provider Integration
 
-**Implementation status:** The native hook bridge, daemon lifecycle route,
-bootstrap injection, Conversation-lite capture, fail-open behavior, and Codex
-lifecycle eval are implemented and pass automated validation. The real Codex
-CLI smoke is recorded in
-[`validation/CODEX_P2_SMOKE.md`](./validation/CODEX_P2_SMOKE.md), so P2 is
-Frozen. P3 implementation is complete and awaiting a compatible real-Claude
-MCP execution smoke.
+**Implementation status:** Complete and Frozen. The native hook bridge, daemon lifecycle route, bootstrap injection, Conversation-lite capture, fail-open behavior, lifecycle eval, and real Codex CLI smoke passed. Evidence: [`validation/CODEX_P2_SMOKE.md`](./validation/CODEX_P2_SMOKE.md).
 
 ## Objective
 
@@ -752,11 +747,11 @@ transcript-reader.ts
 Map supported native lifecycle inputs to common events:
 
 ```text
-SessionStart    → session_start
+SessionStart     → session_start
 UserPromptSubmit → user_prompt
-Stop/final turn → assistant_turn when reliable final content is available
-PreCompact      → pre_compact
-SessionEnd      → session_end
+Stop/final turn  → assistant_turn when reliable final content is available
+PreCompact       → pre_compact
+SessionEnd       → session_end
 ```
 
 Do not ingest PreToolUse/PostToolUse into SessionEvent by default.
@@ -773,8 +768,7 @@ On SessionStart:
 native payload
 → CodexAdapter.normalize
 → LifecycleHandler session_start
-→ SpaceResolver
-→ ProviderSessionResolver
+→ provider identity / Space binding
 → MemorySpace.bootstrap
 → Codex bootstrap renderer
 → provider-native additional context/output
@@ -794,8 +788,6 @@ Memory service failures in Codex lifecycle handling must:
 - allow Codex workflow to continue;
 - never report a durable Memory write/checkpoint as successful when it was not.
 
-Tests should use a fake/failing Memory integration dependency where practical.
-
 ---
 
 ## P2.4 Transcript reference
@@ -804,13 +796,9 @@ Capture a provider-neutral `TranscriptRef` if Codex exposes a durable transcript
 
 Do not read/copy the full transcript automatically in every hook.
 
-A Codex TranscriptReader may be implemented if sufficiently stable/needed for the acceptance eval, but transcript-assisted extraction is not required to block P2 if Conversation-lite evidence is sufficient.
-
 ---
 
 ## P2.5 Codex integration eval
-
-Create an automated fixture/eval that approximates native payloads without requiring interactive Codex in CI.
 
 Validate:
 
@@ -822,19 +810,17 @@ Validate:
 6. bootstrap includes Core + latest Handoff;
 7. changing cwd after binding does not migrate Space.
 
-Also document a manual real-Codex smoke-test procedure.
-
 ---
 
 ## P2 Stop Condition
 
-P2 is complete when one real Codex session can be manually configured to:
+P2 is complete when one real Codex session can:
 
 ```text
 start
 → receive Memory bootstrap
 → use shared MCP tools
-→ persist conversation-lite events
+→ persist Conversation-lite events
 → checkpoint automatically on supported lifecycle boundary
 → resume without duplicate provider Session
 ```
@@ -845,15 +831,7 @@ and automated adapter/integration tests pass.
 
 # 7. P3 — Claude Code Provider Integration
 
-**Implementation status:** `ClaudeAdapter`, lifecycle daemon routing,
-SessionStart bootstrap injection, shared six-tool MCP configuration, provider
-parity tests, and the automated lifecycle eval are complete. A real Claude Code
-2.1.227 run has validated hook loading, bootstrap injection, MCP connection and
-six-tool discovery, UserPromptSubmit, Stop final capture, and SessionEnd. The
-active compatibility gateway rewrites Claude's double-underscore MCP names, so
-real `memory_remember/search` execution is blocked outside Memory Space. See
-[`validation/CLAUDE_P3_SMOKE.md`](./validation/CLAUDE_P3_SMOKE.md). P3 is
-accepted with a scoped progression waiver and is not fully Frozen.
+**Implementation status:** `ClaudeAdapter`, lifecycle daemon routing, SessionStart bootstrap injection, shared six-tool MCP configuration, provider parity tests, and automated lifecycle eval are complete. Real Claude hook lifecycle/bootstrap behavior passed. The active compatibility gateway rewrites Claude MCP tool names, so real model-driven `memory_remember/search` execution remains externally blocked. Evidence: [`validation/CLAUDE_P3_SMOKE.md`](./validation/CLAUDE_P3_SMOKE.md). P3 is accepted with a scoped progression waiver and is not represented as fully Frozen.
 
 ## Objective
 
@@ -909,30 +887,27 @@ A provider capability absent from one adapter must not cause common-contract fai
 
 ---
 
-## P3 Stop Condition
+## P3 Acceptance Status
 
-P3 is complete when Claude Code can use the same Memory Space daemon/MCP tools and automatic lifecycle flow without Codex-specific branches leaking into `MemorySpace` or MCP contracts.
+The code/provider-contract acceptance is complete. The missing real Claude model-driven MCP call is explicitly waived only for progression because the observed blocker is external and working around it would violate the exact-six shared MCP contract.
+
+Do not convert this waiver into a synthetic PASS.
 
 ---
 
 # 8. P4 — Cross-Session & Cross-Provider Durable Memory Eval
 
-**Normative execution spec:**
-[`P4_CROSS_SESSION_PROVIDER_EVAL.md`](./P4_CROSS_SESSION_PROVIDER_EVAL.md)
-
-**Implementation status:** Complete; automated eval PASS; code review pending.
+**Normative execution spec:** [`P4_CROSS_SESSION_PROVIDER_EVAL.md`](./P4_CROSS_SESSION_PROVIDER_EVAL.md)  
+**Review:** [`code-review/CR-PHASE7.md`](./code-review/CR-PHASE7.md)  
+**Implementation status:** Complete; automated eval PASS; code review PASS.
 
 ## Objective
 
-Prove that durable Memory belongs to a Space rather than a provider or one
-Session, without adding provider-pair business logic.
+Prove that durable Memory belongs to a Space rather than a provider or one Session, without adding provider-pair business logic.
 
-## Implemented proof
+## Accepted proof
 
-`eval/cross-session-provider-memory.test.ts` uses provider-native payloads and
-the real Codex/Claude lifecycle integrations to create distinct Sessions. It
-uses the shared MCP protocol surface for remember, promote, search, context,
-checkpoint, and exact-six discovery.
+`eval/cross-session-provider-memory.test.ts` uses provider-native payloads and the real Codex/Claude lifecycle integrations to create distinct Sessions. It uses the shared MCP protocol surface for remember, promote, search, context, checkpoint, and exact-six discovery.
 
 The parameterized matrix passes:
 
@@ -943,10 +918,7 @@ Codex A  → Claude B
 Claude A → Codex B
 ```
 
-Every matrix case closes and reopens SQLite before starting the target Session
-and verifies Core/latest-Handoff bootstrap, Indexed progressive recall,
-provenance preservation, provider Session mappings, changed-cwd binding
-freeze, explicit Space conflict, clean-checkpoint noop, and Space isolation.
+Every matrix case closes and reopens SQLite before starting the target Session and verifies Core/latest-Handoff bootstrap, Indexed progressive recall, provenance preservation, provider Session mappings, changed-cwd binding freeze, explicit Space conflict, clean-checkpoint noop, and Space isolation.
 
 The multi-hop case passes:
 
@@ -954,37 +926,43 @@ The multi-hop case passes:
 Codex A → Claude B → Codex C → Claude D
 ```
 
-Later Sessions advance the latest Handoff while the original Core remains
-durable and Indexed origin remains attached to its writer Session.
+Later Sessions advance the latest Handoff while the original Core remains durable and Indexed origin remains attached to its writer Session.
 
-P3's real Claude model-driven MCP item remains blocked under the scoped waiver.
-P4 does not add aliases, rename tools, add a seventh tool, or claim that
-external check passed.
+P3's real Claude model-driven MCP item remains blocked under the scoped waiver. P4 did not add aliases, rename tools, add a seventh tool, or claim that external check passed.
 
 ---
 
-# 9. P5 — Cursor MCP-first Validation (Optional after v1 proof)
+# 9. Post-Integration Roadmap
 
-Cursor should initially consume the common MCP Command Plane.
+Provider Integration v1 stops after P4.
 
-Do not implement polling/wrapper lifecycle emulation merely to claim parity.
+Do not continue directly into another provider merely to increase provider count. The next planned work is tracked by [`V1_ROADMAP.md`](./V1_ROADMAP.md):
 
-Minimum validation:
+```text
+P5 — Productization
+     init / doctor / status / one-command cross-session eval
 
-- project Space resolution works;
-- shared MCP server is usable;
-- bootstrap/context/search/remember/promote/checkpoint tools work;
-- limitations in automatic lifecycle capture are documented as capability differences.
+P6 — Memory Quality v1
+     deterministic benchmark / long-horizon metrics / measured improvements
 
-Only deepen Cursor lifecycle integration if a stable native lifecycle mechanism is selected later.
+P7 — Optional MCP-first Provider Validation
+     Cursor or another provider only if it proves additional compatibility value
+```
+
+Normative next-phase specs:
+
+- [`PRODUCTIZATION_SPEC.md`](./PRODUCTIZATION_SPEC.md)
+- [`MEMORY_QUALITY_V1_SPEC.md`](./MEMORY_QUALITY_V1_SPEC.md)
+
+Cursor is no longer the default P5. Do not implement polling/wrapper lifecycle emulation merely to claim provider parity.
 
 ---
 
 # 10. Suggested Test Layout
 
-Do not mechanically create every file below if existing test organization is better; preserve current repository conventions.
+Preserve current repository conventions rather than mechanically creating every conceptual file.
 
-Conceptual coverage:
+Current conceptual coverage includes:
 
 ```text
 test/
@@ -994,12 +972,13 @@ test/
 ├── provider-checkpoint-policy.test.ts
 ├── mcp-tools.test.ts
 ├── provider-codex.test.ts
-├── provider-claude.test.ts
+├── provider-claude-code.test.ts
 └── ... existing MVP tests
 
 eval/
 ├── provider-codex-handoff.test.ts
-└── cross-provider-handoff.test.ts
+├── provider-claude-code-handoff.test.ts
+└── cross-session-provider-memory.test.ts
 ```
 
 Keep durable reopen eval separate from only in-memory tests.
@@ -1015,8 +994,8 @@ Keep durable reopen eval separate from only in-memory tests.
 | no binding | stable `SPACE_NOT_BOUND` behavior |
 | same provider native session start twice | same internal Session |
 | concurrent duplicate native session resolution | one durable Session |
-| same provider session presented under different Space | conflict |
-| provider session changes cwd after bind | Space unchanged |
+| existing provider Session + changed cwd | original Space remains authoritative |
+| existing provider Session + conflicting trusted explicit override | conflict |
 | user prompt | one normalized user SessionEvent |
 | assistant final turn | one normalized assistant SessionEvent/full mode |
 | tool calls | not persisted by default |
@@ -1029,16 +1008,20 @@ Keep durable reopen eval separate from only in-memory tests.
 | MCP checkpoint boundary injection | impossible/rejected |
 | lifecycle Memory outage | provider flow fail-open |
 | explicit MCP Memory outage | fail-visible |
-| Codex → Claude same Space | Handoff visible |
-| Codex Indexed detail → Claude bootstrap | hidden |
-| Codex Indexed detail → Claude explicit recall | recoverable |
+| Codex → Codex same Space | durable Memory visible under progressive disclosure |
+| Claude → Claude same Space | durable Memory visible under progressive disclosure |
+| Codex → Claude same Space | Handoff/Core visible; Indexed recallable |
+| Claude → Codex same Space | Handoff/Core visible; Indexed recallable |
+| cross-Space target | no Memory/Handoff leakage |
+| durable reopen | Session mappings + Memory + Handoff preserved |
+| multi-hop provider chain | latest Handoff advances correctly |
 | all existing MVP tests | remain green |
 
 ---
 
 # 12. Security / Trust Tests
 
-At minimum add tests proving that provider-originated/native payloads cannot bypass trust policy.
+At minimum retain tests proving that provider-originated/native payloads cannot bypass trust policy.
 
 Required cases:
 
@@ -1057,15 +1040,15 @@ Expected:
 - MCP schemas do not expose privileged fields;
 - only existing `MemorySpace` promotion policy can create/retain Core.
 
-Do not build full prompt-injection detection in this phase.
+Do not build full prompt-injection detection in Provider Integration v1.
 
 ---
 
 # 13. Observability Minimum
 
-Do not build a dashboard, but make debugging possible.
+Provider/runtime debugging should remain possible without building a dashboard.
 
-Recommended structured diagnostics/log fields:
+Useful structured diagnostics/log fields include:
 
 ```text
 provider
@@ -1082,66 +1065,53 @@ Never log secrets/credentials.
 
 Avoid logging complete conversation content by default in operational logs; SessionEvents already persist normalized content.
 
+P5 Productization now owns the higher-level `doctor` / `status` user experience.
+
 ---
 
-# 14. Manual Developer Workflow Target
+# 14. Developer Workflow Transition
 
-By the end of v1, desired local workflow should conceptually be:
+The low-level v1 runtime remains valid:
 
 ```bash
-memory-space server
-
-cd repo/apps/web
-# .memory-space/config.json exists
-
-codex
+pnpm start
 ```
 
-SessionStart should automatically bind and inject context when the provider adapter is installed/configured.
+with project `.memory-space/config.json` plus provider hook/MCP configuration.
 
-The agent should then be able to use:
+P5 Productization now formalizes the previously deferred UX target:
 
 ```text
-memory_context
-memory_search
-memory_remember
-memory_promote
-memory_checkpoint
-```
-
-A later setup command such as:
-
-```bash
 memory-space init
-memory-space provider install codex
-memory-space provider install claude
 memory-space doctor
+memory-space status
+memory-space eval cross-session
 ```
 
-is desirable product UX but not required for the core v1 implementation unless specifically added in a later plan.
+See `PRODUCTIZATION_SPEC.md` rather than expanding Provider Integration code for those concerns.
 
 ---
 
 # 15. Phase Review Checklist
 
-At the end of each phase, Coding Agent must report:
+For any future change touching Provider Integration v1, report:
 
 1. files changed;
 2. public types/contracts added or changed;
 3. persistence/schema changes;
 4. tests added;
 5. `pnpm run check` result;
-6. manual validation performed;
+6. manual/real-provider validation performed;
 7. frozen Spec invariant changes, if any;
-8. known limitations;
-9. what is intentionally deferred to the next phase.
+8. known limitations/waivers;
+9. why the change belongs in Provider Integration rather than P5/P6.
 
-If a frozen invariant was changed, report explicitly:
+If a frozen invariant would change, report explicitly:
 
 ```text
 Original invariant
-Implemented change
-Why the original could not be preserved
+Proposed change
+Why the original cannot be preserved
 Compatibility impact
 Alternative considered
 ```
@@ -1150,7 +1120,7 @@ Alternative considered
 
 # 16. Definition of Done — Provider Integration v1
 
-Provider Integration v1 is done when:
+Provider Integration v1 is complete at its intended scope when the following are true.
 
 ### Architecture
 
@@ -1177,7 +1147,7 @@ Provider Integration v1 is done when:
 
 - explicit/PreCompact/SessionEnd share one policy;
 - no empty checkpoint is created;
-- logical hook retries are idempotent;
+- logical hook retries are idempotent at checkpoint boundaries;
 - existing durable checkpoint guarantees remain intact.
 
 ### MCP
@@ -1190,28 +1160,34 @@ Provider Integration v1 is done when:
 
 ### Provider proof
 
-- Codex integration works;
-- Claude Code integration works;
-- Cross-provider durable Handoff eval passes;
-- Indexed detail remains on-demand rather than default-exposed.
+- Codex integration works and real smoke passes;
+- Claude Code integration satisfies the shared code/lifecycle contract with the recorded external real-MCP waiver remaining explicit;
+- same-provider and cross-provider durable Session handoff eval passes;
+- multi-hop provider continuity passes;
+- Indexed detail remains on-demand rather than default-exposed;
+- Space isolation/provenance survive durable reopen.
 
-### Quality
+### Quality gate
 
-```bash
-pnpm run check
+The reviewed P4 implementation recorded:
+
+```text
+pnpm run check           PASS — 80/80 tests
+pnpm run check:workspace PASS — 80/80 tests
 ```
 
-passes, and existing MVP durable evals remain green.
+GitHub CI was not independently confirmed in that review.
 
 ---
 
 # 17. Stop Condition
 
-After the Cross-provider Eval passes, stop Provider Integration v1.
+Provider Integration v1 stops after the accepted P4 eval.
 
 Do not immediately expand into:
 
 ```text
+another provider by default
 advanced provider automation
 all tool-event capture
 full transcript ingestion
@@ -1223,4 +1199,4 @@ distributed checkpoint ownership
 UI dashboard
 ```
 
-Select the next phase based on observed integration/eval pain rather than speculative architecture.
+The selected next phase is **P5 Productization**, followed by **P6 Memory Quality v1**. Additional provider validation is optional P7 work and should be chosen only if it adds meaningful compatibility evidence.
