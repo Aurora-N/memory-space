@@ -15,6 +15,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - Space-isolated lexical search and structured agent context
 - TypeScript application API plus a thin JSON HTTP adapter
 - provider-neutral MCP command plane with six policy-bounded tools
+- Codex and Claude Code lifecycle adapters sharing one provider-neutral integration core
 - data-driven cross-agent handoff evaluation
 
 ## Run locally
@@ -59,8 +60,8 @@ MCP:      http://127.0.0.1:4310/mcp
 Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. Every daemon route except `GET /health` validates localhost Host and Origin values before routing to reduce DNS-rebinding exposure. JSON body endpoints require `Content-Type: application/json` before any mutation.
 
 The provider-neutral `LifecycleHandler` is composed against the daemon's same
-`MemorySpace`; the Codex lifecycle endpoint and MCP command plane therefore use
-the same in-process owner.
+`MemorySpace`; Codex, Claude Code, REST, checkpoint orchestration, and the MCP
+command plane therefore share the same in-process owner.
 
 For no-Session read tools, `MEMORY_SPACE_SPACE_ID` is the highest-priority trusted explicit Space override. Otherwise, `MEMORY_SPACE_CWD` is the trusted directory used for nearest-ancestor `.memory-space/config.json` resolution; it defaults to daemon cwd only when not configured. One daemon endpoint therefore has one trusted no-Session project context. A supplied Session ID is always authoritative and cannot be rebound by either setting. Neither `cwd` nor `spaceId` is accepted as a tool argument.
 
@@ -78,7 +79,7 @@ pnpm mcp:standalone
 
 Standalone mode owns its SQLite connection. Never point it at a database used by the daemon or another standalone process; it is not the supported provider runtime.
 
-## Codex provider integration
+## Provider integrations
 
 P2 supports Codex's native `SessionStart`, `UserPromptSubmit`, `Stop`,
 `PreCompact`, and `SessionEnd` hooks through the daemon's local lifecycle
@@ -87,12 +88,25 @@ bootstrap context, checkpoints supported boundaries, and fails open when the
 Memory service is unavailable. Codex connects to the same daemon over MCP for
 explicit Memory commands.
 
-See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for hook/MCP setup
-and the manual real-Codex smoke test.
+Claude Code P3 implements the same provider-neutral lifecycle shape and uses the
+same six-tool MCP command plane. Real Claude hook lifecycle/bootstrap behavior
+has passed; real model-driven MCP execution is currently blocked by the active
+compatibility gateway rewriting Claude MCP tool names. That external limitation
+is recorded as a scoped progression waiver rather than a false PASS or a reason
+to add Claude-only alias tools.
+
+See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for Codex setup and
+real-provider evidence.
 
 See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md) for
-Claude Code hook/MCP setup, lifecycle semantics, and the real-provider smoke
-runner.
+Claude Code hook/MCP setup, lifecycle semantics, and the current real-provider
+limitation.
+
+P4 is defined in
+[`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md).
+It expands the product proof from one Codex→Claude path to same-provider,
+cross-provider, multi-hop, restart, Space-isolation, progressive-disclosure, and
+provenance validation.
 
 ## Architecture
 
@@ -114,6 +128,8 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — product goals, MVP scope, behaviors, success criteria, non-goals
 - [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — Space / Session / SessionEvent / Memory / Checkpoint / HandoffSnapshot contracts and invariants
 - [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — AI-coding-oriented vertical slices, acceptance criteria, test strategy, and implementation order
+- [`docs/PROVIDER_INTEGRATION_GUARDRAILS.md`](docs/PROVIDER_INTEGRATION_GUARDRAILS.md) — normative provider/runtime implementation constraints
+- [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md) — normative P4 cross-session and cross-provider durable-memory eval
 
 ## Status
 
@@ -127,10 +143,13 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **Codex P2: FROZEN after the recorded real-Codex CLI smoke.**
 
-**Claude Code P3: implementation and automated validation complete; NOT YET
-FROZEN because the current compatibility gateway does not preserve Claude MCP
-tool names during real-CLI execution.**
+**Claude Code P3: implementation, automated validation, code review, and real
+hook lifecycle PASS. Real model-driven MCP execution remains externally blocked;
+P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully
+FROZEN.**
 
-Real-provider evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
-The current Claude attempt and rerun instructions are recorded in
-[`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
+**P4: READY — implement cross-session + cross-provider durable-memory eval per
+`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`.**
+
+Real Codex evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
+Claude hook/MCP blocker evidence: [`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
