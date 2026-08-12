@@ -1,9 +1,9 @@
 # P4 — Cross-Session & Cross-Provider Durable Memory Eval
 
-**Status:** Implementation complete; automated eval PASS; code review pending
+**Status:** Implementation complete; automated eval PASS; code review PASS
 
 **Applies after:** P2 Codex Frozen; P3 Claude Code implementation/code review accepted with a scoped real-MCP execution waiver  
-**Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PROVIDER_INTEGRATION_PLAN.md`, `PROVIDER_INTEGRATION_GUARDRAILS.md`, `code-review/CR-PHASE6.md`
+**Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PROVIDER_INTEGRATION_PLAN.md`, `PROVIDER_INTEGRATION_GUARDRAILS.md`, `code-review/CR-PHASE6.md`, `code-review/CR-PHASE7.md`
 
 > This document is the normative P4 execution spec. It expands and supersedes the narrower P4 scenario currently described in `PROVIDER_INTEGRATION_PLAN.md` section 8.
 
@@ -477,12 +477,12 @@ Before requesting P4 code review, Coding Agent must report:
 12. real-provider evidence actually executed;
 13. Claude real-MCP waiver still pending or resolved.
 
-Allowed status after successful automated P4 implementation while the external Claude MCP blocker remains:
+Accepted final status under the inherited external Claude MCP blocker:
 
 ```text
 P4 implementation:          COMPLETE
 P4 automated eval:          PASS
-P4 code review:              pending/pass after CR
+P4 code review:              PASS
 P4 real cross-session hook: PASS where executed
 P4 real Claude MCP recall:  WAIVED / external blocker
 ```
@@ -546,3 +546,14 @@ No new real-provider P4 smoke was executed in this implementation turn. The
 recorded real Codex P2 and real Claude P3 hook-only evidence remain applicable;
 real Claude model-driven MCP remains waived. GitHub CI status was not
 independently confirmed.
+
+---
+
+## 18. Code review result
+
+`docs/code-review/CR-PHASE7.md` records the P4 review PASS for commit
+`9cfeca21aec048a63193a0f9b51838ec8a2bc339`.
+
+No P4 correctness or architecture blocker remains. Two optional future test-strengthening items were noted: direct latest-Handoff provenance assertion after reopen, and one selected Streamable HTTP `/mcp` P4 scenario. Neither changes the accepted P4 architecture or blocks the next phase.
+
+P4 is closed at its intended product/automated scope. Continue with `V1_ROADMAP.md` and `PRODUCTIZATION_SPEC.md` rather than adding more provider-specific P4 behavior.
