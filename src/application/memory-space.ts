@@ -322,20 +322,39 @@ export class MemorySpace {
     const query = input.query ?? "";
     const matches = memories.map((memory) => {
       if (query.trim() === "") {
-        return { memory, score: 1, canonicalSlotConflict: false, strongExact: false };
+        return {
+          memory,
+          score: 1,
+          canonicalSlotConflict: false,
+          strongExact: false,
+          keyContentMatchedTokens: [] as string[],
+          missingKeyContentQueryTokens: [] as string[]
+        };
       }
       const match = scoreLexicalMemory(query, memory);
       return {
         memory,
         score: match.relevant ? match.score : 0,
         canonicalSlotConflict: match.canonicalSlotConflict,
-        strongExact: match.exactKey || match.exactContentPhrase
+        strongExact: match.exactKey || match.exactContentPhrase,
+        keyContentMatchedTokens: match.keyContentMatchedTokens,
+        missingKeyContentQueryTokens: match.missingKeyContentQueryTokens
       };
     });
+    const hasUnsupportedCanonicalConflict = matches.some((candidate) => (
+      candidate.canonicalSlotConflict
+      && candidate.missingKeyContentQueryTokens.some((missingToken) => (
+        !matches.some((support) => (
+          support.memory.id !== candidate.memory.id
+          && support.score > 0
+          && support.keyContentMatchedTokens.includes(missingToken)
+        ))
+      ))
+    ));
     if (
       query.trim() !== ""
       && !matches.some((match) => match.strongExact)
-      && matches.some((match) => match.canonicalSlotConflict)
+      && hasUnsupportedCanonicalConflict
     ) return [];
     const results = matches
       .filter((result) => query.trim() === "" || result.score > 0)

@@ -18,6 +18,9 @@ export interface LexicalRetrievalMatch {
   relevant: boolean;
   rawQueryTokenCount: number;
   matchedQueryTokens: number;
+  keyContentMatchedTokens: string[];
+  metadataMatchedTokens: string[];
+  missingKeyContentQueryTokens: string[];
   contentMatches: number;
   keyMatches: number;
   typeMatches: number;
@@ -55,10 +58,9 @@ function intersection(rawQueryTokens: readonly string[], fieldTokens: Set<string
 function canonicalSlotConflict(
   memory: Memory,
   rawQueryTokens: readonly string[],
-  matchedTokens: ReadonlySet<string>,
+  keyContentMatchedTokens: ReadonlySet<string>,
   exactKey: boolean,
   exactContentPhrase: boolean,
-  hasKeyOrContentEvidence: boolean
 ): boolean {
   if (
     !memory.key
@@ -66,11 +68,11 @@ function canonicalSlotConflict(
     || exactContentPhrase
     || rawQueryTokens.length < 2
     || rawQueryTokens.length > COMPACT_QUERY_MAX_TOKENS
-    || !hasKeyOrContentEvidence
-    || matchedTokens.size === rawQueryTokens.length
+    || keyContentMatchedTokens.size === 0
+    || keyContentMatchedTokens.size === rawQueryTokens.length
   ) return false;
 
-  return matchedTokens.size * 3 >= rawQueryTokens.length * 2;
+  return keyContentMatchedTokens.size * 3 >= rawQueryTokens.length * 2;
 }
 
 export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrievalMatch {
@@ -85,23 +87,33 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
     rawQueryTokens,
     new Set(lexicalTokens(JSON.stringify(memory.data ?? {})))
   );
-  const matchedTokens = new Set([
+  const keyContentEvidence = new Set([
     ...contentMatches,
-    ...keyMatches,
+    ...keyMatches
+  ]);
+  const metadataEvidence = new Set([
     ...typeMatches,
     ...dataMatches
   ]);
+  const keyContentMatchedTokens = rawQueryTokens.filter((token) => keyContentEvidence.has(token));
+  const metadataMatchedTokens = rawQueryTokens.filter((token) => metadataEvidence.has(token));
+  const matchedTokens = new Set([
+    ...keyContentMatchedTokens,
+    ...metadataMatchedTokens
+  ]);
+  const missingKeyContentQueryTokens = rawQueryTokens.filter(
+    (token) => !keyContentEvidence.has(token)
+  );
   const exactContentPhrase = normalizedQuery.length > 0 && content.includes(normalizedQuery);
   const exactKey = normalizedQuery.length > 0 && key === normalizedQuery;
   const coverage = rawQueryTokens.length === 0 ? 0 : matchedTokens.size / rawQueryTokens.length;
-  const hasKeyOrContentEvidence = contentMatches.length > 0 || keyMatches.length > 0;
+  const hasKeyOrContentEvidence = keyContentMatchedTokens.length > 0;
   const hasCanonicalSlotConflict = canonicalSlotConflict(
     memory,
     rawQueryTokens,
-    matchedTokens,
+    new Set(keyContentMatchedTokens),
     exactKey,
-    exactContentPhrase,
-    hasKeyOrContentEvidence
+    exactContentPhrase
   );
 
   // Type/data-only overlap is diagnostic evidence, but not enough to expose a
@@ -129,6 +141,9 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
     relevant,
     rawQueryTokenCount: rawQueryTokens.length,
     matchedQueryTokens: matchedTokens.size,
+    keyContentMatchedTokens,
+    metadataMatchedTokens,
+    missingKeyContentQueryTokens,
     contentMatches: contentMatches.length,
     keyMatches: keyMatches.length,
     typeMatches: typeMatches.length,

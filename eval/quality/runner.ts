@@ -10,12 +10,15 @@ import {
   createDefaultMemorySpace,
   createMemoryMcpServer,
   LifecycleHandler,
+  MemorySpace,
   MemoryMcpGateway,
+  NoopCache,
   ProviderSessionResolver,
+  RuleBasedExtractor,
+  SqliteMemoryStore,
   SpaceResolver,
   type HandoffSnapshot,
   type Memory,
-  type MemorySpace,
   type MemorySearchInput
 } from "../../src/index.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
@@ -70,6 +73,29 @@ interface LongHorizonOutput {
   summary: MemoryQualityReport["summary"];
   queryResults: RetrievalQueryResult[];
   correctness: CorrectnessCheck[];
+}
+
+/**
+ * Retrieval reports must preserve the exact production order while remaining
+ * reproducible. Stable eval-only runtime identities make the production id
+ * tie-break deterministic without sorting by fixture logical key after search.
+ */
+class QualityRetrievalStore extends SqliteMemoryStore {
+  #nextMemoryId = 0;
+
+  override async insertMemory(memory: Memory): Promise<void> {
+    this.#nextMemoryId += 1;
+    memory.id = `00000000-0000-4000-8000-${String(this.#nextMemoryId).padStart(12, "0")}`;
+    await super.insertMemory(memory);
+  }
+}
+
+function createQualityRetrievalMemorySpace(databasePath: string): MemorySpace {
+  return new MemorySpace({
+    store: new QualityRetrievalStore(databasePath),
+    extractor: new RuleBasedExtractor(),
+    cache: new NoopCache()
+  });
 }
 
 function matchMemory(memory: Memory, expected: GroundTruthMemory): boolean {
@@ -307,7 +333,7 @@ async function runRetrievalScenario(
   fixtures: QualityFixtureBundle
 ): Promise<ScenarioOutput<RetrievalOutput>> {
   const fixture = fixtures.retrieval;
-  const memorySpace = createDefaultMemorySpace({ databasePath: join(root, "retrieval.db") });
+  const memorySpace = createQualityRetrievalMemorySpace(join(root, "retrieval.db"));
   try {
     const space = await memorySpace.createSpace({ id: "quality-retrieval", name: fixture.id });
     const session = await memorySpace.createSession({
@@ -383,7 +409,7 @@ async function runLongHorizonScenario(
   ks: readonly number[]
 ): Promise<ScenarioOutput<LongHorizonOutput>> {
   const fixture = fixtures.longHorizon;
-  const memorySpace = createDefaultMemorySpace({ databasePath: join(root, "long-horizon.db") });
+  const memorySpace = createQualityRetrievalMemorySpace(join(root, "long-horizon.db"));
   const index = new LogicalMemoryIndex();
   const truthByKey = new Map<string, GroundTruthMemory>();
   const failures: QualityFailureExample[] = [];

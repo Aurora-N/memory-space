@@ -66,6 +66,8 @@ test("raw multi-token queries cannot collapse into one-token type/data relevance
   assert.equal(matching.contentMatches, 2);
   assert.equal(conflicting.relevant, true, "topic evidence is scored before corpus abstention");
   assert.equal(conflicting.canonicalSlotConflict, true);
+  assert.deepEqual(conflicting.keyContentMatchedTokens, ["project", "database"]);
+  assert.deepEqual(conflicting.missingKeyContentQueryTokens, ["sqlite"]);
 
   const unrelatedDecision = scoreLexicalMemory("database decision", memory({
     key: undefined,
@@ -77,6 +79,17 @@ test("raw multi-token queries cannot collapse into one-token type/data relevance
 
   assert.equal(scoreLexicalMemory("decision", current).relevant, true, "true one-token type");
   assert.equal(scoreLexicalMemory("platform", current).relevant, true, "true one-token data");
+});
+
+test("canonical conflict coverage excludes type and data metadata evidence", () => {
+  const result = scoreLexicalMemory("database decision history", memory({
+    content: "Production storage uses PostgreSQL.",
+    data: { history: "not canonical slot evidence" }
+  }));
+  assert.deepEqual(result.keyContentMatchedTokens, ["database"]);
+  assert.deepEqual(result.metadataMatchedTokens, ["decision", "history"]);
+  assert.deepEqual(result.missingKeyContentQueryTokens, ["decision", "history"]);
+  assert.equal(result.canonicalSlotConflict, false, "H6: metadata cannot manufacture 2/3 coverage");
 });
 
 test("canonicalKey is a ranking prior weaker than one content token", () => {
@@ -133,6 +146,18 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       key: "project.api.endpoint",
       content: "Public API endpoint is /v2/orders."
     });
+    const apiDocs = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      content: "API docs live in docs/openapi.md."
+    });
+    const databaseMigration = await memorySpace.remember({
+      spaceId: space.id,
+      family: "procedure",
+      type: "workflow",
+      content: "Migration helper lives in scripts/db/migrate.ts."
+    });
     const chineseDatabase = await memorySpace.remember({
       spaceId: space.id,
       family: "knowledge",
@@ -178,15 +203,31 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
     assert.deepEqual(await memorySpace.search({
       spaceId: space.id,
       query: "project database SQLite"
-    }), [], "obsolete/conflicting value must abstain");
+    }), [], "H1: obsolete/conflicting database value must abstain");
     assert.deepEqual(await memorySpace.search({
       spaceId: space.id,
       query: "project api v1"
-    }), [], "API v1 cannot expose the current keyed v2 slot");
+    }), [], "H2: API v1 cannot expose the current keyed v2 slot");
     assert.deepEqual(await memorySpace.search({
       spaceId: space.id,
       query: "数据库 SQLite"
-    }), [], "Han topic overlap cannot expose a conflicting current value");
+    }), [], "H3: Han topic overlap cannot expose a conflicting current value");
+    const apiDocsResults = await memorySpace.search({
+      spaceId: space.id,
+      query: "project api docs"
+    });
+    assert.ok(
+      apiDocsResults.some((item) => item.memory.id === apiDocs.id),
+      "H4: API docs support elsewhere in the eligible corpus prevents false abstention"
+    );
+    const migrationResults = await memorySpace.search({
+      spaceId: space.id,
+      query: "project database migration"
+    });
+    assert.ok(
+      migrationResults.some((item) => item.memory.id === databaseMigration.id),
+      "H5: migration support elsewhere in the eligible corpus prevents false abstention"
+    );
     assert.equal((await memorySpace.search({
       spaceId: space.id,
       query: "数据库 PostgreSQL"
@@ -219,7 +260,8 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
 
     assert.equal((await memorySpace.search({
       spaceId: space.id,
-      query: "Migration script fails on empty databases"
+      query: "Migration script fails on empty databases",
+      types: ["blocker"]
     })).length, 0, "default active status filter");
     assert.equal((await memorySpace.search({
       spaceId: space.id,
@@ -240,6 +282,34 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       [rateLimit.id, bucketDistractor.id].includes(limited[0]!.memory.id),
       "an equally relevant bucket Memory is retained before limit"
     );
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("strong exact support survives a separate canonical-slot conflict", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  try {
+    const space = await memorySpace.createSpace({ name: "Stage B1.1 exact support" });
+    await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      key: "project.database",
+      content: "Production database is PostgreSQL."
+    });
+    const exact = await memorySpace.remember({
+      spaceId: space.id,
+      family: "procedure",
+      type: "workflow",
+      content: "Project database migration"
+    });
+
+    const results = await memorySpace.search({
+      spaceId: space.id,
+      query: "project database migration"
+    });
+    assert.equal(results[0]?.memory.id, exact.id, "H7: exact content support survives conflict");
   } finally {
     await memorySpace.close();
   }
