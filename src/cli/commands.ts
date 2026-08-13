@@ -7,6 +7,10 @@ import {
   formatStageB1Comparison,
   type StageB1ComparisonReport
 } from "../../eval/quality/comparison.ts";
+import {
+  formatStageB2ExtractionComparison,
+  type StageB2ExtractionComparisonReport
+} from "../../eval/quality/extraction-comparison.ts";
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { Space } from "../domain/types.ts";
@@ -377,6 +381,20 @@ export async function runQualityComparison(
     write(JSON.stringify(report, null, 2));
   } else {
     for (const line of formatStageB1Comparison(report)) write(line);
+  }
+  return report.acceptance.overall === "pass" ? 0 : 1;
+}
+
+export async function runQualityExtractionComparison(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<StageB2ExtractionComparisonReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of formatStageB2ExtractionComparison(report)) write(line);
   }
   return report.acceptance.overall === "pass" ? 0 : 1;
 }

@@ -37,12 +37,44 @@ const currentExecutionNarrationPatterns = [
   /^(?:正在|刚刚|刚才|稍后)(?:检查|查看|读取|运行|执行|打开|构建|测试|分析|回复|输出|修改|处理|修复)/u
 ] as const;
 
-const temporaryOperationFailurePatterns = [
-  /^(?:the\s+)?(?:command|tool(?:\s+call)?|test|build)\s+(?:just\s+)?(?:failed|errored)(?:\s+(?:because|due\s+to)\b.*)?[.!]?$/iu,
-  /^(?:刚才|刚刚|这次|本次)(?:的)?(?:命令|工具调用|测试|构建).*(?:失败|报错|出错)[。！？]?$/u
+const recentOperationFailurePatterns = [
+  /^(?:the\s+)?(?:command|tool(?:\s+call)?|test|build)\s+(?:has\s+)?just\s+(?:failed|errored)(?:\s+(?:because|due\s+to)\b.*)?[.!]?$/iu,
+  /^(?:刚才|刚刚)(?:的)?(?:命令|工具调用|测试|构建).*(?:失败|报错|出错)[。！？]?$/u
 ] as const;
 
-const currentInteractionScope = /(?:\b(?:this|the\s+current)\s+(?:command|turn|response)\b|(?:本次|这次|当前|这一轮|这轮)(?:命令|对话|回复|响应))/iu;
+const operationLocalCompletionPatterns = [
+  /^(?:the\s+)?(?:command|tool\s+call|test)\s+(?:has\s+been\s+)?(?:completed|finished)[.!]?$/iu,
+  /^(?:命令|工具调用|测试)(?:已经|已)(?:完成|结束)[。！？]?$/u
+] as const;
+
+const currentInteractionScope = /(?:\b(?:this|the\s+current)\s+(?:command|tool\s+call|test|turn|response)\b|(?:本次|这次|当前|这一轮|这轮)(?:命令|工具调用|测试|对话|回复|响应))/iu;
+
+const durableEnglishSubjectClasses = [
+  /^(?:all\s+)?(?:public\s+)?apis?\b/iu,
+  /^(?:the\s+)?(?:project|team|service|system|database)\b/iu,
+  /\b(?:credentials|tokens?|configuration|components?)\b/iu,
+  /\b(?:release|rollout|migration|deployment|pipeline)\b/iu
+] as const;
+
+const durableChineseSubjectClasses = [
+  /^(?:项目|团队|服务|系统|数据库)/u,
+  /(?:API|接口|凭证|令牌|配置|组件)/iu,
+  /(?:发布|迁移|部署|构建流程|流水线)/u
+] as const;
+
+function isInteractionLocalSubject(subject: string): boolean {
+  const normalized = subject.trim();
+  return /\b(?:i|we|you)\b/iu.test(normalized)
+    || /^(?:(?:this|the|the\s+current)\s+)?(?:command|tool\s+call|test|response|turn|run)$/iu.test(normalized)
+    || /(?:我|我们|你)/u.test(normalized)
+    || /^(?:(?:这次|本次|当前|这一轮|这轮)的?)?(?:命令|工具调用|测试|回复|对话|运行)$/u.test(normalized);
+}
+
+function hasDurableProjectSubject(subject: string): boolean {
+  if (isInteractionLocalSubject(subject)) return false;
+  return durableEnglishSubjectClasses.some((pattern) => pattern.test(subject))
+    || durableChineseSubjectClasses.some((pattern) => pattern.test(subject));
+}
 
 function explicitDefinition(line: string): MatchedDefinition | undefined {
   for (const definition of definitions) {
@@ -55,7 +87,8 @@ function explicitDefinition(line: string): MatchedDefinition | undefined {
 function isTransientEvidence(text: string): boolean {
   return currentInteractionScope.test(text)
     || currentExecutionNarrationPatterns.some((pattern) => pattern.test(text))
-    || temporaryOperationFailurePatterns.some((pattern) => pattern.test(text));
+    || recentOperationFailurePatterns.some((pattern) => pattern.test(text))
+    || operationLocalCompletionPatterns.some((pattern) => pattern.test(text));
 }
 
 function candidateFromDefinition(
@@ -102,9 +135,10 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const naturalConstraint = /^(?!i\b|we\b)(?=\S)(?:.+\s+)(?:must(?:\s+not)?|shall(?:\s+not)?|is\s+required\s+to)\s+.+$/iu.test(line)
-    || /^(?!我(?:们)?(?:必须|不得|只能|禁止))(?:(?:.+?)(?:必须|不得|只能).+|禁止\s*.+)[。！？]?$/u.test(line);
-  if (naturalConstraint) {
+  const englishConstraint = line.match(/^(.+?)\s+(?:must(?:\s+not)?|shall(?:\s+not)?|is\s+required\s+to)\s+.+$/iu);
+  const chineseConstraint = line.match(/^(.+?)(?:必须|不得|只能).+[。！？]?$/u);
+  if ((englishConstraint && hasDurableProjectSubject(englishConstraint[1]))
+    || (chineseConstraint && hasDurableProjectSubject(chineseConstraint[1]))) {
     return candidateFromDefinition(
       { family: "knowledge", type: "constraint", core: true },
       line,
@@ -113,9 +147,10 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const durableProgress = /^(?!i\b|we\b)(?:.+?)\s+(?:(?:has\s+been\s+)?(?:completed|finished|deployed|shipped)|is\s+(?:now\s+)?complete)[.!]?$/iu.test(line)
-    || /^(?!我(?:们)?)(?:.+?)(?:已经|已)(?:完成|结束|上线|发布|部署|就绪)[。！？]?$/u.test(line);
-  if (durableProgress) {
+  const englishProgress = line.match(/^(.+?)\s+(?:(?:has\s+been\s+)?(?:completed|finished|deployed|shipped)|is\s+(?:now\s+)?complete)[.!]?$/iu);
+  const chineseProgress = line.match(/^(.+?)(?:已经|已)(?:完成|结束|上线|发布|部署|就绪)[。！？]?$/u);
+  if ((englishProgress && hasDurableProjectSubject(englishProgress[1]))
+    || (chineseProgress && hasDurableProjectSubject(chineseProgress[1]))) {
     return candidateFromDefinition(
       { family: "state", type: "progress", key: "project.progress.current", core: true },
       line,
@@ -124,9 +159,10 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const durableBlocker = /^(?!i\b|we\b)(?:.+?)\s+(?:is|remains)\s+blocked\s+(?:by|on)\s+.+[.!]?$/iu.test(line)
-    || /^(?!我(?:们)?)(?:.+?)(?:被.+(?:阻塞|阻断)|因.+(?:无法继续|无法发布|受阻))[。！？]?$/u.test(line);
-  if (durableBlocker) {
+  const englishBlocker = line.match(/^(.+?)\s+(?:is|remains)\s+blocked\s+(?:by|on)\s+.+[.!]?$/iu);
+  const chineseBlocker = line.match(/^(.+?)(?:被.+(?:阻塞|阻断)|因.+(?:无法继续|无法发布|受阻))[。！？]?$/u);
+  if ((englishBlocker && hasDurableProjectSubject(englishBlocker[1]))
+    || (chineseBlocker && hasDurableProjectSubject(chineseBlocker[1]))) {
     return candidateFromDefinition(
       { family: "state", type: "blocker", core: true },
       line,

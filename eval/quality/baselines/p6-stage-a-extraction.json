@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "id": "p6-stage-a-extraction",
+  "acceptedCommit": "9490ebce94928132a2fb16aca247c8ae4888a7cf",
+  "fixture": {
+    "version": 1,
+    "id": "checkpoint-derived-extraction-baseline",
+    "events": [
+      "Goal: Ship the deterministic Memory Quality baseline.",
+      "Decision: SQLite remains the zero-configuration default.",
+      "Fact: Migration helper lives in scripts/db/migrate.ts.",
+      "Blocker: Production migration credentials are unavailable.",
+      "Task: Remove the temporary debug log after this command.",
+      "We selected PostgreSQL for hosted deployments.",
+      "All public APIs must remain backward compatible.",
+      "Scratch note: inspect local command output only."
+    ],
+    "expectedMemories": [
+      {
+        "logicalKey": "extraction.goal.quality-baseline",
+        "family": "state",
+        "type": "goal",
+        "key": "project.goal.primary",
+        "content": "Ship the deterministic Memory Quality baseline.",
+        "shouldBeCore": true
+      },
+      {
+        "logicalKey": "extraction.decision.sqlite-default",
+        "family": "knowledge",
+        "type": "decision",
+        "content": "SQLite remains the zero-configuration default.",
+        "shouldBeCore": true
+      },
+      {
+        "logicalKey": "extraction.knowledge.migration-path",
+        "family": "knowledge",
+        "type": "fact",
+        "content": "Migration helper lives in scripts/db/migrate.ts.",
+        "shouldBeCore": false
+      },
+      {
+        "logicalKey": "extraction.blocker.credentials",
+        "family": "state",
+        "type": "blocker",
+        "content": "Production migration credentials are unavailable.",
+        "shouldBeCore": true
+      },
+      {
+        "logicalKey": "extraction.decision.hosted-postgresql",
+        "family": "knowledge",
+        "type": "decision",
+        "content": "We selected PostgreSQL for hosted deployments.",
+        "shouldBeCore": true
+      },
+      {
+        "logicalKey": "extraction.constraint.api-compatibility",
+        "family": "knowledge",
+        "type": "constraint",
+        "content": "All public APIs must remain backward compatible.",
+        "shouldBeCore": true
+      }
+    ],
+    "negativeEvidence": [
+      {
+        "text": "Task: Remove the temporary debug log after this command.",
+        "reason": "One-off cleanup local to the current command should not become durable project state."
+      },
+      {
+        "text": "Scratch note: inspect local command output only.",
+        "reason": "Transient scratch evidence should not become Memory."
+      }
+    ]
+  },
+  "acceptedResult": {
+    "metrics": {
+      "tp": 4,
+      "fp": 1,
+      "fn": 2,
+      "precision": 0.8,
+      "recall": 0.6666666666666666
+    },
+    "matchedMemoryKeys": [
+      "extraction.blocker.credentials",
+      "extraction.decision.sqlite-default",
+      "extraction.goal.quality-baseline",
+      "extraction.knowledge.migration-path"
+    ],
+    "missingMemoryKeys": [
+      "extraction.constraint.api-compatibility",
+      "extraction.decision.hosted-postgresql"
+    ],
+    "unexpectedPredictions": [
+      "state/task:Remove the temporary debug log after this command."
+    ]
+  }
+}

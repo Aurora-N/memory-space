@@ -252,3 +252,111 @@ test("transient rejection uses interaction scope rather than a keyword stoplist"
     { type: "task", content: "Document command failure recovery for the project." }
   ]);
 });
+
+test("D1-D3 natural constraints require durable project subject and scope evidence", async () => {
+  assert.deepEqual(await extract([
+    "You must run the test now.",
+    "Right now I must run the test.",
+    "I must reply with the result now.",
+    "你必须现在运行测试。",
+    "现在我必须运行测试。"
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "All public APIs must remain backward compatible.",
+    "Client credentials must not be written to logs.",
+    "All access tokens must expire within one hour."
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ family, type }) => ({ family, type })), [
+    { family: "knowledge", type: "constraint" },
+    { family: "knowledge", type: "constraint" },
+    { family: "knowledge", type: "constraint" }
+  ]);
+});
+
+test("D4-D6 passive completions distinguish operations from durable progress", async () => {
+  assert.deepEqual(await extract([
+    "The command has been completed.",
+    "The test has been completed.",
+    "The tool call has been completed."
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "The production rollout has been completed.",
+    "The database migration has been completed."
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ family, type }) => ({ family, type })), [
+    { family: "state", type: "progress" },
+    { family: "state", type: "progress" }
+  ]);
+});
+
+test("D7-D8 operation failure needs recent scope before it is transient", async () => {
+  assert.deepEqual(await extract([
+    "Blocker: The tool call just failed due to a mistyped path.",
+    "Blocker: This tool call failed due to malformed input."
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "Blocker: Build failed because production signing credentials are missing.",
+    "阻塞：生产构建因缺少签名凭证而失败。"
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ family, type }) => ({ family, type })), [
+    { family: "state", type: "blocker" },
+    { family: "state", type: "blocker" }
+  ]);
+});
+
+test("D9-D12 Chinese durability boundary rejects operations and retains project state", async () => {
+  assert.deepEqual(await extract([
+    "命令已经完成。",
+    "测试已经完成。",
+    "工具调用已经完成。",
+    "现在我必须运行测试。"
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "数据库迁移已经完成。",
+    "生产发布已经完成。",
+    "所有访问令牌必须在一小时内过期。"
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ family, type }) => ({ family, type })), [
+    { family: "state", type: "progress" },
+    { family: "state", type: "progress" },
+    { family: "knowledge", type: "constraint" }
+  ]);
+});
+
+test("natural blockers require durable subjects and explicit durable prefixes stay authoritative", async () => {
+  assert.deepEqual(await extract([
+    "The current command is blocked on a bad path.",
+    "This tool call is blocked by malformed input.",
+    "当前命令被错误路径阻塞。"
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "Production rollout is blocked by missing credentials.",
+    "The release is blocked on production signing credentials.",
+    "Constraint: Public APIs must remain backward compatible.",
+    "Progress: Production rollout has been completed.",
+    "Blocker: Build failed because production signing credentials are missing."
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ type }) => type), [
+    "blocker",
+    "blocker",
+    "constraint",
+    "progress",
+    "blocker"
+  ]);
+});
+
+test("B2.1 preserves keyed database and explicit current-task compatibility", async () => {
+  const candidates = await extract([
+    "数据库使用 PostgreSQL",
+    "先完成迁移回滚演练"
+  ].join("\n"));
+  assert.deepEqual(candidates.map(({ type, key, content }) => ({ type, key, content })), [
+    { type: "decision", key: "project.database", content: "数据库使用 PostgreSQL" },
+    { type: "task", key: "project.task.current", content: "完成 迁移回滚演练" }
+  ]);
+});

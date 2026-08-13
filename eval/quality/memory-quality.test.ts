@@ -4,10 +4,19 @@ import type { Memory, MemorySearchInput, MemorySearchResult } from "../../src/do
 import type { MemorySpace } from "../../src/application/memory-space.ts";
 import { loadStageABaseline, stageABaselineSchema } from "./baseline.ts";
 import {
+  assertAcceptedStageAExtractionBaseline,
+  loadStageAExtractionBaseline
+} from "./extraction-baseline.ts";
+import {
   assertStageAQueryContract,
   formatStageB1Comparison,
   runStageB1Comparison
 } from "./comparison.ts";
+import {
+  assertStageAExtractionContract,
+  formatStageB2ExtractionComparison,
+  runStageB2ExtractionComparison
+} from "./extraction-comparison.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
 import { LogicalMemoryIndex } from "./identity.ts";
 import {
@@ -303,6 +312,94 @@ test("Stage A comparison rejects every accepted fixture-contract mutation", asyn
   })), /eligible corpus mutation/u);
 });
 
+test("Stage A extraction baseline freezes historical provenance and metrics", async () => {
+  const baseline = await loadStageAExtractionBaseline();
+  assert.equal(baseline.acceptedCommit, "9490ebce94928132a2fb16aca247c8ae4888a7cf");
+  assert.deepEqual(baseline.acceptedResult.metrics, {
+    tp: 4,
+    fp: 1,
+    fn: 2,
+    precision: 0.8,
+    recall: 2 / 3
+  });
+  assert.equal(baseline.fixture.events.length, 8);
+  assert.equal(baseline.fixture.expectedMemories.length, 6);
+  assert.equal(baseline.fixture.negativeEvidence.length, 2);
+});
+
+test("B2 extraction comparison rejects every frozen contract mutation", async () => {
+  const [baseline, fixtures] = await Promise.all([
+    loadStageAExtractionBaseline(),
+    loadQualityFixtures()
+  ]);
+  const accepted = fixtures.extraction;
+  assert.doesNotThrow(() => assertStageAExtractionContract(baseline.fixture, accepted));
+  const mutated = (change: (fixture: typeof accepted) => void): typeof accepted => {
+    const value = structuredClone(accepted);
+    change(value);
+    return value;
+  };
+
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.events[0] = "changed event"; })
+  ), /event text\/order mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.events.reverse(); })
+  ), /event text\/order mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.content = "changed content"; })
+  ), /expected content mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.logicalKey = "changed.logical-key"; })
+  ), /expected logical key\/order mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.type = "changed-type"; })
+  ), /expected type mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.family = "knowledge"; })
+  ), /expected family mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.key = "changed.key"; })
+  ), /expected key mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories[0]!.shouldBeCore = false; })
+  ), /shouldBeCore mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.negativeEvidence[0]!.text = "changed negative"; })
+  ), /negative-evidence text\/order mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.negativeEvidence[0]!.reason = "changed reason"; })
+  ), /negative-evidence reason mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.expectedMemories.pop(); })
+  ), /expected Memory set mutation/u);
+  assert.throws(() => assertStageAExtractionContract(
+    baseline.fixture,
+    mutated((fixture) => { fixture.negativeEvidence.pop(); })
+  ), /negative-evidence set mutation/u);
+});
+
+test("B2 extraction comparison rejects accepted metric mutation", async () => {
+  const baseline = await loadStageAExtractionBaseline();
+  const changed = structuredClone(baseline);
+  changed.acceptedResult.metrics.recall = 1;
+  assert.throws(
+    () => assertAcceptedStageAExtractionBaseline(changed),
+    /accepted Stage A extraction metric mutation: recall/iu
+  );
+});
+
 test("logical fixture identity remains stable across keyed runtime updates", () => {
   const index = new LogicalMemoryIndex();
   const runtime = { id: "runtime-memory-1" } as Pick<Memory, "id">;
@@ -402,4 +499,38 @@ test("Stage B1 comparison is deterministic and enforces accepted baseline deltas
   assert.match(human, /Negative abstention/u);
   assert.match(human, /no-new-retrieval-failures/u);
   assert.match(human, /Overall PASS/u);
+});
+
+test("Stage B2 extraction comparison is deterministic and reports per-case deltas", async () => {
+  const first = await runStageB2ExtractionComparison();
+  const second = await runStageB2ExtractionComparison();
+  assert.deepEqual(second, first);
+  assert.equal(first.contract.status, "pass");
+  assert.equal(first.contract.ordering, "normative");
+  assert.equal(first.contract.expectedRationale, "descriptive-not-frozen");
+  assert.deepEqual(first.baseline.metrics, {
+    tp: 4, fp: 1, fn: 2, precision: 0.8, recall: 2 / 3
+  });
+  assert.deepEqual(first.candidate.metrics, {
+    tp: 6, fp: 0, fn: 0, precision: 1, recall: 1
+  });
+  assert.deepEqual(first.cases.fixedFalseNegatives, [
+    "extraction.constraint.api-compatibility",
+    "extraction.decision.hosted-postgresql"
+  ]);
+  assert.deepEqual(first.cases.removedFalsePositives, [
+    "state/task:Remove the temporary debug log after this command."
+  ]);
+  assert.deepEqual(first.cases.newFalseNegatives, []);
+  assert.deepEqual(first.cases.newFalsePositives, []);
+  assert.deepEqual(first.cases.unchangedFalseNegatives, []);
+  assert.deepEqual(first.cases.unchangedFalsePositives, []);
+  assert.equal(first.acceptance.overall, "pass");
+  assert.ok(first.acceptance.checks.every((item) => item.status === "pass"));
+
+  const human = formatStageB2ExtractionComparison(first).join("\n");
+  assert.match(human, /P6 Stage B2 — Extraction comparison/u);
+  assert.match(human, /Contract: PASS/u);
+  assert.match(human, /Overall PASS/u);
+  assert.doesNotMatch(human, /Retrieval comparison/u);
 });

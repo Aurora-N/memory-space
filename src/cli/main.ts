@@ -5,11 +5,15 @@ import { pathToFileURL } from "node:url";
 import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
+import type {
+  StageB2ExtractionComparisonReport
+} from "../../eval/quality/extraction-comparison.ts";
 import {
   runDoctor,
   runEval,
   runInit,
   runQualityComparison,
+  runQualityExtractionComparison,
   runQualityEval,
   runStatus
 } from "./commands.ts";
@@ -21,7 +25,7 @@ import {
 } from "./local-client.ts";
 
 type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
-type BooleanOption = "json" | "compare-stage-a";
+type BooleanOption = "json" | "compare-stage-a" | "compare-stage-a-extraction";
 
 interface ParsedOptions {
   cwd?: string;
@@ -30,6 +34,7 @@ interface ParsedOptions {
   endpoint?: string;
   json?: boolean;
   compareStageA?: boolean;
+  compareStageAExtraction?: boolean;
 }
 
 export interface CliDependencies {
@@ -42,6 +47,7 @@ export interface CliDependencies {
   evalRunner?: () => Promise<CrossSessionEvalReport>;
   qualityEvalRunner?: () => Promise<MemoryQualityReport>;
   qualityComparisonRunner?: () => Promise<StageB1ComparisonReport>;
+  qualityExtractionComparisonRunner?: () => Promise<StageB2ExtractionComparisonReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
 }
 
@@ -52,7 +58,7 @@ Usage:
   memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
   memory-space status [--cwd <path>] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
-  memory-space eval quality [--json] [--compare-stage-a]
+  memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction]
 
 Development invocation:
   pnpm memory-space <command>`;
@@ -74,6 +80,7 @@ function parseOptions(
     const name = argument.slice(2) as ValueOption | BooleanOption;
     if (allowedBooleans.includes(name as BooleanOption)) {
       if (name === "compare-stage-a") result.compareStageA = true;
+      else if (name === "compare-stage-a-extraction") result.compareStageAExtraction = true;
       else result.json = true;
       continue;
     }
@@ -111,6 +118,11 @@ async function defaultQualityComparisonRunner(): Promise<StageB1ComparisonReport
   return module.runStageB1Comparison();
 }
 
+async function defaultQualityExtractionComparisonRunner(): Promise<StageB2ExtractionComparisonReport> {
+  const module = await import("../../eval/quality/extraction-comparison.ts");
+  return module.runStageB2ExtractionComparison();
+}
+
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {}
@@ -138,10 +150,26 @@ export async function runCli(
       const options = parseOptions(
         argv.slice(2),
         [],
-        target === "quality" ? ["json", "compare-stage-a"] : ["json"]
+        target === "quality"
+          ? ["json", "compare-stage-a", "compare-stage-a-extraction"]
+          : ["json"]
       );
+      if (options.compareStageA && options.compareStageAExtraction) {
+        throw new CliError(
+          "USAGE_ERROR",
+          "Choose only one Stage A comparison mode.",
+          { exitCode: 2 }
+        );
+      }
       return target === "cross-session"
         ? await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner)
+        : options.compareStageAExtraction
+          ? await runQualityExtractionComparison(
+            options,
+            write,
+            dependencies.qualityExtractionComparisonRunner
+              ?? defaultQualityExtractionComparisonRunner
+          )
         : options.compareStageA
           ? await runQualityComparison(
             options,
