@@ -328,7 +328,7 @@ export class MemorySpace {
           canonicalSlotConflict: false,
           strongExact: false,
           keyContentMatchedTokens: [] as string[],
-          missingKeyContentQueryTokens: [] as string[]
+          unresolvedQueryTokens: [] as string[]
         };
       }
       const match = scoreLexicalMemory(query, memory);
@@ -338,16 +338,16 @@ export class MemorySpace {
         canonicalSlotConflict: match.canonicalSlotConflict,
         strongExact: match.exactKey || match.exactContentPhrase,
         keyContentMatchedTokens: match.keyContentMatchedTokens,
-        missingKeyContentQueryTokens: match.missingKeyContentQueryTokens
+        unresolvedQueryTokens: match.unresolvedQueryTokens
       };
     });
     const hasUnsupportedCanonicalConflict = matches.some((candidate) => (
       candidate.canonicalSlotConflict
-      && candidate.missingKeyContentQueryTokens.some((missingToken) => (
+      && candidate.unresolvedQueryTokens.some((unresolvedToken) => (
         !matches.some((support) => (
           support.memory.id !== candidate.memory.id
           && support.score > 0
-          && support.keyContentMatchedTokens.includes(missingToken)
+          && support.keyContentMatchedTokens.includes(unresolvedToken)
         ))
       ))
     ));

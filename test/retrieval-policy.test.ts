@@ -67,7 +67,7 @@ test("raw multi-token queries cannot collapse into one-token type/data relevance
   assert.equal(conflicting.relevant, true, "topic evidence is scored before corpus abstention");
   assert.equal(conflicting.canonicalSlotConflict, true);
   assert.deepEqual(conflicting.keyContentMatchedTokens, ["project", "database"]);
-  assert.deepEqual(conflicting.missingKeyContentQueryTokens, ["sqlite"]);
+  assert.deepEqual(conflicting.unresolvedQueryTokens, ["sqlite"]);
 
   const unrelatedDecision = scoreLexicalMemory("database decision", memory({
     key: undefined,
@@ -88,8 +88,30 @@ test("canonical conflict coverage excludes type and data metadata evidence", () 
   }));
   assert.deepEqual(result.keyContentMatchedTokens, ["database"]);
   assert.deepEqual(result.metadataMatchedTokens, ["decision", "history"]);
-  assert.deepEqual(result.missingKeyContentQueryTokens, ["decision", "history"]);
-  assert.equal(result.canonicalSlotConflict, false, "H6: metadata cannot manufacture 2/3 coverage");
+  assert.deepEqual(result.unresolvedQueryTokens, []);
+  assert.equal(result.canonicalSlotConflict, false, "H6: metadata cannot manufacture canonical coverage");
+});
+
+test("two-token metadata qualifiers explain terms without increasing canonical coverage", () => {
+  const stale = scoreLexicalMemory("database SQLite", memory());
+  assert.deepEqual(stale.keyContentMatchedTokens, ["database"]);
+  assert.deepEqual(stale.metadataMatchedTokens, []);
+  assert.deepEqual(stale.unresolvedQueryTokens, ["sqlite"]);
+  assert.equal(stale.canonicalSlotConflict, true, "T1 diagnostic: one canonical + one unresolved");
+
+  const qualified = scoreLexicalMemory("database decision", memory());
+  assert.deepEqual(qualified.keyContentMatchedTokens, ["database"]);
+  assert.deepEqual(qualified.metadataMatchedTokens, ["decision"]);
+  assert.deepEqual(qualified.unresolvedQueryTokens, []);
+  assert.equal(qualified.canonicalSlotConflict, false, "T6: metadata explains but never adds coverage");
+
+  const ambiguous = scoreLexicalMemory("database migration rollback", memory({
+    content: "Production storage uses PostgreSQL.",
+    data: undefined
+  }));
+  assert.deepEqual(ambiguous.keyContentMatchedTokens, ["database"]);
+  assert.deepEqual(ambiguous.unresolvedQueryTokens, ["migration", "rollback"]);
+  assert.equal(ambiguous.canonicalSlotConflict, false, "two unresolved terms are not stale inference");
 });
 
 test("canonicalKey is a ranking prior weaker than one content token", () => {
@@ -212,6 +234,14 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       spaceId: space.id,
       query: "数据库 SQLite"
     }), [], "H3: Han topic overlap cannot expose a conflicting current value");
+    assert.deepEqual(await memorySpace.search({
+      spaceId: space.id,
+      query: "database SQLite"
+    }), [], "T1: two-token obsolete database value must abstain");
+    assert.deepEqual(await memorySpace.search({
+      spaceId: space.id,
+      query: "api v1"
+    }), [], "T2: two-token obsolete API value must abstain");
     const apiDocsResults = await memorySpace.search({
       spaceId: space.id,
       query: "project api docs"
@@ -220,6 +250,10 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       apiDocsResults.some((item) => item.memory.id === apiDocs.id),
       "H4: API docs support elsewhere in the eligible corpus prevents false abstention"
     );
+    assert.ok((await memorySpace.search({
+      spaceId: space.id,
+      query: "api docs"
+    })).some((item) => item.memory.id === apiDocs.id), "T4: two-token API docs remains recallable");
     const migrationResults = await memorySpace.search({
       spaceId: space.id,
       query: "project database migration"
@@ -228,6 +262,12 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       migrationResults.some((item) => item.memory.id === databaseMigration.id),
       "H5: migration support elsewhere in the eligible corpus prevents false abstention"
     );
+    assert.ok((await memorySpace.search({
+      spaceId: space.id,
+      query: "database migration"
+    })).some(
+      (item) => item.memory.id === databaseMigration.id
+    ), "T3: two-token database migration remains recallable");
     assert.equal((await memorySpace.search({
       spaceId: space.id,
       query: "数据库 PostgreSQL"
@@ -238,6 +278,7 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
     });
     assert.equal(databaseDecision[0]?.memory.id, database.id);
     assert.equal(databaseDecision.some((item) => item.memory.id === unrelatedDecision.id), false);
+    assert.ok(databaseDecision.length > 0, "T5: metadata-qualified query does not globally abstain");
     assert.equal((await memorySpace.search({
       spaceId: space.id,
       query: "project.api.endpoint"
@@ -281,6 +322,37 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
     assert.ok(
       [rateLimit.id, bucketDistractor.id].includes(limited[0]!.memory.id),
       "an equally relevant bucket Memory is retained before limit"
+    );
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("two-token canonical conflict yields to key/content corpus support", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  try {
+    const space = await memorySpace.createSpace({ name: "Stage B1.2 corpus support" });
+    await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      key: "project.database",
+      content: "Production database is PostgreSQL."
+    });
+    const sqliteSupport = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      content: "SQLite compatibility tests cover local imports."
+    });
+
+    const results = await memorySpace.search({
+      spaceId: space.id,
+      query: "database SQLite"
+    });
+    assert.ok(
+      results.some((item) => item.memory.id === sqliteSupport.id),
+      "T7: another eligible key/content supporter prevents global abstention"
     );
   } finally {
     await memorySpace.close();

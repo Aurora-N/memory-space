@@ -20,7 +20,7 @@ export interface LexicalRetrievalMatch {
   matchedQueryTokens: number;
   keyContentMatchedTokens: string[];
   metadataMatchedTokens: string[];
-  missingKeyContentQueryTokens: string[];
+  unresolvedQueryTokens: string[];
   contentMatches: number;
   keyMatches: number;
   typeMatches: number;
@@ -50,15 +50,15 @@ function intersection(rawQueryTokens: readonly string[], fieldTokens: Set<string
 
 /**
  * A compact compound query is treated as conjunctive when it nearly identifies
- * an active keyed slot but includes an unmatched term. That unmatched term may
- * be a stale/conflicting value, so the caller must abstain rather than fall back
- * to weaker topic-only results. This rule depends on query shape and canonical
- * slot evidence, not a domain- or language-specific token vocabulary.
+ * an active keyed slot but includes exactly one term that neither canonical
+ * key/content nor candidate metadata explains. Metadata can qualify a candidate
+ * and prevent a false conflict, but never increases canonical coverage.
  */
 function canonicalSlotConflict(
   memory: Memory,
   rawQueryTokens: readonly string[],
-  keyContentMatchedTokens: ReadonlySet<string>,
+  keyContentMatchedTokens: readonly string[],
+  unresolvedQueryTokens: readonly string[],
   exactKey: boolean,
   exactContentPhrase: boolean,
 ): boolean {
@@ -68,11 +68,10 @@ function canonicalSlotConflict(
     || exactContentPhrase
     || rawQueryTokens.length < 2
     || rawQueryTokens.length > COMPACT_QUERY_MAX_TOKENS
-    || keyContentMatchedTokens.size === 0
-    || keyContentMatchedTokens.size === rawQueryTokens.length
   ) return false;
 
-  return keyContentMatchedTokens.size * 3 >= rawQueryTokens.length * 2;
+  return keyContentMatchedTokens.length === rawQueryTokens.length - 1
+    && unresolvedQueryTokens.length === 1;
 }
 
 export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrievalMatch {
@@ -101,8 +100,8 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
     ...keyContentMatchedTokens,
     ...metadataMatchedTokens
   ]);
-  const missingKeyContentQueryTokens = rawQueryTokens.filter(
-    (token) => !keyContentEvidence.has(token)
+  const unresolvedQueryTokens = rawQueryTokens.filter(
+    (token) => !keyContentEvidence.has(token) && !metadataEvidence.has(token)
   );
   const exactContentPhrase = normalizedQuery.length > 0 && content.includes(normalizedQuery);
   const exactKey = normalizedQuery.length > 0 && key === normalizedQuery;
@@ -111,7 +110,8 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
   const hasCanonicalSlotConflict = canonicalSlotConflict(
     memory,
     rawQueryTokens,
-    new Set(keyContentMatchedTokens),
+    keyContentMatchedTokens,
+    unresolvedQueryTokens,
     exactKey,
     exactContentPhrase
   );
@@ -143,7 +143,7 @@ export function scoreLexicalMemory(query: string, memory: Memory): LexicalRetrie
     matchedQueryTokens: matchedTokens.size,
     keyContentMatchedTokens,
     metadataMatchedTokens,
-    missingKeyContentQueryTokens,
+    unresolvedQueryTokens,
     contentMatches: contentMatches.length,
     keyMatches: keyMatches.length,
     typeMatches: typeMatches.length,
