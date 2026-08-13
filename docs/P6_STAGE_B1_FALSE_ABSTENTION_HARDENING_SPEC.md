@@ -646,7 +646,7 @@ After implementation, stop and report:
 30. GitHub CI only if independently observed
 ```
 
-End with:
+The historical B1.1 implementation report ended with:
 
 ```text
 P6 Stage B1.1 false-abstention hardening implemented.
@@ -654,7 +654,8 @@ B2/B3/B4 NOT started.
 Awaiting B1 re-review.
 ```
 
-Do not self-mark B1 PASS or FROZEN.
+That instruction governed the B1.1 implementation handoff. The later B1 review
+and explicit B2 authorization closed the gate and froze B1.
 
 ---
 

@@ -611,7 +611,7 @@ Report:
 19. GitHub CI status if observed;
 20. recommendation: stop at lexical B1 or request semantic-recall architecture review.
 
-For the CR-PHASE10 re-review pass, end with:
+The historical CR-PHASE10 implementation report ended with:
 
 ```text
 P6 Stage B1 CR-PHASE10 fixes implemented.
@@ -619,4 +619,6 @@ B2/B3/B4 NOT started.
 Awaiting B1 re-review.
 ```
 
-Do not mark B1 review PASS yourself.
+That stop gate has since completed. Stage B1 was marked REVIEW PASS / FROZEN by
+the explicit reviewer/next-stage authorization, not by the B1 implementation
+agent.

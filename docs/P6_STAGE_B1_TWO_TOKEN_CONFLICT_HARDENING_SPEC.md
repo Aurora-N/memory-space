@@ -709,7 +709,7 @@ After implementation, stop and report:
 30. B2/B3/B4 status;
 31. GitHub CI evidence only if independently observed.
 
-End with exactly:
+The historical B1.2 implementation report ended with exactly:
 
 ```text
 P6 Stage B1.2 two-token conflict hardening implemented.
@@ -717,7 +717,8 @@ B2/B3/B4 NOT started.
 Awaiting B1 final re-review.
 ```
 
-Do not self-promote Stage B1 to PASS/FROZEN.
+That instruction governed the B1.2 implementation handoff. The later final B1
+review and explicit B2 authorization closed the gate and froze B1.
 
 ---
 
