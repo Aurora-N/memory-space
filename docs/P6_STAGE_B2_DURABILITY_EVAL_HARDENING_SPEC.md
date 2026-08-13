@@ -1,10 +1,11 @@
 # P6 Stage B2.1 — Durability Boundary & Extraction Eval Hardening Spec
 
-**Status:** READY FOR IMPLEMENTATION / CHANGES REQUESTED FOLLOW-UP  
+**Status:** IMPLEMENTED / AWAITING B2 FINAL RE-REVIEW — NOT PASS / NOT FROZEN
 **Parent phase:** P6 Stage B2 — Extraction Generalization & Transient Rejection  
 **Current reviewed branch:** `agent/memory-quality-v1`  
 **Reviewed head:** `97d61c2a1287f9185247a4404f5a93f39f1d9dc1`  
 **B2 implementation under review:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`  
+**B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **P6 Stage B1:** REVIEW PASS / FROZEN  
 **P6 Stage B3 / B4:** NOT AUTHORIZED

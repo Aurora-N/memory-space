@@ -28,9 +28,11 @@ The runner owns isolated temporary SQLite files and never opens the daemon's con
 
 ```text
 quality/
-├── baselines/      immutable accepted Stage A machine-readable snapshot
+├── baselines/      immutable accepted Stage A retrieval and extraction snapshots
 ├── baseline.ts     strict snapshot schema/version validation
 ├── comparison.ts   Stage A versus B1 delta report and acceptance gate
+├── extraction-baseline.ts   strict Stage A extraction snapshot validation
+├── extraction-comparison.ts Stage A versus B2 extraction comparison/gate
 ├── fixtures/       independent JSON inputs and expected logical Memory keys
 ├── fixtures.ts     schema validation and loading
 ├── identity.ts     random runtime ID to stable fixture-key mapping
@@ -47,6 +49,8 @@ pnpm memory-space eval quality
 pnpm memory-space eval quality --json
 pnpm memory-space eval quality --compare-stage-a
 pnpm memory-space eval quality --compare-stage-a --json
+pnpm memory-space eval quality --compare-stage-a-extraction
+pnpm memory-space eval quality --compare-stage-a-extraction --json
 ```
 
 Each invocation creates and removes its own temporary SQLite databases; it does not connect to the daemon or open the daemon database.
@@ -100,8 +104,8 @@ hard correctness result
 
 Do not overwrite Stage A baseline evidence with candidate values, and do not change accepted fixture relevance labels merely to improve scores.
 
-Stage B1 changes lexical relevance/ranking only and is frozen. The Stage B2
-deterministic extraction/transient-rejection candidate awaits code review;
+Stage B1 changes lexical relevance/ranking only and is frozen. The Stage B2.1
+durability/eval-hardened extraction candidate awaits final re-review;
 Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers
 remain out of scope.
 
@@ -110,3 +114,25 @@ hard-correctness checks fail. Regular `eval quality` still separates observation
 quality scores from its hard-correctness exit status.
 
 Candidate evidence: [`../docs/quality/P6_STAGE_B1_RESULT.md`](../docs/quality/P6_STAGE_B1_RESULT.md).
+
+## P6 Stage B2 extraction comparison rule
+
+The dedicated accepted extraction before-state is frozen independently at:
+
+```text
+eval/quality/baselines/p6-stage-a-extraction.json
+```
+
+It records the accepted Stage A commit, ordered event evidence, ordered expected
+Memory identities and fields, ordered negative evidence with reasons, and the
+accepted 4 TP / 1 FP / 2 FN result. The B2 comparison validates this contract
+before measuring the current extractor. Mutated event text/order, labels,
+Memory identity or fields, negative evidence/reason, result identities, or
+accepted metrics fail before candidate metric comparison.
+
+Use `--compare-stage-a-extraction` for B2 evidence. It reports the accepted and
+candidate TP/FP/FN, precision/recall, fixed/removed/new/unchanged failures, hard
+correctness, and the B2 acceptance gate. It does not run or relabel the B1
+retrieval comparison.
+
+Candidate evidence: [`../docs/quality/P6_STAGE_B2_RESULT.md`](../docs/quality/P6_STAGE_B2_RESULT.md).

@@ -20,7 +20,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - local product CLI for init/doctor/status/eval
 - accepted deterministic 20-Session Memory Quality Stage A baseline
 - frozen Stage B1 deterministic retrieval policy and before/after comparison
-- Stage B2 deterministic extraction-quality candidate awaiting code review
+- Stage B2.1 durability/eval-hardened extraction candidate awaiting final re-review
 
 ## Run locally
 
@@ -47,6 +47,8 @@ pnpm memory-space eval quality
 pnpm memory-space eval quality --json
 pnpm memory-space eval quality --compare-stage-a
 pnpm memory-space eval quality --compare-stage-a --json
+pnpm memory-space eval quality --compare-stage-a-extraction
+pnpm memory-space eval quality --compare-stage-a-extraction --json
 ```
 
 The package also exposes a `memory-space` bin for linked/installed use, with the same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality` syntax. `init` creates or confirms the Space through the running daemon and then atomically writes the v1 project binding. It never edits global Codex or Claude configuration. Use `doctor --json` for stable check IDs and machine-readable diagnostics.
@@ -137,9 +139,11 @@ frozen policy uses provider-neutral field-aware lexical
 evidence and explicit abstention. After CR-PHASE10 hardening removed the
 query-independent type prior, P@1/R@1 truthfully remain at the accepted baseline
 of 0.727273/0.681818; negative false positives fall from 1.0 to 0 and negative
-abstention rises from 0 to 1.0. The Stage B2 candidate raises extraction from
+abstention rises from 0 to 1.0. The Stage B2.1-hardened candidate raises extraction from
 4 TP / 1 FP / 2 FN to 6 TP / 0 FP / 0 FN while leaving the full B1/downstream
-metric set unchanged. It is awaiting code review; embeddings, vector search,
+metric set unchanged. It also freezes the accepted Stage A extraction contract
+and exposes a B2-specific comparison gate. It is awaiting final re-review;
+embeddings, vector search,
 Core/Handoff policy changes, and semantic dedup remain unauthorized.
 
 See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md),
@@ -157,7 +161,7 @@ P5 Productization
 P6 Memory Quality v1
 → Stage A deterministic baseline COMPLETE / REVIEW PASS
 → Stage B1 Retrieval Precision & Abstention REVIEW PASS / FROZEN
-→ Stage B2 Extraction Generalization IMPLEMENTED / AWAITING CODE REVIEW
+→ Stage B2.1 Durability/Eval Hardening IMPLEMENTED / AWAITING FINAL RE-REVIEW
 → B3/B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
@@ -195,6 +199,8 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md) — P5 local CLI/productization requirements
 - [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 umbrella quality requirements and staged-improvement policy
 - [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) — normative P6 Stage B1 retrieval precision/abstention execution spec
+- [`docs/P6_STAGE_B2_EXTRACTION_SPEC.md`](docs/P6_STAGE_B2_EXTRACTION_SPEC.md) — normative P6 Stage B2 deterministic extraction execution spec
+- [`docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md) — normative B2.1 durability-boundary and extraction-eval hardening spec
 - [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
 - [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md) — Stage B1 candidate metrics, deltas, and local validation evidence
 
@@ -216,7 +222,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 REVIEW PASS / FROZEN. Stage B2 extraction generalization is implemented and awaiting code review. B3/B4 have not started.**
+**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 REVIEW PASS / FROZEN. Stage B2.1 durability-boundary and extraction-eval hardening is implemented and awaiting final re-review. B3/B4 have not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 

@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2 IMPLEMENTED / AWAITING CODE REVIEW
+**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -198,7 +198,7 @@ B1 — Retrieval Precision & Abstention
      REVIEW PASS / FROZEN
 
 B2 — Extraction Generalization & Transient Rejection
-     IMPLEMENTED / AWAITING CODE REVIEW
+     B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW
 
 B3 — Core / Handoff Pollution Policy
      NOT AUTHORIZED
@@ -213,7 +213,7 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1 completed code/quality review and is frozen. B2 is implemented and awaiting code review;
+B1 completed code/quality review and is frozen. B2.1 is implemented and awaiting final re-review;
 B3/B4 remain unauthorized.
 
 ---
@@ -436,8 +436,9 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Item 1 completed review and is frozen. Item 2 is implemented and awaiting review under
-`P6_STAGE_B2_EXTRACTION_SPEC.md`; items 3–4 remain unauthorized.
+Item 1 completed review and is frozen. Item 2 is implemented and awaiting final
+re-review under `P6_STAGE_B2_EXTRACTION_SPEC.md` and
+`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`; items 3–4 remain unauthorized.
 
 Stage B1 must:
 
@@ -504,5 +505,7 @@ accepted before-state
 
 Stage B1 frozen evidence is in
 [`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). B2 is governed
-by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md); B3/B4
-remain blocked.
+by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md), with
+B2.1 hardening governed by
+[`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](./P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md);
+B3/B4 remain blocked.

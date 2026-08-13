@@ -1,10 +1,11 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Result
 
-**Status:** IMPLEMENTED / AWAITING CODE REVIEW — NOT PASS / NOT FROZEN
+**Status:** B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW — NOT PASS / NOT FROZEN
 **Source of Truth:** `docs/P6_STAGE_B2_EXTRACTION_SPEC.md`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Frozen B1 documentation commit:** `752abf7311bb3016e1184ab7435b195d0d6d22ac`
 **B2 implementation:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`
+**B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **B3 / B4:** NOT STARTED / NOT AUTHORIZED
 
 This document records the measured Stage A extraction failures and the completed
@@ -181,5 +182,132 @@ Remaining measured limitations are intentionally unchanged:
 - unkeyed semantic paraphrases remain duplicated and are B4 input;
 - the deterministic grammar remains conservative for implicit durable facts not
   carrying one of the reviewed semantic shapes.
+
+## B2.1 durability-boundary and extraction-eval hardening
+
+### Final subject/scope model
+
+Natural extraction now requires two independent kinds of evidence:
+
+```text
+predicate grammar identifies the candidate Memory kind
+subject/scope grammar establishes that the statement is durable
+```
+
+The subject classifier uses small grammatical classes rather than a generic
+keyword stoplist. Interaction-local subjects (`I`, `you`, current
+command/tool/test/turn/response and Chinese equivalents) do not establish
+durability. Project/team/service/system/database, public API, durable
+credential/configuration/component, and release/rollout/migration/deployment
+subjects can establish it when paired with the corresponding durable predicate.
+
+Constraint extraction therefore requires a persistent non-agent subject, while
+current/second-person obligations are narration. Progress extraction rejects
+passive command/tool/test completion but retains project rollout/migration
+completion. Operation failure is transient only when recent or current-operation
+scope is expressed; a persistent build failure with durable missing prerequisites
+remains a blocker. Explicit durable prefixes remain authoritative after the
+shared transient-evidence gate, and structured Memory events retain their exact
+compatibility behavior.
+
+### B2.1 holdouts
+
+All existing E1–E10 holdouts remain PASS. The added durability cases are:
+
+| Holdout | Expected boundary | Result |
+| --- | --- | --- |
+| D1 `You must run the test now.` | second-person constraint rejected | PASS |
+| D2 `Right now I must run the test.` | shifted first-person constraint rejected | PASS |
+| D3 public APIs must remain compatible | durable API constraint retained | PASS |
+| D4 command completed | passive operation completion rejected | PASS |
+| D5 test completed | passive operation completion rejected | PASS |
+| D6 production rollout completed | durable progress retained | PASS |
+| D7 tool call just failed | recent operation failure rejected | PASS |
+| D8 build failed because signing credentials are missing | persistent blocker retained | PASS |
+| D9 `命令已经完成。` | passive operation completion rejected | PASS |
+| D10 `数据库迁移已经完成。` | durable project progress retained | PASS |
+| D11 `现在我必须运行测试。` | immediate narration rejected | PASS |
+| D12 `所有访问令牌必须在一小时内过期。` | durable constraint retained | PASS |
+
+Additional regressions cover natural blocker subject boundaries, explicit
+durable prefixes, keyed database decisions, and the existing current-task rule.
+
+### Accepted Stage A extraction contract and B2 comparison
+
+The immutable extraction before-state is:
+
+```text
+eval/quality/baselines/p6-stage-a-extraction.json
+accepted commit 9490ebce94928132a2fb16aca247c8ae4888a7cf
+```
+
+`eval/quality/extraction-baseline.ts` validates its version, provenance,
+historical metrics, and historical result identities.
+`eval/quality/extraction-comparison.ts` validates the ordered fixture contract
+before candidate metrics and implements the dedicated B2 comparison gate.
+
+Mutation tests fail before metric comparison for event text/order/set, expected
+Memory set/order/logical key/family/type/key/content/Core label, negative
+evidence set/order/text/reason, and accepted metric mutations. The B1 retrieval
+snapshot v2 and comparison remain unchanged.
+
+The dedicated CLI reports itself as `P6 Stage B2 — Extraction comparison`:
+
+```text
+pnpm memory-space eval quality --compare-stage-a-extraction
+pnpm memory-space eval quality --compare-stage-a-extraction --json
+```
+
+| Metric | Accepted Stage A | B2.1 candidate | Delta |
+| --- | ---: | ---: | ---: |
+| TP | 4 | 6 | +2 |
+| FP | 1 | 0 | -1 |
+| FN | 2 | 0 | -2 |
+| Precision | 0.800000 | 1.000000 | +0.200000 |
+| Recall | 0.666667 | 1.000000 | +0.333333 |
+
+Fixed false negatives are `extraction.constraint.api-compatibility` and
+`extraction.decision.hosted-postgresql`. The transient current-command cleanup
+false positive is removed. New and unchanged false positives/negatives are all
+zero. Contract validation, hard correctness, precision non-regression, strict
+recall improvement, false-negative reduction, and no-new-regression checks all
+PASS.
+
+### Whole-quality and verification evidence
+
+| Dimension | B2.1 result |
+| --- | ---: |
+| P@1 / R@1 | 0.727273 / 0.681818 |
+| P@3 / R@3 | 0.303030 / 0.818182 |
+| P@5 / R@5 | 0.180000 / 0.800000 |
+| P@10 / R@10 | 0.090000 / 0.800000 |
+| Negative FP / abstention | 0.000000 / 1.000000 |
+| Core pollution | 0.111111 (1/9) |
+| Bootstrap critical coverage | 1.000000 (7/7) |
+| Handoff completeness | 1.000000 (9/9) |
+| Stale-memory rate | 0.000000 (0/13) |
+| Duplicate-memory rate | 0.500000 (2/4) |
+| Contradiction checks | 1.000000 (10/10) |
+| Hard correctness | PASS |
+
+```text
+Focused extractor + quality tests       PASS (33/33)
+pnpm run check                          PASS (143/143)
+pnpm run check:workspace                PASS (143/143)
+quality human report                    PASS; hard correctness PASS
+quality JSON                            PASS; two explicit runs byte-identical
+B2 extraction comparison human         PASS; all six gates PASS
+B2 extraction comparison JSON          PASS; two explicit runs byte-identical
+Codex P2 smoke runner self-test         PASS
+Claude P3 smoke runner self-test        PASS
+GitHub CI                               not independently confirmed
+```
+
+Production changes remain confined to the deterministic extractor. Frozen B1
+lexical retrieval/search ordering, extractor port, domain, storage, provider
+adapters/lifecycle, MCP, checkpoint/Handoff generation, Core promotion, Space
+binding, and accepted fixture labels were not changed. B3/B4 remain unstarted;
+the known Core/Handoff pollution and semantic duplicate limitations remain
+inputs for separately authorized stages.
 
 P6 Stage B2 is not marked PASS or frozen. B3/B4 have not started.
