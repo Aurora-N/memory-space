@@ -37,8 +37,7 @@ test("field-aware lexical scorer centralizes exact, key, content, type, and data
     dataToken: 4,
     typeToken: 2,
     coverage: 10,
-    canonicalKey: 2,
-    canonicalType: 1
+    canonicalKey: 2
   });
   const exactKey = scoreLexicalMemory("project.database", memory());
   assert.equal(exactKey.exactKey, true);
@@ -47,7 +46,7 @@ test("field-aware lexical scorer centralizes exact, key, content, type, and data
 
   const exactContent = scoreLexicalMemory("database is PostgreSQL", memory());
   assert.equal(exactContent.exactContentPhrase, true);
-  assert.equal(exactContent.contentMatches, 2);
+  assert.equal(exactContent.contentMatches, 3);
 
   const type = scoreLexicalMemory("decision", memory());
   assert.equal(type.typeMatches, 1);
@@ -58,25 +57,41 @@ test("field-aware lexical scorer centralizes exact, key, content, type, and data
   assert.equal(data.relevant, true);
 });
 
-test("mixed broad key terms require the discriminating content value", () => {
+test("raw multi-token queries cannot collapse into one-token type/data relevance", () => {
   const current = memory();
   const matching = scoreLexicalMemory("project database PostgreSQL", current);
   const conflicting = scoreLexicalMemory("project database SQLite", current);
   assert.equal(matching.relevant, true);
-  assert.equal(matching.contentMatches, 1);
-  assert.equal(conflicting.relevant, false);
-  assert.equal(conflicting.score, 0);
+  assert.equal(matching.rawQueryTokenCount, 3);
+  assert.equal(matching.contentMatches, 2);
+  assert.equal(conflicting.relevant, true, "topic evidence is scored before corpus abstention");
+  assert.equal(conflicting.canonicalSlotConflict, true);
 
-  const structuralTail = scoreLexicalMemory("project database", memory({
-    key: "project.api",
-    content: "Current API endpoint is /v2."
+  const unrelatedDecision = scoreLexicalMemory("database decision", memory({
+    key: undefined,
+    content: "Authentication uses signed access tokens."
   }));
-  assert.equal(structuralTail.relevant, false, "one broad key token is insufficient");
-  assert.equal(
-    scoreLexicalMemory("project database", current).relevant,
-    true,
-    "complete broad-key coverage remains relevant"
-  );
+  assert.equal(unrelatedDecision.rawQueryTokenCount, 2);
+  assert.equal(unrelatedDecision.typeMatches, 1);
+  assert.equal(unrelatedDecision.relevant, false);
+
+  assert.equal(scoreLexicalMemory("decision", current).relevant, true, "true one-token type");
+  assert.equal(scoreLexicalMemory("platform", current).relevant, true, "true one-token data");
+});
+
+test("canonicalKey is a ranking prior weaker than one content token", () => {
+  const keyed = scoreLexicalMemory("project bucket", memory({
+    key: "project.unrelated",
+    content: "Canonical slot without requested content."
+  }));
+  const content = scoreLexicalMemory("project bucket", memory({
+    key: undefined,
+    type: "fact",
+    content: "Bucket configuration detail."
+  }));
+  assert.equal(keyed.relevant, true);
+  assert.equal(content.relevant, true);
+  assert.ok(content.score > keyed.score);
 });
 
 test("lexical result ties retain updatedAt then id deterministic order", () => {
@@ -111,6 +126,26 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       type: "fact",
       content: "Asset uploads use a storage bucket."
     });
+    const api = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      key: "project.api.endpoint",
+      content: "Public API endpoint is /v2/orders."
+    });
+    const chineseDatabase = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      key: "project.database.zh",
+      content: "数据库使用 PostgreSQL"
+    });
+    const unrelatedDecision = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      content: "Authentication uses signed access tokens."
+    });
     const resolved = await memorySpace.remember({
       spaceId: space.id,
       family: "state",
@@ -127,14 +162,14 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       spaceId: space.id,
       query: "project.database"
     }))[0]?.memory.id, database.id, "exact key");
-    assert.equal((await memorySpace.search({
+    assert.ok((await memorySpace.search({
       spaceId: space.id,
       query: "PostgreSQL"
-    }))[0]?.memory.id, database.id, "short one-token query");
-    assert.equal((await memorySpace.search({
+    })).some((item) => item.memory.id === database.id), "short one-token direct value query");
+    assert.ok((await memorySpace.search({
       spaceId: space.id,
       query: "database"
-    }))[0]?.memory.id, database.id, "partial key query");
+    })).some((item) => item.memory.id === database.id), "partial key query");
     assert.equal((await memorySpace.search({
       spaceId: space.id,
       query: "project database PostgreSQL"
@@ -146,6 +181,32 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
     }), [], "obsolete/conflicting value must abstain");
     assert.deepEqual(await memorySpace.search({
       spaceId: space.id,
+      query: "project api v1"
+    }), [], "API v1 cannot expose the current keyed v2 slot");
+    assert.deepEqual(await memorySpace.search({
+      spaceId: space.id,
+      query: "数据库 SQLite"
+    }), [], "Han topic overlap cannot expose a conflicting current value");
+    assert.equal((await memorySpace.search({
+      spaceId: space.id,
+      query: "数据库 PostgreSQL"
+    }))[0]?.memory.id, chineseDatabase.id, "Han current-value recall");
+    const databaseDecision = await memorySpace.search({
+      spaceId: space.id,
+      query: "database decision"
+    });
+    assert.equal(databaseDecision[0]?.memory.id, database.id);
+    assert.equal(databaseDecision.some((item) => item.memory.id === unrelatedDecision.id), false);
+    assert.equal((await memorySpace.search({
+      spaceId: space.id,
+      query: "project.api.endpoint"
+    }))[0]?.memory.id, api.id, "exact API key remains strong");
+    assert.equal((await memorySpace.search({
+      spaceId: space.id,
+      query: "v2 orders"
+    }))[0]?.memory.id, api.id, "direct current API value");
+    assert.deepEqual(await memorySpace.search({
+      spaceId: space.id,
       query: "completely absent evidence"
     }), [], "empty result abstention");
 
@@ -153,8 +214,8 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       spaceId: space.id,
       query: "storage bucket throttling"
     });
-    assert.equal(bucket[0]?.memory.id, rateLimit.id, "canonical state type wins equal evidence");
-    assert.equal(bucket[1]?.memory.id, bucketDistractor.id, "same-token distractor remains visible");
+    assert.equal(bucket[0]?.memory.id, bucketDistractor.id, "stronger lexical evidence ranks first");
+    assert.equal(bucket[1]?.memory.id, rateLimit.id, "weaker lexical target remains recallable");
 
     assert.equal((await memorySpace.search({
       spaceId: space.id,
@@ -175,7 +236,7 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       limit: 1
     });
     assert.equal(limited.length, 1, "limit is applied after relevance filtering/ranking");
-    assert.equal(limited[0]?.memory.id, rateLimit.id);
+    assert.equal(limited[0]?.memory.id, bucketDistractor.id);
   } finally {
     await memorySpace.close();
   }

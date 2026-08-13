@@ -3,7 +3,11 @@ import test from "node:test";
 import type { Memory, MemorySearchInput, MemorySearchResult } from "../../src/domain/types.ts";
 import type { MemorySpace } from "../../src/application/memory-space.ts";
 import { loadStageABaseline, stageABaselineSchema } from "./baseline.ts";
-import { formatStageB1Comparison, runStageB1Comparison } from "./comparison.ts";
+import {
+  assertStageAQueryContract,
+  formatStageB1Comparison,
+  runStageB1Comparison
+} from "./comparison.ts";
 import { loadQualityFixtures } from "./fixtures.ts";
 import { LogicalMemoryIndex } from "./identity.ts";
 import {
@@ -237,11 +241,66 @@ test("quality fixtures validate independent ground truth and exactly 20 Sessions
 
 test("accepted Stage A snapshot has the frozen versioned comparison shape", async () => {
   const baseline = await loadStageABaseline();
+  assert.equal(baseline.version, 2);
   assert.equal(baseline.acceptedCommit, "9490ebce94928132a2fb16aca247c8ae4888a7cf");
   assert.equal(baseline.queries.length, 12);
   assert.equal(baseline.correctness.checks.length, 15);
   assert.equal(baseline.negativeRetrieval.falsePositiveRate, 1);
-  assert.equal(stageABaselineSchema.safeParse({ ...baseline, version: 2 }).success, false);
+  assert.equal(stageABaselineSchema.safeParse({ ...baseline, version: 1 }).success, false);
+  const [query] = baseline.queries;
+  assert.equal(query.query, "PostgreSQL");
+  assert.deepEqual(query.relevantMemoryKeys, ["retrieval.decision.database"]);
+  assert.deepEqual(query.filters, {});
+  assert.equal(stageABaselineSchema.safeParse({
+    ...baseline,
+    queries: baseline.queries.map((item, index) => index === 0
+      ? { ...item, query: undefined }
+      : item)
+  }).success, false);
+  assert.equal(stageABaselineSchema.safeParse({
+    ...baseline,
+    queries: baseline.queries.map((item, index) => index === 0
+      ? { ...item, relevantMemoryKeys: undefined }
+      : item)
+  }).success, false);
+  assert.equal(stageABaselineSchema.safeParse({
+    ...baseline,
+    queries: baseline.queries.map((item, index) => index === 0
+      ? { ...item, filters: undefined }
+      : item)
+  }).success, false);
+});
+
+test("Stage A comparison rejects every accepted fixture-contract mutation", async () => {
+  const baseline = await loadStageABaseline();
+  const accepted = structuredClone(baseline.queries);
+  assert.doesNotThrow(() => assertStageAQueryContract(baseline.queries, accepted));
+
+  const mutated = (
+    change: (queries: typeof accepted) => void
+  ): typeof accepted => {
+    const value = structuredClone(accepted);
+    change(value);
+    return value;
+  };
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries[0]!.query = "changed query";
+  })), /query text mutation/u);
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries[0]!.relevantMemoryKeys = ["changed.relevant.key"];
+  })), /relevant keys mutation/u);
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries[0]!.classification = "negative";
+  })), /classification mutation/u);
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries[0]!.filters = { statuses: ["resolved"] };
+  })), /filter mutation/u);
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries.pop();
+  })), /query set differs/u);
+  assert.throws(() => assertStageAQueryContract(baseline.queries, mutated((queries) => {
+    queries[0]!.eligibleCorpusSize += 1;
+  })), /eligible corpus mutation/u);
 });
 
 test("logical fixture identity remains stable across keyed runtime updates", () => {
@@ -295,8 +354,8 @@ test("Stage B1 comparison is deterministic and enforces accepted baseline deltas
 
   const metric = (name: string) => first.metrics.find((item) => item.metric === name);
   assert.equal(metric("P@1")?.baseline, 0.7272727272727273);
-  assert.equal(metric("P@1")?.candidate, 0.8181818181818182);
-  assert.equal(metric("R@1")?.candidate, 0.7727272727272727);
+  assert.equal(metric("P@1")?.candidate, 0.7272727272727273);
+  assert.equal(metric("R@1")?.candidate, 0.6818181818181818);
   assert.equal(metric("P@3")?.delta, 0);
   assert.equal(metric("R@10")?.delta, 0);
   assert.equal(first.baseline.negativeRetrieval.falsePositiveRate, 1);
@@ -304,9 +363,9 @@ test("Stage B1 comparison is deterministic and enforces accepted baseline deltas
   assert.equal(first.candidate.negativeRetrieval.abstentionRate, 1);
 
   const semantic = first.queries.find((item) => item.id === "semantic-target-loses-to-overlap");
-  assert.equal(semantic?.change, "improved");
+  assert.equal(semantic?.change, "unchanged");
   assert.equal(semantic?.baselineTop1Relevant, false);
-  assert.equal(semantic?.candidateTop1Relevant, true);
+  assert.equal(semantic?.candidateTop1Relevant, false);
   assert.equal(first.queries.some((item) => item.change === "regressed"), false);
   assert.deepEqual(first.failures.new, []);
   assert.deepEqual(first.failures.removed, [
@@ -316,5 +375,6 @@ test("Stage B1 comparison is deterministic and enforces accepted baseline deltas
   const human = formatStageB1Comparison(first).join("\n");
   assert.match(human, /P6 Stage B1 — Retrieval comparison/u);
   assert.match(human, /Negative abstention/u);
+  assert.match(human, /no-new-retrieval-failures/u);
   assert.match(human, /Overall PASS/u);
 });

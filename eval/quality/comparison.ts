@@ -1,9 +1,20 @@
+import { isDeepStrictEqual } from "node:util";
 import { loadStageABaseline, type StageABaseline } from "./baseline.ts";
+import { loadQualityFixtures } from "./fixtures.ts";
 import type {
   MemoryQualityReport,
+  QualityFixtureBundle,
   RetrievalAggregate,
+  RetrievalQueryFixture,
   RetrievalQueryResult
 } from "./types.ts";
+
+export interface RetrievalQueryFilters {
+  families?: RetrievalQueryFixture["families"];
+  types?: RetrievalQueryFixture["types"];
+  tiers?: RetrievalQueryFixture["tiers"];
+  statuses?: RetrievalQueryFixture["statuses"];
+}
 
 export interface RetrievalMetricDelta {
   metric: `P@${number}` | `R@${number}`;
@@ -19,6 +30,9 @@ export interface RetrievalQueryComparison {
   scenarioId: string;
   id: string;
   classification: "positive" | "negative";
+  query: string;
+  relevantMemoryKeys: string[];
+  filters: RetrievalQueryFilters;
   eligibleCorpusSize: { baseline: number; candidate: number };
   baselineReturned: string[];
   candidateReturned: string[];
@@ -60,17 +74,57 @@ export interface StageB1ComparisonReport {
   };
 }
 
-interface ComparableQuery {
+export interface ComparableRetrievalQuery {
   scenarioId: string;
   id: string;
   classification: "positive" | "negative";
+  query: string;
+  relevantMemoryKeys: string[];
+  filters: RetrievalQueryFilters;
   eligibleCorpusSize: number;
   returned: string[];
   atK: Array<{ k: number; hits: number; precision: number; recall: number }>;
 }
 
-function candidateQueries(report: MemoryQualityReport): ComparableQuery[] {
-  const queries: ComparableQuery[] = [];
+function normalizedFilters(query: RetrievalQueryFixture): RetrievalQueryFilters {
+  return {
+    ...(query.families ? { families: [...query.families] } : {}),
+    ...(query.types ? { types: [...query.types] } : {}),
+    ...(query.tiers ? { tiers: [...query.tiers] } : {}),
+    ...(query.statuses ? { statuses: [...query.statuses] } : {})
+  };
+}
+
+function fixtureContracts(fixtures: QualityFixtureBundle): ComparableRetrievalQuery[] {
+  const values: Array<{ scenarioId: string; query: RetrievalQueryFixture }> = [
+    ...fixtures.retrieval.queries.map((query) => ({
+      scenarioId: fixtures.retrieval.id,
+      query
+    })),
+    ...fixtures.longHorizon.finalQueries.map((query) => ({
+      scenarioId: fixtures.longHorizon.id,
+      query
+    }))
+  ];
+  return values.map(({ scenarioId, query }) => ({
+    scenarioId,
+    id: query.id,
+    classification: query.relevantMemoryKeys.length > 0 ? "positive" : "negative",
+    query: query.query,
+    relevantMemoryKeys: [...query.relevantMemoryKeys],
+    filters: normalizedFilters(query),
+    eligibleCorpusSize: -1,
+    returned: [],
+    atK: []
+  }));
+}
+
+function candidateQueries(
+  report: MemoryQualityReport,
+  contracts: readonly ComparableRetrievalQuery[]
+): ComparableRetrievalQuery[] {
+  const contractByKey = new Map(contracts.map((query) => [queryKey(query), query]));
+  const queries: ComparableRetrievalQuery[] = [];
   for (const scenario of report.scenarios) {
     const value = scenario.kind === "retrieval"
       ? scenario.observations.queries
@@ -79,10 +133,24 @@ function candidateQueries(report: MemoryQualityReport): ComparableQuery[] {
         : undefined;
     if (!Array.isArray(value)) continue;
     for (const query of value as RetrievalQueryResult[]) {
+      const contract = contractByKey.get(`${scenario.id}:${query.id}`);
+      if (!contract) throw new Error(`Candidate report contains an unknown query: ${scenario.id}:${query.id}`);
+      if (query.query !== contract.query) {
+        throw new Error(`Candidate runner query text differs from its fixture: ${scenario.id}:${query.id}`);
+      }
+      if (!isDeepStrictEqual(query.expected, contract.relevantMemoryKeys)) {
+        throw new Error(`Candidate runner relevant keys differ from its fixture: ${scenario.id}:${query.id}`);
+      }
+      if (query.classification !== contract.classification) {
+        throw new Error(`Candidate runner classification differs from its fixture: ${scenario.id}:${query.id}`);
+      }
       queries.push({
         scenarioId: scenario.id,
         id: query.id,
         classification: query.classification,
+        query: contract.query,
+        relevantMemoryKeys: [...contract.relevantMemoryKeys],
+        filters: contract.filters,
         eligibleCorpusSize: query.eligibleCorpusSize,
         returned: [...query.returned],
         atK: query.atK.map((item) => ({ ...item }))
@@ -92,16 +160,16 @@ function candidateQueries(report: MemoryQualityReport): ComparableQuery[] {
   return queries;
 }
 
-function queryKey(query: Pick<ComparableQuery, "scenarioId" | "id">): string {
+function queryKey(query: Pick<ComparableRetrievalQuery, "scenarioId" | "id">): string {
   return `${query.scenarioId}:${query.id}`;
 }
 
-function top1Relevant(query: ComparableQuery): boolean {
+function top1Relevant(query: ComparableRetrievalQuery): boolean {
   return query.classification === "positive"
     && (query.atK.find((item) => item.k === 1)?.hits ?? 0) > 0;
 }
 
-function queryFailure(query: ComparableQuery): string | undefined {
+function queryFailure(query: ComparableRetrievalQuery): string | undefined {
   const key = queryKey(query);
   if (query.classification === "negative") {
     return query.returned.length > 0 ? `${key}:negative-query-false-positive` : undefined;
@@ -151,8 +219,8 @@ function buildMetrics(
 }
 
 function compareQueries(
-  baseline: readonly ComparableQuery[],
-  candidate: readonly ComparableQuery[]
+  baseline: readonly ComparableRetrievalQuery[],
+  candidate: readonly ComparableRetrievalQuery[]
 ): RetrievalQueryComparison[] {
   const candidateByKey = new Map(candidate.map((query) => [queryKey(query), query]));
   if (candidateByKey.size !== baseline.length || candidate.length !== baseline.length) {
@@ -179,6 +247,9 @@ function compareQueries(
       scenarioId: before.scenarioId,
       id: before.id,
       classification: before.classification,
+      query: before.query,
+      relevantMemoryKeys: [...before.relevantMemoryKeys],
+      filters: before.filters,
       eligibleCorpusSize: {
         baseline: before.eligibleCorpusSize,
         candidate: after.eligibleCorpusSize
@@ -194,28 +265,70 @@ function compareQueries(
   });
 }
 
-function baselineQueries(baseline: StageABaseline): ComparableQuery[] {
+function baselineQueries(baseline: StageABaseline): ComparableRetrievalQuery[] {
   return baseline.queries.map((query) => ({
     scenarioId: query.scenarioId,
     id: query.id,
     classification: query.classification,
+    query: query.query,
+    relevantMemoryKeys: [...query.relevantMemoryKeys],
+    filters: query.filters,
     eligibleCorpusSize: query.eligibleCorpusSize,
     returned: [...query.returned],
     atK: query.atK.map((item) => ({ ...item }))
   }));
 }
 
+export function assertStageAQueryContract(
+  baseline: readonly ComparableRetrievalQuery[],
+  candidate: readonly ComparableRetrievalQuery[]
+): void {
+  const candidateByKey = new Map<string, ComparableRetrievalQuery>();
+  for (const query of candidate) {
+    const key = queryKey(query);
+    if (candidateByKey.has(key)) throw new Error(`Candidate query set contains a duplicate: ${key}`);
+    candidateByKey.set(key, query);
+  }
+  if (candidate.length !== baseline.length || candidateByKey.size !== baseline.length) {
+    throw new Error("Candidate query set differs from the accepted Stage A snapshot");
+  }
+  for (const before of baseline) {
+    const key = queryKey(before);
+    const after = candidateByKey.get(key);
+    if (!after) throw new Error(`Candidate query set is missing: ${key}`);
+    if (after.query !== before.query) throw new Error(`Candidate query text mutation: ${key}`);
+    if (!isDeepStrictEqual(after.relevantMemoryKeys, before.relevantMemoryKeys)) {
+      throw new Error(`Candidate relevant keys mutation: ${key}`);
+    }
+    if (after.classification !== before.classification) {
+      throw new Error(`Candidate classification mutation: ${key}`);
+    }
+    if (!isDeepStrictEqual(after.filters, before.filters)) {
+      throw new Error(`Candidate filter mutation: ${key}`);
+    }
+    if (after.eligibleCorpusSize !== before.eligibleCorpusSize) {
+      throw new Error(`Candidate eligible corpus mutation: ${key}`);
+    }
+  }
+}
+
 export async function runStageB1Comparison(): Promise<StageB1ComparisonReport> {
   const { runMemoryQualityEval } = await import("./runner.ts");
   const baseline = await loadStageABaseline();
-  const candidateReport = await runMemoryQualityEval();
+  const [candidateReport, fixtures] = await Promise.all([
+    runMemoryQualityEval(),
+    loadQualityFixtures()
+  ]);
+  const beforeQueries = baselineQueries(baseline);
+  const afterQueries = candidateQueries(candidateReport, fixtureContracts(fixtures));
+  assertStageAQueryContract(beforeQueries, afterQueries);
   const metrics = buildMetrics(baseline.retrieval, candidateReport.summary.retrieval);
-  const queries = compareQueries(baselineQueries(baseline), candidateQueries(candidateReport));
+  const queries = compareQueries(beforeQueries, afterQueries);
   const baselineFailures = new Set(
-    baselineQueries(baseline).map(queryFailure).filter((value): value is string => Boolean(value))
+    beforeQueries.map(queryFailure).filter((value): value is string => Boolean(value))
   );
   const candidateFailures = new Set(
-    candidateQueries(candidateReport).map(queryFailure).filter((value): value is string => Boolean(value))
+    afterQueries.map(queryFailure).filter((value): value is string => Boolean(value))
   );
   const removed = [...baselineFailures].filter((value) => !candidateFailures.has(value)).sort();
   const added = [...candidateFailures].filter((value) => !baselineFailures.has(value)).sort();
@@ -225,7 +338,6 @@ export async function runStageB1Comparison(): Promise<StageB1ComparisonReport> {
     if (!value) throw new Error(`Comparison is missing ${name}`);
     return value;
   };
-  const positiveRemoved = removed.filter((value) => !value.endsWith("negative-query-false-positive"));
   const top1Regressions = queries.filter((query) =>
     query.classification === "positive"
     && query.baselineTop1Relevant
@@ -264,11 +376,9 @@ export async function runStageB1Comparison(): Promise<StageB1ComparisonReport> {
       `${name} must equal or exceed the accepted Stage A baseline.`
     )),
     check(
-      "positive-precision-strict-improvement",
-      metric("P@1").candidate > metric("P@1").baseline
-        || metric("P@3").candidate > metric("P@3").baseline
-        || (positiveRemoved.length > 0 && top1Regressions.length === 0),
-      "P@1, P@3, or positive top-K failures must strictly improve without top-1 regression."
+      "no-new-retrieval-failures",
+      added.length === 0,
+      "The candidate must not add an accepted-fixture retrieval failure."
     ),
     check(
       "per-query-top1-non-regression",

@@ -320,11 +320,26 @@ export class MemorySpace {
       tiers: input.tiers, statuses: input.statuses ?? ["active"]
     });
     const query = input.query ?? "";
-    const results = memories.map((memory) => {
-      if (query.trim() === "") return { memory, score: 1 };
+    const matches = memories.map((memory) => {
+      if (query.trim() === "") {
+        return { memory, score: 1, canonicalSlotConflict: false, strongExact: false };
+      }
       const match = scoreLexicalMemory(query, memory);
-      return { memory, score: match.relevant ? match.score : 0 };
-    }).filter((result) => query.trim() === "" || result.score > 0);
+      return {
+        memory,
+        score: match.relevant ? match.score : 0,
+        canonicalSlotConflict: match.canonicalSlotConflict,
+        strongExact: match.exactKey || match.exactContentPhrase
+      };
+    });
+    if (
+      query.trim() !== ""
+      && !matches.some((match) => match.strongExact)
+      && matches.some((match) => match.canonicalSlotConflict)
+    ) return [];
+    const results = matches
+      .filter((result) => query.trim() === "" || result.score > 0)
+      .map(({ memory, score }) => ({ memory, score }));
     results.sort(compareLexicalResults);
     return results.slice(0, input.limit ?? 20);
   }

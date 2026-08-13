@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "p6-stage-a",
   "acceptedCommit": "9490ebce94928132a2fb16aca247c8ae4888a7cf",
   "reportVersion": 1,
@@ -39,6 +39,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "exact-keyword",
       "classification": "positive",
+      "query": "PostgreSQL",
+      "relevantMemoryKeys": ["retrieval.decision.database"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": ["retrieval.decision.database"],
       "atK": [
@@ -52,6 +55,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "partial-keyword",
       "classification": "positive",
+      "query": "migration helper",
+      "relevantMemoryKeys": ["retrieval.knowledge.migration-path"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": ["retrieval.knowledge.migration-path"],
       "atK": [
@@ -65,6 +71,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "different-word-order",
       "classification": "positive",
+      "query": "handler callback OAuth",
+      "relevantMemoryKeys": ["retrieval.knowledge.oauth-callback"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": ["retrieval.knowledge.oauth-callback"],
       "atK": [
@@ -78,6 +87,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "wording-mismatch",
       "classification": "positive",
+      "query": "database upgrade utility location",
+      "relevantMemoryKeys": ["retrieval.knowledge.migration-path"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": ["retrieval.distractor.connection-limit", "retrieval.decision.database"],
       "atK": [
@@ -91,6 +103,12 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "multiple-relevant-with-distractor",
       "classification": "positive",
+      "query": "rate limit connection enforcement headers Redis",
+      "relevantMemoryKeys": [
+        "retrieval.decision.rate-limit",
+        "retrieval.knowledge.rate-headers"
+      ],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": [
         "retrieval.decision.rate-limit",
@@ -109,6 +127,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "same-token-wrong-target",
       "classification": "positive",
+      "query": "authentication token expiry",
+      "relevantMemoryKeys": ["retrieval.decision.jwt-expiry"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": [
         "retrieval.decision.jwt-expiry",
@@ -126,6 +147,9 @@
       "scenarioId": "lexical-retrieval-baseline",
       "id": "semantic-target-loses-to-overlap",
       "classification": "positive",
+      "query": "storage bucket throttling",
+      "relevantMemoryKeys": ["retrieval.decision.rate-limit"],
+      "filters": {},
       "eligibleCorpusSize": 12,
       "returned": ["retrieval.distractor.storage-bucket", "retrieval.decision.rate-limit"],
       "atK": [
@@ -139,6 +163,9 @@
       "scenarioId": "saas-commerce-api-20-session-evolution",
       "id": "long-current-database",
       "classification": "positive",
+      "query": "project.database",
+      "relevantMemoryKeys": ["decision.database.postgresql"],
+      "filters": {},
       "eligibleCorpusSize": 13,
       "returned": ["decision.database.postgresql"],
       "atK": [
@@ -152,6 +179,9 @@
       "scenarioId": "saas-commerce-api-20-session-evolution",
       "id": "long-migration-wording-mismatch",
       "classification": "positive",
+      "query": "schema upgrade utility location",
+      "relevantMemoryKeys": ["knowledge.migration.path"],
+      "filters": {},
       "eligibleCorpusSize": 13,
       "returned": [],
       "atK": [
@@ -165,6 +195,9 @@
       "scenarioId": "saas-commerce-api-20-session-evolution",
       "id": "long-resolved-blocker",
       "classification": "positive",
+      "query": "Migration script fails on empty databases",
+      "relevantMemoryKeys": ["blocker.migration-script"],
+      "filters": { "statuses": ["resolved"] },
       "eligibleCorpusSize": 4,
       "returned": ["blocker.migration-script", "task.database-migration"],
       "atK": [
@@ -176,6 +209,9 @@
       "scenarioId": "saas-commerce-api-20-session-evolution",
       "id": "long-old-sqlite-decision",
       "classification": "negative",
+      "query": "project database SQLite",
+      "relevantMemoryKeys": [],
+      "filters": {},
       "eligibleCorpusSize": 13,
       "returned": [
         "decision.database.postgresql",
@@ -192,6 +228,9 @@
       "scenarioId": "saas-commerce-api-20-session-evolution",
       "id": "long-current-api-endpoint",
       "classification": "positive",
+      "query": "project.api.endpoint",
+      "relevantMemoryKeys": ["decision.api.v2"],
+      "filters": {},
       "eligibleCorpusSize": 13,
       "returned": ["decision.api.v2"],
       "atK": [
