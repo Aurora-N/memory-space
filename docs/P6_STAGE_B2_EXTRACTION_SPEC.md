@@ -1,10 +1,11 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Spec
 
-**Status:** AUTHORIZED / IMPLEMENTATION IN PROGRESS
+**Status:** IMPLEMENTED / AWAITING CODE REVIEW
 **Parent phase:** P6 Memory Quality  
 **Prerequisite:** P6 Stage B1 Retrieval Precision & Abstention — REVIEW PASS / FROZEN
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **B1 final reviewed head:** `b4e01619bfbc63d03c2ca661dc8ad69558fa613f`  
+**B2 implementation:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`
 **B3 / B4:** NOT AUTHORIZED
 
 > Stage B2 improves deterministic checkpoint-derived Memory candidate extraction only. It must not reopen retrieval, Core/Handoff policy, semantic deduplication, provider integration, storage semantics, or MCP contracts.

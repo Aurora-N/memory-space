@@ -20,7 +20,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - local product CLI for init/doctor/status/eval
 - accepted deterministic 20-Session Memory Quality Stage A baseline
 - frozen Stage B1 deterministic retrieval policy and before/after comparison
-- authorized Stage B2 deterministic extraction-quality work
+- Stage B2 deterministic extraction-quality candidate awaiting code review
 
 ## Run locally
 
@@ -137,12 +137,14 @@ frozen policy uses provider-neutral field-aware lexical
 evidence and explicit abstention. After CR-PHASE10 hardening removed the
 query-independent type prior, P@1/R@1 truthfully remain at the accepted baseline
 of 0.727273/0.681818; negative false positives fall from 1.0 to 0 and negative
-abstention rises from 0 to 1.0. Stage B2 separately authorizes deterministic
-extractor changes only; embeddings, vector search, Core/Handoff policy changes,
-and semantic dedup remain unauthorized.
+abstention rises from 0 to 1.0. The Stage B2 candidate raises extraction from
+4 TP / 1 FP / 2 FN to 6 TP / 0 FP / 0 FN while leaving the full B1/downstream
+metric set unchanged. It is awaiting code review; embeddings, vector search,
+Core/Handoff policy changes, and semantic dedup remain unauthorized.
 
-See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) and
-[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md).
+See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md),
+[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md), and
+[`docs/quality/P6_STAGE_B2_RESULT.md`](docs/quality/P6_STAGE_B2_RESULT.md).
 
 ## Next roadmap
 
@@ -155,7 +157,7 @@ P5 Productization
 P6 Memory Quality v1
 → Stage A deterministic baseline COMPLETE / REVIEW PASS
 → Stage B1 Retrieval Precision & Abstention REVIEW PASS / FROZEN
-→ Stage B2 Extraction Generalization AUTHORIZED / IN PROGRESS
+→ Stage B2 Extraction Generalization IMPLEMENTED / AWAITING CODE REVIEW
 → B3/B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
@@ -214,7 +216,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 REVIEW PASS / FROZEN. Stage B2 extraction generalization is authorized and in progress. B3/B4 have not started.**
+**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 REVIEW PASS / FROZEN. Stage B2 extraction generalization is implemented and awaiting code review. B3/B4 have not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 

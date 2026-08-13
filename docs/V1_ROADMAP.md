@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B2 Extraction Generalization & Transient Rejection — AUTHORIZED / IN PROGRESS
+**Current phase:** P6 Stage B2 Extraction Generalization & Transient Rejection — IMPLEMENTED / AWAITING CODE REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`
 
@@ -45,7 +45,7 @@ P5 — Productization                            COMPLETE / REVIEW PASS
 P6 — Memory Quality v1
      Stage A deterministic baseline            COMPLETE / REVIEW PASS
      Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
-     Stage B2 Extraction Quality               AUTHORIZED / IN PROGRESS
+     Stage B2 Extraction Quality               IMPLEMENTED / AWAITING CODE REVIEW
      Stage B3 Core/Handoff Pollution            NOT AUTHORIZED
      Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
 
@@ -175,10 +175,11 @@ falls to 0, and abstention rises to 1. The committed comparison and detailed lim
 B1 completed reviewer approval and is frozen. Its production retrieval behavior
 is the non-regression baseline for B2.
 
-## 4.3 Stage B2 — Extraction Generalization & Transient Rejection — IN PROGRESS
+## 4.3 Stage B2 — Extraction Generalization & Transient Rejection — AWAITING CODE REVIEW
 
-B2 is separately authorized by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md).
-It may change deterministic checkpoint extraction and transient rejection only.
+B2 is implemented under [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md)
+and is awaiting code review. Its candidate changes deterministic checkpoint
+extraction and transient rejection only.
 
 Later work remains unauthorized:
 

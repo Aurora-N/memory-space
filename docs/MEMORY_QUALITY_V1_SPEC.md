@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2 AUTHORIZED
+**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2 IMPLEMENTED / AWAITING CODE REVIEW
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -198,7 +198,7 @@ B1 — Retrieval Precision & Abstention
      REVIEW PASS / FROZEN
 
 B2 — Extraction Generalization & Transient Rejection
-     AUTHORIZED / IN PROGRESS
+     IMPLEMENTED / AWAITING CODE REVIEW
 
 B3 — Core / Handoff Pollution Policy
      NOT AUTHORIZED
@@ -213,7 +213,7 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1 completed code/quality review and is frozen. B2 is separately authorized;
+B1 completed code/quality review and is frozen. B2 is implemented and awaiting code review;
 B3/B4 remain unauthorized.
 
 ---
@@ -436,7 +436,7 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Item 1 completed review and is frozen. Item 2 is now separately authorized under
+Item 1 completed review and is frozen. Item 2 is implemented and awaiting review under
 `P6_STAGE_B2_EXTRACTION_SPEC.md`; items 3–4 remain unauthorized.
 
 Stage B1 must:

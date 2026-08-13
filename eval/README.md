@@ -100,8 +100,8 @@ hard correctness result
 
 Do not overwrite Stage A baseline evidence with candidate values, and do not change accepted fixture relevance labels merely to improve scores.
 
-Stage B1 changes lexical relevance/ranking only and is frozen. Stage B2 is
-separately authorized for deterministic extraction and transient rejection;
+Stage B1 changes lexical relevance/ranking only and is frozen. The Stage B2
+deterministic extraction/transient-rejection candidate awaits code review;
 Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers
 remain out of scope.
 
