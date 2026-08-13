@@ -85,6 +85,10 @@ B3 may implement, after review:
 - a small pure Handoff inclusion policy;
 - the existing type, key, status, recommendation, and promotion-reason gates,
   minus one bounded-local automatic-admission override;
+- reason-aware prospective admission for extractor evidence that matches an
+  existing Memory, including the equivalent/deduplicate path;
+- durable automatic/explicit-agent/explicit-user promotion provenance through
+  the existing history operation channel;
 - audit-only reporting for persisted importance and confidence metadata;
 - deterministic fresh-store and seeded-upgrade tests plus a B3-specific frozen
   comparison;
@@ -174,6 +178,11 @@ Updating changed keyed Memory preserves the existing tier unless the extractor
 requests and passes Core admission. Core capacity defaults to 64 active items and
 is enforced on creation and promotion.
 
+Conversely, an Indexed extractor decision does not currently demote an existing
+Core Memory. Equivalent content returns through the deduplicate path without
+re-applying an Indexed admission decision. These before-state behaviors are the
+prospective update gap addressed in sections 7.7 and 7.8.
+
 ### 5.2 Explicit remember, promote, demote, and status
 
 `remember()` rejects a caller-supplied tier and persists new explicit Memory as
@@ -184,6 +193,12 @@ eligibility check but still requires active status and capacity.
 
 `demote()` changes Core to Indexed. Setting status to resolved, superseded, or
 archived also forces Indexed. These transitions invalidate bootstrap cache.
+
+The current `#changeTier(...)` path records every Indexed-to-Core tier change as
+the same generic history operation, `promote`. It does not durably distinguish
+an extractor-driven automatic promotion from `memory_promote` or a trusted
+in-process user promotion. Therefore existing generic `promote` history is
+ambiguous and cannot prove explicit continuation intent under B3.
 
 ### 5.3 Current bootstrap
 
@@ -251,6 +266,10 @@ provider-neutral, and case-testable.
 9. Upgrade must be observable and no-clobber: opening an existing store cannot
    silently rewrite legacy Core rows, their history, or their last stored
    Handoff Snapshot.
+10. Trusted explicit continuation intent must have durable, unambiguous
+    provenance. Legacy or unknown promotion provenance fails closed.
+11. Passive legacy state is preserved, but every new post-B3 extractor
+    transition is governed prospectively by the B3 admission decision.
 
 ## 7. Proposed deterministic Core admission policy
 
@@ -262,11 +281,27 @@ A future pure policy should return an auditable decision such as:
 
 ```ts
 type CoreAdmissionDecision =
-  | { tier: "core"; reason: string }
-  | { tier: "indexed"; reason: string };
+  | { tier: "core"; reason: "eligible" }
+  | {
+      tier: "indexed";
+      reason:
+        | "bounded-local"
+        | "not-recommended"
+        | "missing-promotion-reason"
+        | "type-ineligible";
+    };
 ```
 
-This is an internal design shape, not a frozen public domain type.
+This is an internal design shape, not a frozen public domain type or TypeScript
+API. The semantic reason categories are normative. They let persistence wiring
+distinguish a measured negative override from a candidate that merely lacks
+positive automatic-admission evidence.
+
+Reason selection is deterministic. For a working-state candidate, explicit
+bounded-local scope produces `bounded-local` even if recommendation or promotion
+reason is also absent. Otherwise the checks proceed as
+`not-recommended` → `missing-promotion-reason` → `type-ineligible` → `eligible`.
+The reason describes Core admission only; it does not re-evaluate B2 durability.
 
 ### 7.2 Stable-context types
 
@@ -325,10 +360,10 @@ regress.
 The complete B3 v1 automatic decision is intentionally minimal:
 
 ```text
+working-state type has bounded-local scope   → Indexed / bounded-local
 recommendedTier is not Core                  → Indexed
 promoteReason is empty                       → Indexed
 existing #coreEligible(...) is false         → Indexed
-working-state type has bounded-local scope   → Indexed
 otherwise                                    → Core
 ```
 
@@ -354,12 +389,12 @@ improve an aggregate metric.
 
 ### 7.5 Pre-existing Core upgrade semantics
 
-B3 v1 applies automatic admission only to a newly persisted extractor candidate
-or an attempted automatic promotion of an existing Indexed Memory. It does not
-rescan or automatically demote a Memory that was already Core when the B3
-runtime opened its store. Reopening, `bootstrap()`, search, and ordinary reads
-must be side-effect-free with respect to that Memory's tier, version, and
-history.
+B3 v1 evaluates automatic admission for every new extractor candidate processed
+after B3 is active, including a candidate that creates, updates, or deduplicates
+against an existing semantic Memory. It does not rescan or automatically demote
+a Memory merely because that Memory was already Core when the B3 runtime opened
+its store. Reopening, `bootstrap()`, search, and ordinary reads must be
+side-effect-free with respect to that Memory's tier, version, and history.
 
 The Core tier and the Handoff Snapshot have different upgrade semantics:
 
@@ -367,7 +402,8 @@ The Core tier and the Handoff Snapshot have different upgrade semantics:
 | --- | --- |
 | open a B2-created store | preserve all Memory rows, tiers, versions, history, and the identity and field values of the stored latest Handoff; perform no replacement or update |
 | bootstrap before a new checkpoint | legacy active Core is still rendered; the last pre-B3 Handoff is still the latest stored Snapshot |
-| first successful B3 checkpoint | do not rewrite the legacy tier merely because the runtime was upgraded; build a new Snapshot with the B3 Handoff inclusion policy |
+| first successful B3 checkpoint with no matching new Memory evidence | do not rewrite the legacy tier merely because the runtime was upgraded; build a new Snapshot with the B3 Handoff inclusion policy |
+| post-B3 extractor evidence that matches an existing Memory | apply the prospective transition matrix in section 7.7, including on the equivalent/deduplicate path |
 | explicit demotion or non-active status transition | use the existing trusted transition; subsequent bootstrap/snapshots no longer disclose the item as active Core |
 
 Consequently, a cleanup task that was already Core under B2 remains Core and can
@@ -380,6 +416,125 @@ Fresh-store B3 quality evaluation must still prove that the same cleanup task is
 admitted as Indexed. A separate seeded-upgrade evaluation must prove the behavior
 above. The fresh-store improvement must never be reported as retroactively
 cleaning a user's existing Core state.
+
+### 7.6 Promotion provenance invariant
+
+B3 must not infer trusted explicit promotion intent from the legacy generic
+`MemoryHistoryRecord.operation === "promote"`. That operation is ambiguous: it
+may have been written by extractor automatic promotion, explicit agent
+promotion, trusted user promotion, or an earlier implementation path. A legacy
+generic `promote`, a missing record, and an unknown promotion identity all fail
+closed and must not:
+
+- override bounded-local automatic admission;
+- make a bounded-local Core Memory eligible for Handoff continuation;
+- prove that an agent or user intentionally requested persistent continuation.
+
+After B3, every successful new Indexed-to-Core promotion must durably identify
+one of these semantic provenance categories:
+
+| Semantic provenance | Source | Trusted explicit continuation intent? |
+| --- | --- | --- |
+| `AUTOMATIC` | extractor admission promotes an existing Indexed Memory | no |
+| `EXPLICIT_AGENT` | `memory_promote` / trusted adapter path after agent eligibility, reason, ownership, status, and capacity checks | yes |
+| `EXPLICIT_USER` | trusted in-process user promotion after status and capacity checks | yes |
+| `AMBIGUOUS_LEGACY` | legacy generic `promote`, missing provenance, or unknown identity | no; fail closed |
+
+The semantic category is frozen; the concrete operation strings are an
+implementation choice. B3 must persist distinct operation identities through
+the existing extensible `MemoryHistoryRecord.operation` channel. It must not add
+a Memory field, database column, or domain schema field, and it must not infer
+provenance later from free-form reason text, source event ids, or caller data.
+A direct extractor-created Core Memory is automatic admission, never explicit
+override evidence, regardless of the history operation used for creation. B3 v1
+establishes an override only through a successful Indexed-to-Core explicit
+transition. An idempotent promotion request for a Memory already in Core does not
+create override evidence.
+
+Promotion provenance is used only to determine whether a durable working-state
+Memory has trusted continuation intent. It must not call the extractor again,
+change family/type/content, or reclassify durability.
+
+A trusted explicit promotion intent is effective only for the semantic Memory
+state on which it was recorded. It survives later extractor evidence that is
+equivalent under the existing deterministic deduplicate relation. It is
+invalidated by explicit demotion, a non-active status transition, supersession,
+or a changed-content update representing a new semantic state. Historical
+records remain immutable; “invalidated” means they no longer authorize a current
+override.
+
+### 7.7 Prospective admission for existing Memory
+
+Passive legacy preservation ends when new extractor evidence attempts to create,
+update, or deduplicate the same active semantic Memory. That is a new admission
+event governed by current B3 policy, not a retroactive migration. The decision
+must be evaluated before both the changed-content update path and the
+equivalent-content deduplicate path.
+
+The following tier transition matrix is normative:
+
+| Existing tier | New admission reason | Additional state | Required tier result |
+| --- | --- | --- | --- |
+| Indexed | `eligible` | active candidate | Core; any Indexed-to-Core transition has `AUTOMATIC` provenance |
+| Indexed | any Indexed reason | — | remain Indexed |
+| Core | `eligible` | — | remain Core |
+| Core | `bounded-local` | changed content/new semantic state | Indexed; any older explicit intent is invalid for the new state |
+| Core | `bounded-local` | equivalent content and effective B3 `EXPLICIT_AGENT` or `EXPLICIT_USER` intent | remain Core; preserve the trusted override |
+| Core | `bounded-local` | equivalent content without effective trusted intent, including `AUTOMATIC` or `AMBIGUOUS_LEGACY` history | Indexed |
+| Core | `not-recommended` | — | preserve Core; absence of a new recommendation is not demotion evidence |
+| Core | `missing-promotion-reason` | — | preserve Core; absence of a new reason is not demotion evidence |
+| Core | `type-ineligible` | no existing schema conflict | preserve Core; ineligibility alone is not an implicit demotion command |
+| Core | `type-ineligible` | existing key/family/type invariant would be violated | reject and roll back using the existing schema-conflict behavior |
+
+“Same semantic Memory” uses the existing trusted target/key resolution and
+deduplicate relation; B3 must not introduce semantic matching. An extractor
+candidate whose operation is `create` may still resolve to an existing keyed or
+equivalent Memory and is then governed by this matrix. `ignore` performs no
+transition. `supersede`, explicit demotion, and non-active status remain
+authoritative domain transitions rather than admission reasons.
+
+Equivalent content is not permission to skip policy. In particular:
+
+```text
+existing automatic/legacy Core
++ new equivalent bounded-local extractor evidence
+→ evaluate bounded-local
+→ no effective trusted explicit intent
+→ Indexed
+```
+
+Conversely:
+
+```text
+bounded-local durable task
+→ automatic Indexed
+→ trusted explicit promotion to Core
+→ new equivalent bounded-local extractor evidence
+→ explicit intent remains effective
+→ preserve Core and Handoff continuation
+```
+
+### 7.8 Transition precedence
+
+B3 v1 resolves competing transitions in this order:
+
+```text
+authoritative status transition or supersession
+        ↓
+explicit demotion
+        ↓
+effective B3 EXPLICIT_AGENT / EXPLICIT_USER intent for equivalent state
+        ↓
+automatic B3 admission for new extractor evidence
+        ↓
+passive legacy Core preservation when there is no new matching evidence
+```
+
+This precedence prevents an ordinary equivalent checkpoint observation from
+undoing a trusted explicit action. It does not let explicit promotion bypass
+status, Space ownership, type eligibility applicable to that actor, Core
+capacity, or supersession. A changed semantic state invalidates the older
+promotion intent before its new admission decision is applied.
 
 ## 8. Type-specific semantics
 
@@ -429,9 +584,11 @@ provide a reason. It must continue to enforce Session Space ownership, active
 status, deterministic type eligibility, Core capacity, and trusted actor
 selection. Promotion does not bypass status or Space isolation.
 
-For eligible tasks/blockers/questions, explicit promotion is also sufficient
-continuation intent for Handoff inclusion while active. Demotion reverses default
-Core/Handoff disclosure at the next snapshot without deleting Indexed recall.
+For eligible tasks/blockers/questions, a successful B3 promotion with durable
+`EXPLICIT_AGENT` or `EXPLICIT_USER` provenance is sufficient continuation intent
+for Handoff inclusion while active. A generic legacy `promote` record is not.
+Demotion reverses default Core/Handoff disclosure at the next snapshot without
+deleting Indexed recall and invalidates earlier explicit intent.
 
 ## 9. Handoff is an independent policy
 
@@ -482,12 +639,15 @@ extractor candidate, or caller-selected Handoff fields are never projection
 inputs. `data.nextStep(s)` is output data only: it cannot help a Memory become
 Core or Handoff-eligible.
 
-For this policy, “eligible for Handoff continuation” means the task either
-passes the current B3 automatic Core admission decision without the bounded-local
-override firing, or has a recorded trusted explicit promotion after ordinary
-validation. This makes a project-wide auto-admitted task and an intentionally
-promoted task eligible, while preventing a bounded-local legacy Core row from
-qualifying merely because an older release assigned its tier.
+For this policy, “eligible for Handoff continuation” means the persisted active
+Core task either has no bounded-local scope under the same B3 classifier, or has
+currently effective B3 `EXPLICIT_AGENT` or `EXPLICIT_USER` provenance after
+ordinary validation. Handoff does not need to reconstruct non-persisted
+recommendation or promotion-reason inputs. Generic legacy `promote`, `AUTOMATIC`,
+missing, and unknown provenance fail closed as bounded-local overrides. This
+makes a project-wide auto-admitted task and an intentionally promoted task
+eligible, while preventing a bounded-local legacy Core row from qualifying
+merely because an older release assigned its tier.
 
 An active Core `decision`, `constraint`, `fact`, `progress`, `goal`, `blocker`,
 `question`, `convention`, `rule`, `instruction`, or `roadmap` must not contribute
@@ -519,7 +679,15 @@ These cases must be implemented only after this spec is approved.
 | C11 | explicit `memory_promote` | eligible active Indexed Memory can override automatic admission; ownership/capacity retained |
 | C12 | demotion/resolution | next bootstrap/snapshot removes active disclosure; resolved former-Core task is completed only |
 | C13 | Handoff next-step provenance | accepted active Core task content/data may contribute; Core decision/constraint/fact data with identical `nextStep(s)` cannot inject Handoff; inactive/Indexed tasks cannot contribute |
-| C14 | B2-to-B3 seeded upgrade | opening/bootstrapping performs no tier/version/history/Snapshot rewrite; first B3 checkpoint applies new Handoff projection without retroactive tier demotion; trusted demotion/status transition then removes active disclosure |
+| C14 | B2-to-B3 seeded upgrade | opening/bootstrapping performs no tier/version/history/Snapshot rewrite; first B3 checkpoint with no matching new Memory evidence applies new Handoff projection without retroactive tier demotion; trusted demotion/status transition then removes active disclosure |
+| C15 | automatic bounded-local task | cleanup task is durable but automatic admission is Indexed; no trusted explicit provenance; absent from Core and Handoff |
+| C16 | explicitly agent-promoted bounded-local task | same task starts Indexed, then trusted `memory_promote` records `EXPLICIT_AGENT`; becomes Core and may contribute active task/next step at the next checkpoint |
+| C17 | legacy ambiguous promotion | seeded B2 bounded-local Core has only generic `promote`; opening does not mutate tier, but the first B3 Handoff excludes it and the legacy record never counts as explicit override |
+| C18 | trusted user promotion | eligible active Indexed task promoted in-process records `EXPLICIT_USER`; becomes Core and is eligible for Handoff continuation |
+| C19 | changed-content existing-Core update | same active key changes from project-wide Core task to bounded-local task; new `bounded-local` decision applies prospectively and demotes to Indexed |
+| C20 | equivalent existing-Core deduplicate | equivalent bounded-local extractor evidence re-runs admission; automatic/legacy Core demotes, so deduplicate cannot bypass B3 |
+| C21 | non-bounded Indexed reasons on existing Core | `not-recommended` and `missing-promotion-reason` preserve Core; `type-ineligible` preserves or raises the existing schema conflict, never silently rewrites the type |
+| C22 | explicit override precedence | equivalent bounded-local evidence preserves Core after effective `EXPLICIT_AGENT`/`EXPLICIT_USER`; changed semantic state, demotion, non-active status, or supersession invalidates that intent |
 
 Independent paraphrases and Chinese/English variants must prove that a future
 bounded-scope rule is structural rather than an exact fixture sentence patch.
@@ -549,6 +717,8 @@ expected checkpoint candidate operation (`create`, `update`, `supersede`, or
 `ignore`) where extraction evidence defines a candidate
 explicit-memory promote flag for every explicit Memory, including omitted flags
 normalized to `false`
+expected semantic promotion provenance (`AUTOMATIC`, `EXPLICIT_AGENT`,
+`EXPLICIT_USER`, or `AMBIGUOUS_LEGACY`) for every promotion transition
 ordered statusChanges with logical key, target status, and reason
 active Core logical keys
 polluted Core logical keys
@@ -574,7 +744,9 @@ distinguish at least:
 source mode:          checkpoint message event | checkpoint structured Memory
                       event | explicit remember
 candidate operation:  create | update | supersede | ignore
-transition operation: checkpoint | remember | promote | status change
+transition operation: checkpoint | remember | automatic promotion |
+                      explicit agent promotion | explicit user promotion |
+                      demote | status change
 ```
 
 A step containing more than one operation freezes their execution order. A
@@ -588,12 +760,19 @@ intent independently of the evaluator transition that eventually persists,
 promotes, or changes status. Those paths are not interchangeable benchmark
 setup.
 
+The frozen B2 upgrade seed must preserve the literal generic `promote` history
+operation and normalize its semantic provenance only to `AMBIGUOUS_LEGACY`; the
+baseline must not guess its origin. Candidate-side B3 transitions must record
+their expected semantic provenance independently of concrete operation-string
+names.
+
 The baseline loader must reject wrong version/id/source commit and any mutation
 of frozen metrics or per-case identities. Fixture-contract validation must occur
 before candidate metric comparison and reject changed event text/order/set,
 logical keys, type/family/key/content/status/Core labels, critical bootstrap set,
 Handoff expected set, scenario set, explicit promote flag, `statusChanges`,
-candidate operation, transition-operation order, or source mode.
+candidate operation, semantic promotion provenance, transition-operation order,
+or source mode.
 
 Mutation tests must independently prove rejection when they:
 
@@ -603,6 +782,8 @@ Mutation tests must independently prove rejection when they:
 - switch checkpoint-extracted input to explicit remember or the reverse;
 - switch message-event and structured-Memory-event source modes;
 - mutate `create`/`update`/`supersede`/`ignore` candidate operation;
+- mutate automatic/explicit-agent/explicit-user/ambiguous-legacy provenance or
+  reinterpret a legacy generic `promote` as trusted explicit intent;
 - add, remove, or reorder a transition operation in a mixed-operation step;
 - mutate the seeded-upgrade tier, version, history operation, or latest Handoff.
 
@@ -636,8 +817,9 @@ new/unchanged missing required Handoff facts
 bootstrap critical coverage and missing keys
 extraction and retrieval non-regression values
 hard-correctness result
-C1–C14 results
+C1–C22 results
 seeded-upgrade preservation and post-checkpoint Handoff results
+promotion-provenance and prospective existing-Core transition results
 ```
 
 Contract mutation failures occur before candidate deltas are considered. The
@@ -659,8 +841,12 @@ no new polluted Core logical key
 no new missing required Handoff fact
 bootstrap critical coverage does not regress
 Handoff required-fact coverage does not regress
-all C1–C14 holdouts pass
+all C1–C22 holdouts pass
 seeded upgrade performs no read/startup mutation and follows section 7.5
+legacy generic `promote` and unknown provenance fail closed
+new automatic/explicit-agent/explicit-user promotions are durably distinguishable
+post-B3 changed and equivalent existing-Memory transitions follow section 7.7
+effective trusted explicit intent survives equivalent automatic evidence
 only whitelisted active Core task sources contribute `nextSteps`
 Core decision/constraint/fact data cannot inject `nextSteps`
 B1 retrieval does not regress
@@ -703,18 +889,23 @@ by dropping a required goal, decision, task, or blocker fails.
 An implementation plan must include:
 
 1. pure unit tests for Core admission and Handoff inclusion decisions;
-2. C1–C14 integration holdouts, including non-task `data.nextStep(s)` injection
+2. C1–C22 integration holdouts, including non-task `data.nextStep(s)` injection
    rejection;
-3. fresh-store and seeded B2-to-B3 upgrade-state regressions;
-4. existing promotion/demotion/status/wasEverCore regressions;
-5. checkpoint and bootstrap cache-invalidation regressions;
-6. dedicated baseline schema and independent mutation tests for promote flags,
-   status changes, operation order/source mode, and upgrade seed state;
-7. per-case comparison and deterministic two-run tests;
-8. full quality human/JSON and B3 comparison human/JSON;
-9. `pnpm run check` and `pnpm run check:workspace`;
-10. Codex P2 and Claude P3 smoke runner self-tests;
-11. a production-boundary audit proving B1/B2/domain/storage/provider/MCP files
+3. promotion provenance unit/integration tests for all four semantic categories,
+   legacy fail-closed behavior, and invalidation boundaries;
+4. prospective changed-content and equivalent/deduplicate transition-matrix
+   tests, with and without effective trusted explicit intent;
+5. fresh-store and seeded B2-to-B3 upgrade-state regressions;
+6. existing promotion/demotion/status/wasEverCore regressions;
+7. checkpoint and bootstrap cache-invalidation regressions;
+8. dedicated baseline schema and independent mutation tests for promote flags,
+   promotion provenance, status changes, operation order/source mode, and
+   upgrade seed state;
+9. per-case comparison and deterministic two-run tests;
+10. full quality human/JSON and B3 comparison human/JSON;
+11. `pnpm run check` and `pnpm run check:workspace`;
+12. Codex P2 and Claude P3 smoke runner self-tests;
+13. a production-boundary audit proving B1/B2/domain/storage/provider/MCP files
     remain unchanged.
 
 Real provider smoke reruns are not required solely for provider-neutral admission
@@ -727,9 +918,9 @@ Do not begin this sequence until the reviewer authorizes B3 implementation.
 
 ```text
 1. freeze B2 Core/Handoff before-state and fixture contract
-2. add failing C1–C14, upgrade-state, and mutation tests
+2. add failing C1–C22, upgrade-state, provenance, transition-matrix, and mutation tests
 3. implement a pure Core/Handoff policy module
-4. add minimal MemorySpace admission/snapshot wiring
+4. add minimal MemorySpace admission, provenance-history, update, and snapshot wiring
 5. run B3-specific comparison and full quality suite
 6. document per-case deltas and limitations
 7. stop for code review
@@ -763,11 +954,17 @@ This document is ready for review when the reviewer can determine:
 - whether audit-only importance/confidence is the correct minimal B3 v1 scope;
 - whether legacy Core no-reconciliation semantics are explicit and adequately
   protected by the seeded-upgrade contract;
+- whether generic legacy `promote` fails closed and new automatic/agent/user
+  provenance is durably distinguishable without schema changes;
+- whether prospective existing-Core update and deduplicate semantics use the
+  admission reason without treating every Indexed result as a demotion;
+- whether effective trusted explicit intent has correct precedence and
+  invalidation boundaries;
 - whether the task-only `nextStep(s)` type/source whitelist prevents indirect
   Handoff injection;
 - whether the dedicated before/after contract prevents transition and fixture
   drift;
-- whether C1–C14 and the delta gate protect critical context.
+- whether C1–C22 and the delta gate protect critical context.
 
 Until that review completes:
 
