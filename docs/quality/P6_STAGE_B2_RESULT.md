@@ -1,11 +1,12 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Result
 
-**Status:** B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW — NOT PASS / NOT FROZEN
+**Status:** B2 FINAL TASK-BOUNDARY HARDENING IMPLEMENTED / AWAITING FINAL RE-REVIEW — NOT PASS / NOT FROZEN
 **Source of Truth:** `docs/P6_STAGE_B2_EXTRACTION_SPEC.md`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Frozen B1 documentation commit:** `752abf7311bb3016e1184ab7435b195d0d6d22ac`
 **B2 implementation:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`
 **B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
+**Task-boundary hardening:** `4655124`
 **B3 / B4:** NOT STARTED / NOT AUTHORIZED
 
 This document records the measured Stage A extraction failures and the completed
@@ -309,5 +310,55 @@ adapters/lifecycle, MCP, checkpoint/Handoff generation, Core promotion, Space
 binding, and accepted fixture labels were not changed. B3/B4 remain unstarted;
 the known Core/Handoff pollution and semantic duplicate limitations remain
 inputs for separately authorized stages.
+
+## Final-review task-boundary hardening
+
+The final review found one remaining overly broad Chinese natural-task branch:
+any text before `前/之前必须完成…` was acting as durable scope. The task model now
+requires both a recognized future-obligation predicate and independently
+classified durable boundary/scope evidence.
+
+The implementation separates English project obligations, Chinese project-phase
+obligations, and Chinese boundary obligations. Boundary obligations reuse
+`hasDurableProjectSubject` through `hasDurableProjectScope`, plus a small anchored
+positive boundary-shape classifier for project/release/上线/deployment/migration/
+milestone lifecycle boundaries. It has no response/output blacklist: unknown or
+interaction-local boundaries fail closed. A rejected task-shaped boundary is not
+allowed to fall through and become a natural constraint.
+
+| Holdout | Result |
+| --- | --- |
+| T1 `回复前必须完成测试。` → `[]` | PASS |
+| T2 `输出结果前必须完成测试。` → `[]` | PASS |
+| T3 `发布前必须完成 migration 回滚演练。` → `state/task` | PASS |
+| T4 `部署前必须完成数据库迁移。` → `state/task` | PASS |
+| Paraphrase `上线之前必须完成回滚验证。` → `state/task` | PASS |
+| Project milestone paraphrase → `state/task` | PASS |
+| Mixed migration-test-output boundary → `[]` | PASS |
+
+E1–E10 and D1–D12 remain PASS. Keyed `project.database`, explicit current-task,
+and structured Memory event compatibility remain unchanged. The accepted Stage A
+extraction artifact is byte-unchanged.
+
+Final validation at `4655124`:
+
+```text
+Focused extractor tests                 PASS (19/19)
+pnpm run check                          PASS (144/144)
+pnpm run check:workspace                PASS (144/144)
+quality human/JSON                      PASS; hard correctness PASS
+B2 extraction comparison human/JSON    PASS; all six gates PASS
+quality JSON two-run equality           PASS (byte-equivalent)
+comparison JSON two-run equality        PASS (byte-equivalent)
+Codex P2 smoke runner self-test         PASS
+Claude P3 smoke runner self-test        PASS
+GitHub CI                               not independently confirmed
+```
+
+Extraction remains 6 TP / 0 FP / 0 FN, precision/recall remain 1.000000, and
+new FP/FN remain zero. Frozen B1/downstream metrics remain exactly those recorded
+above. The production semantic diff for this follow-up is limited to
+`src/adapters/rule-based-extractor.ts`; B1 retrieval and B3/B4 surfaces are
+unchanged.
 
 P6 Stage B2 is not marked PASS or frozen. B3/B4 have not started.
