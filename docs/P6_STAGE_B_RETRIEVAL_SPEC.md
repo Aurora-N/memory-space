@@ -1,6 +1,6 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Spec
 
-**Status:** B1.2 TWO-TOKEN HARDENING IMPLEMENTED / AWAITING FINAL RE-REVIEW
+**Status:** REVIEW PASS / FROZEN
 **Phase:** P6 Stage B1  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Stage B1 implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
@@ -13,8 +13,8 @@
 > Stage B1 changes the product retrieval policy, but it does not change what a Memory is, who owns it, how Spaces/Sessions bind, or the six-tool MCP contract.
 
 Implementation and local comparison evidence are recorded in
-[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). This status is
-not a review PASS; B2/B3/B4 remain unstarted and unauthorized.
+[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). Stage B1 is
+reviewed and frozen. B2 is separately authorized; B3/B4 remain unauthorized.
 
 ---
 
@@ -505,7 +505,7 @@ Only then may a semantic retrieval experiment be authorized.
 
 ---
 
-## 13. Stage B2/B3/B4 remain out of scope
+## 13. Stage B2/B3/B4 transition
 
 After B1 review, later work may be considered separately:
 
@@ -515,7 +515,8 @@ B3 — Core / Handoff Pollution Policy
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
 ```
 
-B1 completion does not authorize any of these.
+B1 itself did not authorize these. After B1 review PASS, B2 was separately
+authorized by `P6_STAGE_B2_EXTRACTION_SPEC.md`; B3/B4 remain out of scope.
 
 This separation is intentional: changing corpus creation and search ranking in the same stage would make quality deltas difficult to attribute.
 

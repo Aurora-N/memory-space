@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B1 Retrieval Precision & Abstention — CR-PHASE10 FIXED / AWAITING RE-REVIEW
+**Current phase:** P6 Stage B2 Extraction Generalization & Transient Rejection — AUTHORIZED / IN PROGRESS
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`
 
@@ -44,8 +44,8 @@ P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 P5 — Productization                            COMPLETE / REVIEW PASS
 P6 — Memory Quality v1
      Stage A deterministic baseline            COMPLETE / REVIEW PASS
-     Stage B1 Retrieval Precision & Abstention CR-PHASE10 FIXED / AWAITING RE-REVIEW
-     Stage B2 Extraction Quality               NOT AUTHORIZED
+     Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
+     Stage B2 Extraction Quality               AUTHORIZED / IN PROGRESS
      Stage B3 Core/Handoff Pollution            NOT AUTHORIZED
      Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
 
@@ -137,11 +137,11 @@ Negative abstention         0.000000
 
 Stage A deliberately did not modify production extraction/retrieval algorithms.
 
-## 4.2 Stage B1 — Retrieval Precision & Abstention — AWAITING RE-REVIEW
+## 4.2 Stage B1 — Retrieval Precision & Abstention — REVIEW PASS / FROZEN
 
 **Normative execution spec:** [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md)
 
-B1 is the only production quality change implemented in this stage.
+B1 is the frozen retrieval-quality change.
 
 It targets:
 
@@ -172,14 +172,17 @@ the accepted 0.727273/0.681818 baseline, the negative-query false-positive rate
 falls to 0, and abstention rises to 1. The committed comparison and detailed limitations are in
 [`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md).
 
-B1 completes only after reviewer approval. The Coding Agent must stop before B2/B3/B4.
+B1 completed reviewer approval and is frozen. Its production retrieval behavior
+is the non-regression baseline for B2.
 
-## 4.3 Later quality stages
+## 4.3 Stage B2 — Extraction Generalization & Transient Rejection — IN PROGRESS
 
-Later work may be authorized separately:
+B2 is separately authorized by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md).
+It may change deterministic checkpoint extraction and transient rejection only.
+
+Later work remains unauthorized:
 
 ```text
-B2 — Extraction Generalization & Transient Rejection
 B3 — Core / Handoff Pollution Policy
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
 ```
@@ -239,5 +242,5 @@ accepted before-state
 → explicit authorization for the next stage
 ```
 
-Current work stops at P6 Stage B1 review. No later quality stage is authorized by
-the candidate result.
+Current work stops after B2 implementation for code review. B3/B4 are not
+authorized by B2 implementation results.

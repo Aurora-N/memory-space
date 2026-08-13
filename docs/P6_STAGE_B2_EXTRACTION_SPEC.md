@@ -1,8 +1,8 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Spec
 
-**Status:** READY FOR IMPLEMENTATION  
+**Status:** AUTHORIZED / IMPLEMENTATION IN PROGRESS
 **Parent phase:** P6 Memory Quality  
-**Prerequisite:** P6 Stage B1 Retrieval Precision & Abstention — REVIEW PASS / READY TO FREEZE  
+**Prerequisite:** P6 Stage B1 Retrieval Precision & Abstention — REVIEW PASS / FROZEN
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **B1 final reviewed head:** `b4e01619bfbc63d03c2ca661dc8ad69558fa613f`  
 **B3 / B4:** NOT AUTHORIZED

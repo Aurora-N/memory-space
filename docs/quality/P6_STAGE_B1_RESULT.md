@@ -16,11 +16,11 @@
 
 **B1.2 two-token hardening commit:** `e50d46846900c0d4281af0480fd0e90a596ac6b9`
 
-**Status:** B1.2 HARDENING IMPLEMENTED / AWAITING FINAL RE-REVIEW
+**Status:** REVIEW PASS / FROZEN
 
-This document records the deterministic B1.2 candidate. It is implementation
-evidence, not reviewer approval and not a universal product-quality SLO.
-B2/B3/B4 have not started.
+This document records the reviewed and frozen deterministic B1 result. Its
+metrics are benchmark evidence, not a universal product-quality SLO. B2 is
+separately authorized; B3/B4 remain unstarted.
 
 ## Change boundary
 
@@ -227,6 +227,6 @@ overlap. B1 stops here instead of adding semantic infrastructure. The separately
 reviewable alternatives are compared in
 [`../adr/0004-semantic-recall-options-after-b1.md`](../adr/0004-semantic-recall-options-after-b1.md).
 
-Recommendation: keep the deterministic lexical B1 candidate and request a
-semantic-recall architecture review only if the remaining capability boundary is
-not acceptable. Do not begin B2/B3/B4 from this result.
+Frozen decision: keep the deterministic lexical B1 policy. Semantic-recall work
+still requires a separate B4 architecture review. B2 extraction work proceeds
+under its own spec and must not modify this retrieval policy.

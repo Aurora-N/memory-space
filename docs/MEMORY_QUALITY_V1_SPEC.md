@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 CR-PHASE10 FIXED / AWAITING RE-REVIEW
+**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2 AUTHORIZED
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -195,10 +195,10 @@ It is decomposed so one change class can be attributed to one measured outcome:
 
 ```text
 B1 — Retrieval Precision & Abstention
-     CR-PHASE10 FIXED / AWAITING RE-REVIEW
+     REVIEW PASS / FROZEN
 
 B2 — Extraction Generalization & Transient Rejection
-     NOT AUTHORIZED
+     AUTHORIZED / IN PROGRESS
 
 B3 — Core / Handoff Pollution Policy
      NOT AUTHORIZED
@@ -213,7 +213,8 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1 completion must stop for code/quality review before B2/B3/B4.
+B1 completed code/quality review and is frozen. B2 is separately authorized;
+B3/B4 remain unauthorized.
 
 ---
 
@@ -435,8 +436,8 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Only item 1 was authorized for the current implementation. Its candidate is now
-implemented and awaiting review; this does not authorize items 2–4.
+Item 1 completed review and is frozen. Item 2 is now separately authorized under
+`P6_STAGE_B2_EXTRACTION_SPEC.md`; items 3–4 remain unauthorized.
 
 Stage B1 must:
 
@@ -455,10 +456,9 @@ See [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md) for the nor
 
 # 13. Later Stage B decisions
 
-After B1 review, the reviewer may authorize one of:
+After B1 review, B2 extraction quality was authorized. Later review may authorize:
 
 ```text
-B2 extraction quality
 B3 Core/Handoff pollution policy
 semantic-recall architecture experiment
 semantic dedup architecture work
@@ -502,6 +502,7 @@ accepted before-state
 → explicit next authorization
 ```
 
-Stage B1 implementation evidence is in
-[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). B2/B3/B4
-remain blocked until B1 review completes.
+Stage B1 frozen evidence is in
+[`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). B2 is governed
+by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md); B3/B4
+remain blocked.

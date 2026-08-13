@@ -68,7 +68,7 @@ Evidence:
 
 ## P6 Stage B1 comparison rule
 
-Stage B1 is the only implemented quality optimization and is defined by:
+Stage B1 is the frozen retrieval-quality optimization and is defined by:
 
 [`../docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](../docs/P6_STAGE_B_RETRIEVAL_SPEC.md)
 
@@ -100,7 +100,10 @@ hard correctness result
 
 Do not overwrite Stage A baseline evidence with candidate values, and do not change accepted fixture relevance labels merely to improve scores.
 
-Stage B1 changes lexical relevance/ranking only. Extraction, Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers remain out of scope until separate review.
+Stage B1 changes lexical relevance/ranking only and is frozen. Stage B2 is
+separately authorized for deterministic extraction and transient rejection;
+Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers
+remain out of scope.
 
 The comparison command exits non-zero when the Stage B1 delta gate or accepted
 hard-correctness checks fail. Regular `eval quality` still separates observational

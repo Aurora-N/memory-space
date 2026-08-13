@@ -1,12 +1,13 @@
 # P6 Stage B1.1 — False-Abstention Hardening Spec
 
-**Status:** IMPLEMENTED / AWAITING B1 RE-REVIEW
+**Status:** REVIEW PASS / FROZEN WITH STAGE B1
 **Parent phase:** P6 Stage B1 — Retrieval Precision & Abstention  
 **Reviewed candidate:** `a48df760ebef948393d2fafa0d7e480e8077a417`  
 **Implementation commit:** `aecb9ba5e4fad410569fed60036d590604352b12`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Depends on:** `P6_STAGE_B_RETRIEVAL_SPEC.md`, `code-review/CR-PHASE10.md`, `quality/P6_STAGE_B1_RESULT.md`  
-**B2 / B3 / B4:** NOT AUTHORIZED
+**B2:** AUTHORIZED AFTER B1 FREEZE
+**B3 / B4:** NOT AUTHORIZED
 
 > This is a narrow hardening addendum for the existing deterministic lexical B1 candidate. It does not reopen extraction, Memory semantics, storage, provider integration, MCP, Handoff/Core policy, or semantic retrieval.
 

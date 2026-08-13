@@ -4,15 +4,18 @@
 **Reviewed commit:** `fc6d107a6e431eeaefedfc4e310ac0d883a60f92`  
 **Stage B1 spec baseline:** `a78d758fc7435c06c62e8b2f6f02cfbab342d032`  
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
-**Status:** CHANGES REQUESTED  
-**Phase result:** Stage B1 architecture, comparison harness, and change boundary are accepted; retrieval relevance policy and benchmark-contract enforcement require hardening before B1 can freeze.  
-**B2 / B3 / B4:** NOT AUTHORIZED
+**Status:** PASS — CLOSED AFTER CR-PHASE10 + B1.1/B1.2 HARDENING
+**Phase result:** Initial review findings were closed by the generalized relevance policy, frozen fixture contract, false-abstention hardening, and two-token conflict hardening. Stage B1 is frozen.
+**B2:** AUTHORIZED BY `P6_STAGE_B2_EXTRACTION_SPEC.md`
+**B3 / B4:** NOT AUTHORIZED
 
 ---
 
 ## 1. Review conclusion
 
-Stage B1 is directionally correct and remains within the authorized production boundary.
+The initial review found a directionally correct architecture with remaining
+hardening requirements. All required findings were subsequently closed, and the
+final Stage B1 retrieval policy passed review and is frozen.
 
 The following work is accepted:
 
@@ -33,7 +36,8 @@ B2/B3/B4 not started                                     PASS
 semantic-recall ADR remains deferred                     PASS
 ```
 
-However, the current candidate is not ready to freeze because the relevance policy still contains benchmark-specific behavior and the machine-readable comparison does not fully freeze the accepted Stage A query contract.
+The historical findings below describe the initial candidate. CR-PHASE10,
+B1.1, and B1.2 fixes closed them without reopening the frozen boundaries.
 
 Required review groups:
 
@@ -687,10 +691,10 @@ End with:
 ```text
 P6 Stage B1 CR-PHASE10 fixes implemented.
 B2/B3/B4 NOT started.
-Awaiting B1 re-review.
+Final B1 re-review completed: PASS / FROZEN.
 ```
 
-Do not mark CR-PHASE10 PASS yourself.
+CR-PHASE10 was closed by reviewer authorization when Stage B2 was opened.
 
 ---
 
@@ -718,9 +722,10 @@ P3 Claude scoped waiver unchanged                                               
 B2/B3/B4 remain unstarted                                                       PASS
 ```
 
-Until then:
+Final state:
 
 ```text
-P6 Stage B1 code review        CHANGES REQUESTED
-P6 Stage B2/B3/B4             DO NOT START
+P6 Stage B1 code review        PASS / FROZEN
+P6 Stage B2                    AUTHORIZED
+P6 Stage B3/B4                 DO NOT START
 ```
