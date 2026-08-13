@@ -1,7 +1,6 @@
 # P6 Stage B3 — Core / Handoff Pollution Policy Spec
 
-**Status:** DRAFT / AWAITING REVIEW
-**Implementation:** NOT AUTHORIZED / NOT STARTED
+**Status:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
 **Phase:** P6 Stage B3
 **Reviewed B2 head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Prerequisites:** Stage A, Stage B1, and Stage B2 COMPLETE / REVIEW PASS / FROZEN
@@ -84,9 +83,11 @@ B3 may implement, after review:
 
 - a small pure Core admission policy;
 - a small pure Handoff inclusion policy;
-- type, key, status, bounded-scope, importance, confidence, and trusted explicit
-  promotion gates;
-- deterministic tests and a B3-specific frozen comparison;
+- the existing type, key, status, recommendation, and promotion-reason gates,
+  minus one bounded-local automatic-admission override;
+- audit-only reporting for persisted importance and confidence metadata;
+- deterministic fresh-store and seeded-upgrade tests plus a B3-specific frozen
+  comparison;
 - minimal `MemorySpace` wiring required to apply those policies.
 
 ## 4. Non-goals and frozen boundaries
@@ -109,6 +110,12 @@ B3 does not authorize embeddings, a vector database, semantic deduplication,
 query expansion, reranking, an LLM durability judge, a learned classifier,
 weighted ML scoring, complex decay, or background timed demotion. B4 remains
 unauthorized.
+
+B3 v1 also does not authorize a startup migration, background sweep, or
+retroactive tier reconciliation of Memory already persisted as Core by a prior
+release. That migration is a non-goal, but upgrade behavior is not allowed to be
+untested: sections 7.5, 10, 11, 12, and 15 define a separate seeded-upgrade
+regression contract.
 
 No B3 implementation may solve admission pollution by changing what the frozen
 B2 extractor emits.
@@ -232,8 +239,8 @@ provider-neutral, and case-testable.
 3. Handoff is a continuation view, not a synonym for every Core item.
 4. Type and status establish the base rule; bounded-local scope may make a
    durable working-state item Indexed.
-5. Importance and confidence may gate automatic admission but cannot manufacture
-   durable scope or override an ineligible type.
+5. Importance and confidence remain validated, persisted audit metadata. B3 v1
+   does not use them to admit, reject, rank, demote, or reconcile Memory.
 6. Explicit promotion is the escape hatch for a reviewed Memory that automatic
    policy conservatively leaves Indexed.
 7. Provider payload must never select tier, actor, or Handoff fields directly.
@@ -241,6 +248,9 @@ provider-neutral, and case-testable.
    working-state candidate already accepted as durable by frozen B2, absence of
    explicit bounded-local evidence preserves the reviewed type rule; B3 does not
    reinterpret that absence as an extraction failure.
+9. Upgrade must be observable and no-clobber: opening an existing store cannot
+   silently rewrite legacy Core rows, their history, or their last stored
+   Handoff Snapshot.
 
 ## 7. Proposed deterministic Core admission policy
 
@@ -260,8 +270,8 @@ This is an internal design shape, not a frozen public domain type.
 
 ### 7.2 Stable-context types
 
-When active, recommended Core, accompanied by a promotion reason, and above the
-reviewed minimum importance/confidence gates, these remain automatic Core
+When active, recommended Core, accompanied by a promotion reason, and accepted
+by the existing `#coreEligible(...)` predicate, these remain automatic Core
 candidates:
 
 ```text
@@ -275,9 +285,9 @@ instruction
 keyed stable fact
 ```
 
-Low-value or unkeyed facts remain Indexed. Episodes, debug traces, tool output,
-temporary hypotheses, and implementation details remain Indexed even when they
-are worth durable recall.
+Unkeyed facts remain automatically Indexed because that is the existing
+eligibility rule. Episodes remain ineligible. B3 v1 adds no new positive
+admission signal and no importance/confidence threshold for these types.
 
 ### 7.3 Working-state types
 
@@ -312,16 +322,64 @@ An active high-level migration or rollout task without bounded-local scope keeps
 the current automatic Core behavior so critical bootstrap coverage does not
 regress.
 
-### 7.4 Importance and confidence
+The complete B3 v1 automatic decision is intentionally minimal:
 
-B3 may use importance and confidence only as boolean automatic-admission gates,
-not as a weighted rank. The initial reviewed candidate should test the existing
-Core-producing extractor values (`importance >= 0.8`, `confidence >= 0.8`) as
-minimums. Neither value alone may upgrade a type or defeat bounded-local scope.
+```text
+recommendedTier is not Core                  → Indexed
+promoteReason is empty                       → Indexed
+existing #coreEligible(...) is false         → Indexed
+working-state type has bounded-local scope   → Indexed
+otherwise                                    → Core
+```
 
-If those thresholds reject a frozen critical item, the implementation must stop
-and request review rather than adjusting fixtures or silently weakening the
-gate. Explicit promotion remains available for eligible active Memory.
+Status remains enforced by the existing commit/status transition rules, and
+Core capacity remains enforced separately. Key presence matters only where the
+existing eligibility predicate already uses it, currently for `fact`. No
+absence of bounded-local evidence, score, or metadata field can independently
+promote a candidate.
+
+### 7.4 Importance and confidence are audit-only
+
+B3 v1 must continue validating and persisting `importance` and `confidence`, so
+operators and later evaluations can inspect them. It must not introduce
+`importance >= 0.8`, `confidence >= 0.8`, or any other automatic admission
+threshold. The frozen B3 failure supplies no measured evidence for those new
+variables, and adding them would make the cleanup fix inseparable from an
+unmeasured policy change.
+
+Any future use of importance/confidence as policy input requires a separately
+reviewed B3.x proposal, an independent measured failure, holdouts, and a new
+before-state. It must not be introduced while implementing this spec merely to
+improve an aggregate metric.
+
+### 7.5 Pre-existing Core upgrade semantics
+
+B3 v1 applies automatic admission only to a newly persisted extractor candidate
+or an attempted automatic promotion of an existing Indexed Memory. It does not
+rescan or automatically demote a Memory that was already Core when the B3
+runtime opened its store. Reopening, `bootstrap()`, search, and ordinary reads
+must be side-effect-free with respect to that Memory's tier, version, and
+history.
+
+The Core tier and the Handoff Snapshot have different upgrade semantics:
+
+| Upgrade point | Required B3 v1 behavior |
+| --- | --- |
+| open a B2-created store | preserve all Memory rows, tiers, versions, history, and the identity and field values of the stored latest Handoff; perform no replacement or update |
+| bootstrap before a new checkpoint | legacy active Core is still rendered; the last pre-B3 Handoff is still the latest stored Snapshot |
+| first successful B3 checkpoint | do not rewrite the legacy tier merely because the runtime was upgraded; build a new Snapshot with the B3 Handoff inclusion policy |
+| explicit demotion or non-active status transition | use the existing trusted transition; subsequent bootstrap/snapshots no longer disclose the item as active Core |
+
+Consequently, a cleanup task that was already Core under B2 remains Core and can
+remain visible in Core bootstrap until a normal demotion or status transition.
+After the first B3 checkpoint, however, a newly built Handoff must exclude that
+bounded-local legacy task because Handoff inclusion is independently evaluated.
+The old pre-B3 Snapshot is immutable historical evidence; it is not rewritten.
+
+Fresh-store B3 quality evaluation must still prove that the same cleanup task is
+admitted as Indexed. A separate seeded-upgrade evaluation must prove the behavior
+above. The fresh-store improvement must never be reported as retroactively
+cleaning a user's existing Core state.
 
 ## 8. Type-specific semantics
 
@@ -347,10 +405,13 @@ gate. Explicit promotion remains available for eligible active Memory.
 ### 8.3 Progress
 
 Progress is not equivalent to completed work. B3 v1 should keep a canonical,
-active project-wide current-progress slot eligible for Core bootstrap. Unkeyed or
-bounded-local progress defaults to Indexed. Progress does not enter Handoff
-`completed`; only resolved former-Core tasks do. Explicit `nextStep(s)` data may
-continue to feed the dedicated next-step projection after trusted validation.
+active project-wide current-progress slot eligible for Core bootstrap.
+Bounded-local progress is automatically Indexed. An unkeyed, non-bounded
+progress candidate continues to follow the existing recommendation, reason, and
+type eligibility gates; B3 v1 does not add key presence as a new progress gate.
+Progress does not enter Handoff `completed`; only resolved former-Core tasks do.
+Progress `data.nextStep(s)` cannot feed Handoff under the whitelist in section
+9.1.
 
 ### 8.4 Blockers
 
@@ -397,6 +458,48 @@ This keeps Core and Handoff related but not identical. Handoff policy consumes
 trusted persisted state and policy results; it never consumes provider-selected
 Handoff fields.
 
+### 9.1 `nextSteps` type and source whitelist
+
+The current projection accepts `data.nextStep` or `data.nextSteps` from any
+active Core Memory. B3 v1 replaces that broad behavior with this exhaustive
+whitelist:
+
+```text
+contributing Memory type       task only
+required state                 active + Core + eligible for Handoff continuation
+accepted persisted source      checkpoint-extracted task candidate, or
+                               explicitly remembered task followed by a trusted
+                               successful promotion
+accepted value source          that same task's content, data.nextStep, or
+                               data.nextSteps
+accepted value shape           non-empty string, or array elements that are
+                               non-empty strings
+```
+
+The whitelist is evaluated from trusted persisted Memory and its normal
+transition/provenance history. Raw lifecycle/provider payload, an uncommitted
+extractor candidate, or caller-selected Handoff fields are never projection
+inputs. `data.nextStep(s)` is output data only: it cannot help a Memory become
+Core or Handoff-eligible.
+
+For this policy, “eligible for Handoff continuation” means the task either
+passes the current B3 automatic Core admission decision without the bounded-local
+override firing, or has a recorded trusted explicit promotion after ordinary
+validation. This makes a project-wide auto-admitted task and an intentionally
+promoted task eligible, while preventing a bounded-local legacy Core row from
+qualifying merely because an older release assigned its tier.
+
+An active Core `decision`, `constraint`, `fact`, `progress`, `goal`, `blocker`,
+`question`, `convention`, `rule`, `instruction`, or `roadmap` must not contribute
+`data.nextStep(s)`, even if its data object contains those property names. An
+Indexed, inactive, or bounded-local task also contributes neither its content nor
+its data. Task content and accepted task data are deduplicated in their existing
+deterministic order.
+
+This source rule does not add a provider-specific path or schema. Structured
+Memory events remain compatible only after they have passed the frozen B2
+extractor validation and the ordinary task admission path.
+
 ## 10. Required holdouts (design only)
 
 These cases must be implemented only after this spec is approved.
@@ -412,9 +515,11 @@ These cases must be implemented only after this spec is approved.
 | C7 | resolved task | Indexed; absent from active tasks/next steps; former-Core completion behavior preserved |
 | C8 | persistent project blocker | Core; active Handoff blocker |
 | C9 | bounded local blocker | Indexed; absent from Handoff |
-| C10 | progress state | keyed current project progress Core; local/unkeyed progress Indexed; never completed task |
+| C10 | progress state | keyed current project progress Core; bounded-local progress Indexed; unkeyed non-bounded progress follows existing gates; never completed task or `nextSteps` source |
 | C11 | explicit `memory_promote` | eligible active Indexed Memory can override automatic admission; ownership/capacity retained |
 | C12 | demotion/resolution | next bootstrap/snapshot removes active disclosure; resolved former-Core task is completed only |
+| C13 | Handoff next-step provenance | accepted active Core task content/data may contribute; Core decision/constraint/fact data with identical `nextStep(s)` cannot inject Handoff; inactive/Indexed tasks cannot contribute |
+| C14 | B2-to-B3 seeded upgrade | opening/bootstrapping performs no tier/version/history/Snapshot rewrite; first B3 checkpoint applies new Handoff projection without retroactive tier demotion; trusted demotion/status transition then removes active disclosure |
 
 Independent paraphrases and Chinese/English variants must prove that a future
 bounded-scope rule is structural rather than an exact fixture sentence patch.
@@ -439,6 +544,12 @@ ordered 20-Session scenario/step ids and evidence
 expected logical Memory identities and shouldBeCore labels
 criticalBootstrapKeys
 expected Handoff facts
+normalized ordered operation/source-mode plan for every step
+expected checkpoint candidate operation (`create`, `update`, `supersede`, or
+`ignore`) where extraction evidence defines a candidate
+explicit-memory promote flag for every explicit Memory, including omitted flags
+normalized to `false`
+ordered statusChanges with logical key, target status, and reason
 active Core logical keys
 polluted Core logical keys
 bootstrap covered/missing/unexpected keys
@@ -449,16 +560,55 @@ B1 retrieval and negative-query summary
 B2 extraction TP/FP/FN and precision/recall
 stale/duplicate/contradiction summary
 hard-correctness check ids/statuses
+seeded-upgrade Memory tier/version/history and latest-Handoff expectations
 ```
 
 Array ordering is normative. Runtime UUIDs, temporary paths, wall-clock values,
 and random database state must not enter the artifact.
 
+The contract treats candidate operation, evaluator transition, and source mode
+as separate fields rather than collapsing them into equivalent setup. It must
+distinguish at least:
+
+```text
+source mode:          checkpoint message event | checkpoint structured Memory
+                      event | explicit remember
+candidate operation:  create | update | supersede | ignore
+transition operation: checkpoint | remember | promote | status change
+```
+
+A step containing more than one operation freezes their execution order. A
+missing `explicitMemories[].promote` value is normalized to `false` before the
+contract is captured, so changing omitted/false to true is a mutation rather
+than an evaluator default. `statusChanges` freezes its presence, order, logical
+key, status, and reason. The source mode freezes whether equivalent Memory
+ground truth arrived through a message event, a structured Memory event, or
+explicit remember. The candidate operation freezes the extractor transition
+intent independently of the evaluator transition that eventually persists,
+promotes, or changes status. Those paths are not interchangeable benchmark
+setup.
+
 The baseline loader must reject wrong version/id/source commit and any mutation
 of frozen metrics or per-case identities. Fixture-contract validation must occur
 before candidate metric comparison and reject changed event text/order/set,
 logical keys, type/family/key/content/status/Core labels, critical bootstrap set,
-Handoff expected set, or scenario set.
+Handoff expected set, scenario set, explicit promote flag, `statusChanges`,
+candidate operation, transition-operation order, or source mode.
+
+Mutation tests must independently prove rejection when they:
+
+- toggle, add, remove, or rely on a changed default for an explicit promote
+  flag;
+- add, remove, reorder, or edit a status change;
+- switch checkpoint-extracted input to explicit remember or the reverse;
+- switch message-event and structured-Memory-event source modes;
+- mutate `create`/`update`/`supersede`/`ignore` candidate operation;
+- add, remove, or reorder a transition operation in a mixed-operation step;
+- mutate the seeded-upgrade tier, version, history operation, or latest Handoff.
+
+The artifact must carry two distinct lanes: a fresh-store B3 comparison and a
+seeded B2-to-B3 upgrade-state contract. The upgrade seed is produced from the
+frozen B2 reviewed behavior, not synthesized by the B3 policy under test.
 
 Stage A retrieval and extraction snapshots remain byte-identical. B3 adds a new
 baseline; it does not extend or rewrite accepted prior-phase artifacts.
@@ -486,10 +636,13 @@ new/unchanged missing required Handoff facts
 bootstrap critical coverage and missing keys
 extraction and retrieval non-regression values
 hard-correctness result
-C1–C12 results
+C1–C14 results
+seeded-upgrade preservation and post-checkpoint Handoff results
 ```
 
-Contract mutation failures occur before candidate deltas are considered.
+Contract mutation failures occur before candidate deltas are considered. The
+human and JSON reports must label fresh-store improvement separately from legacy
+upgrade state; they must not imply that B3 retroactively demoted old Core.
 
 ## 13. B3 acceptance philosophy
 
@@ -506,7 +659,10 @@ no new polluted Core logical key
 no new missing required Handoff fact
 bootstrap critical coverage does not regress
 Handoff required-fact coverage does not regress
-all C1–C12 holdouts pass
+all C1–C14 holdouts pass
+seeded upgrade performs no read/startup mutation and follows section 7.5
+only whitelisted active Core task sources contribute `nextSteps`
+Core decision/constraint/fact data cannot inject `nextSteps`
 B1 retrieval does not regress
 B2 extraction does not regress
 stale/duplicate/contradiction values do not regress
@@ -547,15 +703,18 @@ by dropping a required goal, decision, task, or blocker fails.
 An implementation plan must include:
 
 1. pure unit tests for Core admission and Handoff inclusion decisions;
-2. C1–C12 integration holdouts;
-3. existing promotion/demotion/status/wasEverCore regressions;
-4. checkpoint and bootstrap cache-invalidation regressions;
-5. dedicated baseline schema and fixture mutation tests;
-6. per-case comparison and deterministic two-run tests;
-7. full quality human/JSON and B3 comparison human/JSON;
-8. `pnpm run check` and `pnpm run check:workspace`;
-9. Codex P2 and Claude P3 smoke runner self-tests;
-10. a production-boundary audit proving B1/B2/domain/storage/provider/MCP files
+2. C1–C14 integration holdouts, including non-task `data.nextStep(s)` injection
+   rejection;
+3. fresh-store and seeded B2-to-B3 upgrade-state regressions;
+4. existing promotion/demotion/status/wasEverCore regressions;
+5. checkpoint and bootstrap cache-invalidation regressions;
+6. dedicated baseline schema and independent mutation tests for promote flags,
+   status changes, operation order/source mode, and upgrade seed state;
+7. per-case comparison and deterministic two-run tests;
+8. full quality human/JSON and B3 comparison human/JSON;
+9. `pnpm run check` and `pnpm run check:workspace`;
+10. Codex P2 and Claude P3 smoke runner self-tests;
+11. a production-boundary audit proving B1/B2/domain/storage/provider/MCP files
     remain unchanged.
 
 Real provider smoke reruns are not required solely for provider-neutral admission
@@ -568,7 +727,7 @@ Do not begin this sequence until the reviewer authorizes B3 implementation.
 
 ```text
 1. freeze B2 Core/Handoff before-state and fixture contract
-2. add failing C1–C12 and mutation tests
+2. add failing C1–C14, upgrade-state, and mutation tests
 3. implement a pure Core/Handoff policy module
 4. add minimal MemorySpace admission/snapshot wiring
 5. run B3-specific comparison and full quality suite
@@ -601,9 +760,14 @@ This document is ready for review when the reviewer can determine:
 - whether the proposed automatic Core gates are sufficiently small;
 - whether bounded-local scope belongs in B3 admission without reopening B2;
 - whether explicit promotion should override automatic admission as specified;
-- whether Handoff inclusion is sufficiently independent and deterministic;
-- whether the dedicated before/after contract prevents benchmark drift;
-- whether C1–C12 and the delta gate protect critical context.
+- whether audit-only importance/confidence is the correct minimal B3 v1 scope;
+- whether legacy Core no-reconciliation semantics are explicit and adequately
+  protected by the seeded-upgrade contract;
+- whether the task-only `nextStep(s)` type/source whitelist prevents indirect
+  Handoff injection;
+- whether the dedicated before/after contract prevents transition and fixture
+  drift;
+- whether C1–C14 and the delta gate protect critical context.
 
 Until that review completes:
 
