@@ -1,10 +1,11 @@
 # P6 Stage B1.2 — Two-Token Conflict Hardening Spec
 
-**Status:** READY FOR IMPLEMENTATION  
+**Status:** IMPLEMENTED / AWAITING B1 FINAL RE-REVIEW
 **Parent phase:** P6 Stage B1 — Retrieval Precision & Abstention  
 **Previous hardening:** P6 Stage B1.1 — False-Abstention Hardening  
 **Reviewed candidate:** `5dcb14890caa74c610fae877ac3af6dd6c43a72c`  
 **B1.1 implementation:** `aecb9ba5e4fad410569fed60036d590604352b12`  
+**B1.2 implementation:** `e50d46846900c0d4281af0480fd0e90a596ac6b9`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Depends on:** `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B1_FALSE_ABSTENTION_HARDENING_SPEC.md`, `code-review/CR-PHASE10.md`, `quality/P6_STAGE_B1_RESULT.md`  
 **B2 / B3 / B4:** NOT AUTHORIZED
@@ -653,6 +654,21 @@ T1–T7
 Also run the existing Codex P2 and Claude P3 smoke self-tests if they are part of the established branch validation routine.
 
 Do not claim GitHub CI is green unless an actual GitHub status/check/workflow run is observed for the final commit.
+
+### Recorded implementation evidence — 2026-08-13
+
+The percentage threshold was removed. A keyed candidate now signals conflict
+only when a two- or three-token raw query has exactly `N - 1` key/content
+canonical matches and exactly one term unresolved by both key/content and
+type/data metadata. Metadata may explain a qualifier, but does not increase
+canonical coverage. The existing B1.1 eligible-corpus support and strong-exact
+protections remain unchanged.
+
+T1–T7 and H1–H7 pass. Accepted Stage A metrics remain unchanged, negative FP is
+`0.000000`, negative abstention is `1.000000`, new accepted retrieval failures
+and top-1 regressions remain zero. Both full checks pass `120/120`; quality and
+comparison JSON are each byte-equivalent across two CLI processes. This remains
+implementation evidence awaiting reviewer decision, not B1 PASS or freeze.
 
 ---
 

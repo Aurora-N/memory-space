@@ -14,9 +14,11 @@
 
 **B1.1 false-abstention hardening commit:** `aecb9ba5e4fad410569fed60036d590604352b12`
 
-**Status:** B1.1 HARDENING IMPLEMENTED / AWAITING RE-REVIEW
+**B1.2 two-token hardening commit:** `e50d46846900c0d4281af0480fd0e90a596ac6b9`
 
-This document records the deterministic B1.1 candidate. It is implementation
+**Status:** B1.2 HARDENING IMPLEMENTED / AWAITING FINAL RE-REVIEW
+
+This document records the deterministic B1.2 candidate. It is implementation
 evidence, not reviewer approval and not a universal product-quality SLO.
 B2/B3/B4 have not started.
 
@@ -69,13 +71,14 @@ domain-specific stoplist. The policy is:
 1. exact key/content phrase remains strong;
 2. content/key token overlap establishes ordinary lexical relevance;
 3. type/data-only overlap is allowed only when the actual raw query has one token;
-4. for a compact two- or three-token query, a keyed slot whose key/content covers
-   at least two thirds of the raw tokens while missing another term signals a
-   possible stale/conflicting value; type/data matches never increase this
-   conflict coverage;
-5. the query layer checks every missing term against key/content evidence from
+4. for a compact two- or three-token query, a keyed slot signals a possible
+   conflict only when key/content matches exactly `N - 1` raw tokens and exactly
+   one token remains unresolved after both canonical and metadata evidence;
+5. type/data metadata can explain a qualifier and remove it from the unresolved
+   set, but cannot increase key/content canonical coverage;
+6. the query layer checks the unresolved term against key/content evidence from
    other Memories in the same eligible Space/filter corpus;
-6. corpus-supported missing terms preserve normal results and production order;
+7. corpus-supported terms preserve normal results and production order;
    only an unsupported conflict can abstain, while strong exact evidence remains
    protected.
 
@@ -105,6 +108,18 @@ B1.1 false-abstention holdouts:
 | H5 `project database migration` | migration Memory remains returned via corpus support |
 | H6 `database decision history` | type/data metadata cannot manufacture conflict coverage |
 | H7 exact support plus another conflict | exact content result survives |
+
+B1.2 two-token holdouts:
+
+| Holdout | Result |
+| --- | --- |
+| T1 `database SQLite` | empty result without eligible SQLite support |
+| T2 `api v1` | empty result without eligible v1 support |
+| T3 `database migration` | migration Memory remains returned |
+| T4 `api docs` | API docs Memory remains returned |
+| T5 `database decision` | current database remains returned; no global abstention |
+| T6 metadata diagnostic | qualifier is explained but does not add canonical coverage |
+| T7 supported `database SQLite` | SQLite-supporting Memory remains returned |
 
 ## Accepted baseline versus candidate
 
@@ -189,10 +204,10 @@ pnpm memory-space eval quality --compare-stage-a --json
 Recorded local validation on 2026-08-13:
 
 ```text
-focused retrieval + quality tests         PASS — 18/18
-H1–H7 retrieval-policy tests              PASS — 7/7, repeated
-pnpm run check                            PASS — 118/118
-pnpm run check:workspace                  PASS — 118/118
+focused retrieval/eval/MCP/Handoff tests  PASS — 30/30
+H1–H7 + T1–T7 retrieval regressions       PASS
+pnpm run check                            PASS — 120/120
+pnpm run check:workspace                  PASS — 120/120
 quality human CLI                         PASS
 quality JSON CLI                          PASS
 Stage A comparison human CLI              PASS — acceptance gate PASS
