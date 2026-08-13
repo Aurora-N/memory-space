@@ -12,9 +12,11 @@
 
 **CR-PHASE10 hardening commit:** `ea3c50f3c652b431bec0a3f0332c9fbbbade90b1`
 
-**Status:** CR-PHASE10 FIXES IMPLEMENTED / AWAITING RE-REVIEW
+**B1.1 false-abstention hardening commit:** `aecb9ba5e4fad410569fed60036d590604352b12`
 
-This document records the deterministic B1 candidate. It is implementation
+**Status:** B1.1 HARDENING IMPLEMENTED / AWAITING RE-REVIEW
+
+This document records the deterministic B1.1 candidate. It is implementation
 evidence, not reviewer approval and not a universal product-quality SLO.
 B2/B3/B4 have not started.
 
@@ -67,11 +69,15 @@ domain-specific stoplist. The policy is:
 1. exact key/content phrase remains strong;
 2. content/key token overlap establishes ordinary lexical relevance;
 3. type/data-only overlap is allowed only when the actual raw query has one token;
-4. for a compact two- or three-token query, a keyed slot covering at least two
-   thirds of the raw tokens while missing another term signals a possible
-   stale/conflicting value;
-5. unless another eligible Memory has an exact key/content match, that signal
-   makes the whole query abstain instead of returning weaker topic-only results.
+4. for a compact two- or three-token query, a keyed slot whose key/content covers
+   at least two thirds of the raw tokens while missing another term signals a
+   possible stale/conflicting value; type/data matches never increase this
+   conflict coverage;
+5. the query layer checks every missing term against key/content evidence from
+   other Memories in the same eligible Space/filter corpus;
+6. corpus-supported missing terms preserve normal results and production order;
+   only an unsupported conflict can abstain, while strong exact evidence remains
+   protected.
 
 This query-shape/canonical-slot invariant has independent database, API endpoint,
 and Chinese/Han holdouts. No token such as `api`, `auth`, `endpoint`, or a Chinese
@@ -87,6 +93,18 @@ CR-PHASE10 holdout results:
 | current DB PostgreSQL, query `数据库 PostgreSQL` | current Chinese Memory ranks first |
 | `project.api.endpoint` | exact current key ranks first |
 | `v2 orders` | direct current API value ranks first |
+
+B1.1 false-abstention holdouts:
+
+| Holdout | Result |
+| --- | --- |
+| H1 `project database SQLite` | empty result when no eligible SQLite support exists |
+| H2 `project api v1` | empty result when no eligible v1 support exists |
+| H3 `数据库 SQLite` | empty result against current PostgreSQL Memory |
+| H4 `project api docs` | API docs Memory remains returned via corpus support |
+| H5 `project database migration` | migration Memory remains returned via corpus support |
+| H6 `database decision history` | type/data metadata cannot manufacture conflict coverage |
+| H7 exact support plus another conflict | exact content result survives |
 
 ## Accepted baseline versus candidate
 
@@ -105,6 +123,11 @@ CR-PHASE10 holdout results:
 
 The per-K participant counts and every query's eligible corpus size are unchanged.
 All positive queries that were top-1 correct in Stage A remain top-1 correct.
+
+The eval runner uses deterministic eval-only runtime Memory IDs for retrieval
+fixtures. It still records the exact order returned by production search and does
+not sort by fixture logical key. This closes random UUID ties in report tails
+without changing the production comparator or accepted Stage A snapshot.
 
 ## Per-query changes
 
@@ -166,9 +189,10 @@ pnpm memory-space eval quality --compare-stage-a --json
 Recorded local validation on 2026-08-13:
 
 ```text
-focused retrieval/eval/MCP/Handoff tests  PASS — 26/26
-pnpm run check                            PASS — 116/116
-pnpm run check:workspace                  PASS — 116/116
+focused retrieval + quality tests         PASS — 18/18
+H1–H7 retrieval-policy tests              PASS — 7/7, repeated
+pnpm run check                            PASS — 118/118
+pnpm run check:workspace                  PASS — 118/118
 quality human CLI                         PASS
 quality JSON CLI                          PASS
 Stage A comparison human CLI              PASS — acceptance gate PASS

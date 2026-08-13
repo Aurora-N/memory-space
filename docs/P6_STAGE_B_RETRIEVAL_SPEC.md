@@ -1,11 +1,12 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Spec
 
-**Status:** CR-PHASE10 FIXES IMPLEMENTED / AWAITING RE-REVIEW
+**Status:** B1.1 FALSE-ABSTENTION HARDENING IMPLEMENTED / AWAITING RE-REVIEW
 **Phase:** P6 Stage B1  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Stage B1 implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
 **CR-PHASE10 hardening commit:** `ea3c50f3c652b431bec0a3f0332c9fbbbade90b1`
-**Depends on:** `MEMORY_QUALITY_V1_SPEC.md`, `quality/P6_BASELINE.md`, `code-review/CR-PHASE9.md`, `code-review/CR-PHASE10.md`
+**B1.1 hardening commit:** `aecb9ba5e4fad410569fed60036d590604352b12`
+**Depends on:** `MEMORY_QUALITY_V1_SPEC.md`, `quality/P6_BASELINE.md`, `code-review/CR-PHASE9.md`, `code-review/CR-PHASE10.md`, `P6_STAGE_B1_FALSE_ABSTENTION_HARDENING_SPEC.md`
 **Primary goal:** Improve deterministic lexical retrieval precision, ranking, and abstention without changing Memory semantics or introducing semantic infrastructure.
 
 > Stage B1 changes the product retrieval policy, but it does not change what a Memory is, who owns it, how Spaces/Sessions bind, or the six-tool MCP contract.

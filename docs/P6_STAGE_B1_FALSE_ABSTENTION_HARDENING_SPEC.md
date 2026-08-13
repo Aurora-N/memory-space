@@ -1,8 +1,9 @@
 # P6 Stage B1.1 — False-Abstention Hardening Spec
 
-**Status:** READY FOR IMPLEMENTATION  
+**Status:** IMPLEMENTED / AWAITING B1 RE-REVIEW
 **Parent phase:** P6 Stage B1 — Retrieval Precision & Abstention  
 **Reviewed candidate:** `a48df760ebef948393d2fafa0d7e480e8077a417`  
+**Implementation commit:** `aecb9ba5e4fad410569fed60036d590604352b12`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Depends on:** `P6_STAGE_B_RETRIEVAL_SPEC.md`, `code-review/CR-PHASE10.md`, `quality/P6_STAGE_B1_RESULT.md`  
 **B2 / B3 / B4:** NOT AUTHORIZED
@@ -588,6 +589,22 @@ Also run focused retrieval tests containing H1–H7.
 Run both JSON commands twice and confirm deterministic equality / byte-equivalent serialization according to the existing project convention.
 
 Do not claim GitHub CI PASS unless an actual remote check/workflow is visible.
+
+### Recorded implementation evidence — 2026-08-13
+
+The candidate-local conflict signal now exposes key/content matches and missing
+raw query terms separately from type/data metadata matches. `MemorySpace.search()`
+checks every missing conflict term against key/content evidence from other
+eligible Memories. Supported multi-aspect queries continue to normal production
+ranking; unsupported stale-value queries abstain. Strong exact evidence remains
+protected.
+
+All H1–H7 holdouts pass. Accepted Stage A positive metrics remain unchanged,
+negative FP remains `0.000000`, negative abstention remains `1.000000`, new
+accepted retrieval failures remain zero, and top-1 regressions remain zero.
+Both full checks pass `118/118`; quality and comparison JSON each remain
+byte-equivalent across two CLI processes. This is implementation evidence, not
+reviewer PASS or freeze authority.
 
 ---
 
