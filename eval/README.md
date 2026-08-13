@@ -81,6 +81,11 @@ eval/quality/baselines/p6-stage-a.json
 
 The snapshot must be generated from the accepted Stage A reference and contain stable summary/per-query evidence without runtime UUIDs.
 
+Snapshot schema v2 also freezes query text, relevant logical keys,
+positive/negative classification, family/type/tier/status filters, and eligible
+corpus size. These contract fields were added without regenerating accepted Stage
+A returned results or metrics through the B1 implementation.
+
 Stage B1 candidate evaluation compares that immutable before-state with the new deterministic runner output and reports:
 
 ```text

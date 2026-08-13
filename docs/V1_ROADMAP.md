@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B1 Retrieval Precision & Abstention — IMPLEMENTED / AWAITING REVIEW
+**Current phase:** P6 Stage B1 Retrieval Precision & Abstention — CR-PHASE10 FIXED / AWAITING RE-REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`
 
@@ -44,7 +44,7 @@ P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 P5 — Productization                            COMPLETE / REVIEW PASS
 P6 — Memory Quality v1
      Stage A deterministic baseline            COMPLETE / REVIEW PASS
-     Stage B1 Retrieval Precision & Abstention IMPLEMENTED / AWAITING REVIEW
+     Stage B1 Retrieval Precision & Abstention CR-PHASE10 FIXED / AWAITING RE-REVIEW
      Stage B2 Extraction Quality               NOT AUTHORIZED
      Stage B3 Core/Handoff Pollution            NOT AUTHORIZED
      Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
@@ -137,7 +137,7 @@ Negative abstention         0.000000
 
 Stage A deliberately did not modify production extraction/retrieval algorithms.
 
-## 4.2 Stage B1 — Retrieval Precision & Abstention — AWAITING REVIEW
+## 4.2 Stage B1 — Retrieval Precision & Abstention — AWAITING RE-REVIEW
 
 **Normative execution spec:** [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md)
 
@@ -167,9 +167,9 @@ accepted Stage A machine-readable snapshot
 
 B1 must preserve accepted Stage A ground-truth labels and hard correctness invariants.
 
-The deterministic candidate meets the local delta gate: P@1/R@1 improve to
-0.818182/0.772727, the negative-query false-positive rate falls to 0, and
-abstention rises to 1. The committed comparison and detailed limitations are in
+The CR-PHASE10-hardened candidate meets the local delta gate: P@1/R@1 remain at
+the accepted 0.727273/0.681818 baseline, the negative-query false-positive rate
+falls to 0, and abstention rises to 1. The committed comparison and detailed limitations are in
 [`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md).
 
 B1 completes only after reviewer approval. The Coding Agent must stop before B2/B3/B4.

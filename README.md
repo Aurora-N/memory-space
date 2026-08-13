@@ -131,11 +131,12 @@ Handoff completeness        1.000000
 Duplicate-memory rate       0.500000
 ```
 
-**P6 Stage B1 — Retrieval Precision & Abstention** is implemented and awaiting
-code/quality review. The candidate uses provider-neutral field-aware lexical
-evidence and explicit abstention. Against the accepted Stage A snapshot, P@1/R@1
-improve to 0.818182/0.772727, negative false positives fall from 1.0 to 0, and
-negative abstention rises from 0 to 1.0. This does not authorize embeddings,
+**P6 Stage B1 — Retrieval Precision & Abstention** has CR-PHASE10 fixes implemented
+and is awaiting re-review. The candidate uses provider-neutral field-aware lexical
+evidence and explicit abstention. After CR-PHASE10 hardening removed the
+query-independent type prior, P@1/R@1 truthfully remain at the accepted baseline
+of 0.727273/0.681818; negative false positives fall from 1.0 to 0 and negative
+abstention rises from 0 to 1.0. This does not authorize embeddings,
 vector search, extractor changes, Core/Handoff policy changes, or semantic dedup.
 
 See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) and
@@ -151,7 +152,7 @@ P5 Productization
 
 P6 Memory Quality v1
 → Stage A deterministic baseline COMPLETE / REVIEW PASS
-→ Stage B1 Retrieval Precision & Abstention IMPLEMENTED / AWAITING REVIEW
+→ Stage B1 Retrieval Precision & Abstention CR-PHASE10 FIXED / AWAITING RE-REVIEW
 → B2/B3/B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
@@ -210,7 +211,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 Retrieval Precision & Abstention is implemented and awaiting code/quality review. B2/B3/B4 have not started.**
+**P6 Memory Quality v1: Stage A deterministic baseline PASS after CR-PHASE9. Stage B1 CR-PHASE10 fixes are implemented and awaiting re-review. B2/B3/B4 have not started.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 

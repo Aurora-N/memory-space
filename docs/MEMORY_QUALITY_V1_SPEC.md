@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 IMPLEMENTED / AWAITING REVIEW
+**Status:** Stage A ACCEPTED; Stage B1 CR-PHASE10 FIXED / AWAITING RE-REVIEW
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -195,7 +195,7 @@ It is decomposed so one change class can be attributed to one measured outcome:
 
 ```text
 B1 — Retrieval Precision & Abstention
-     IMPLEMENTED / AWAITING REVIEW
+     CR-PHASE10 FIXED / AWAITING RE-REVIEW
 
 B2 — Extraction Generalization & Transient Rejection
      NOT AUTHORIZED

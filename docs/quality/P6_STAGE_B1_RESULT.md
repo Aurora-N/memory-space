@@ -1,6 +1,6 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Result
 
-**Date:** 2026-08-12
+**Date:** 2026-08-13
 
 **Branch:** `agent/memory-quality-v1`
 
@@ -10,7 +10,9 @@
 
 **Implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
 
-**Status:** IMPLEMENTED / AWAITING CODE AND QUALITY REVIEW
+**CR-PHASE10 hardening commit:** `ea3c50f3c652b431bec0a3f0332c9fbbbade90b1`
+
+**Status:** CR-PHASE10 FIXES IMPLEMENTED / AWAITING RE-REVIEW
 
 This document records the deterministic B1 candidate. It is implementation
 evidence, not reviewer approval and not a universal product-quality SLO.
@@ -49,32 +51,49 @@ Centralized evidence weights:
 | type token | 2 each |
 | matched-token coverage | up to 10 |
 | canonical key tie prior | 2 |
-| canonical working-state type tie prior | 1 |
 
-The two small priors cannot outweigh one content token. They resolve otherwise
-equal lexical evidence in favor of canonical keyed/working-state Memory while the
-existing deterministic `updatedAt`/`id` order remains the final tie breaker.
+`canonicalType` was removed during CR-PHASE10 hardening. Stage B1 no longer gives
+`decision`, `task`, or other working-state types a query-independent preference.
+The semantic target therefore returns to its accepted Stage A rank instead of
+being promoted merely because it is a `decision`.
 
-Broad structural nouns (`current`, `database`, `memory`, `project`, `storage`)
-remain useful as a complete one-token query. In a mixed query that contains a
-more discriminating term, they cannot independently establish relevance. This
-is why `database` can retrieve current database Memory while `project database
-SQLite` abstains when no eligible active Memory contains `SQLite` evidence.
-When a multi-token query consists only of broad structural nouns, all tokens must
-be covered unless an exact key/content phrase matches; `project.database` therefore
-does not expose unrelated Memories that match only `project`.
+`canonicalKey` remains a +2 ranking prior, explicitly separate from lexical
+evidence. An independent holdout proves that one content-token match (+12) ranks
+above a candidate receiving only key-token evidence and this prior.
 
-A candidate is relevant when it has an exact key/content phrase, a content/key
-token match, or—for a one-token query only—a type/data token match. Multi-token
-type/data-only overlap is insufficient. A non-empty query with no qualifying
-candidate returns an empty list.
+`BROAD_QUERY_TOKENS` was removed. Raw query tokens are never collapsed by a
+domain-specific stoplist. The policy is:
+
+1. exact key/content phrase remains strong;
+2. content/key token overlap establishes ordinary lexical relevance;
+3. type/data-only overlap is allowed only when the actual raw query has one token;
+4. for a compact two- or three-token query, a keyed slot covering at least two
+   thirds of the raw tokens while missing another term signals a possible
+   stale/conflicting value;
+5. unless another eligible Memory has an exact key/content match, that signal
+   makes the whole query abstain instead of returning weaker topic-only results.
+
+This query-shape/canonical-slot invariant has independent database, API endpoint,
+and Chinese/Han holdouts. No token such as `api`, `auth`, `endpoint`, or a Chinese
+translation was added to a vocabulary.
+
+CR-PHASE10 holdout results:
+
+| Holdout | Result |
+| --- | --- |
+| `database decision` | current database Memory is retained; unrelated `decision` type-only Memory is excluded |
+| current API `/v2/orders`, query `project api v1` | empty result / abstain |
+| current DB PostgreSQL, query `数据库 SQLite` | empty result / abstain |
+| current DB PostgreSQL, query `数据库 PostgreSQL` | current Chinese Memory ranks first |
+| `project.api.endpoint` | exact current key ranks first |
+| `v2 orders` | direct current API value ranks first |
 
 ## Accepted baseline versus candidate
 
 | Metric | Stage A | B1 candidate | Delta | Queries |
 | --- | ---: | ---: | ---: | ---: |
-| P@1 | 0.727273 | 0.818182 | +0.090909 | 11 |
-| R@1 | 0.681818 | 0.772727 | +0.090909 | 11 |
+| P@1 | 0.727273 | 0.727273 | 0 | 11 |
+| R@1 | 0.681818 | 0.681818 | 0 | 11 |
 | P@3 | 0.303030 | 0.303030 | 0 | 11 |
 | R@3 | 0.818182 | 0.818182 | 0 | 11 |
 | P@5 | 0.180000 | 0.180000 | 0 | 10 |
@@ -91,9 +110,12 @@ All positive queries that were top-1 correct in Stage A remain top-1 correct.
 
 Improved:
 
-- `semantic-target-loses-to-overlap`: `retrieval.decision.rate-limit` moves from
-  rank 2 to rank 1 over the same-token local storage fact.
 - `long-old-sqlite-decision`: seven false-positive results become an empty result.
+
+The provisional `semantic-target-loses-to-overlap` rank-1 improvement was removed
+with `canonicalType`. Its relevant Memory remains at rank 2, matching Stage A and
+preserving Recall@3 without claiming lexical evidence for `throttling → rate
+limiting`.
 
 No positive query regressed at top 1 or at its reported P@K/R@K values. Some
 returned tails changed because candidates with only broad/non-qualifying evidence
@@ -124,8 +146,15 @@ provenance, inactive bootstrap exclusion, latest Handoff boundary, keyed current
 state, and the exact shared six-tool MCP surface.
 
 The committed comparison validates the Stage A snapshot schema/version, candidate
-query identity and eligible corpus, per-K query counts, all required delta gates,
-deep-rank diagnostics, and per-query top-1 non-regression.
+query identity/text/relevant keys/filters/classification and eligible corpus,
+per-K query counts, all required delta gates, no-new-failure policy, deep-rank
+diagnostics, and per-query top-1 non-regression. Snapshot schema v2 only adds this
+contract metadata; all accepted returned results and metrics still originate from
+`9490ebc`.
+
+Mutation tests independently reject changed query text, relevant keys,
+classification, filters, query set, and eligible corpus. Aggregate per-K query
+counts remain checked separately by the acceptance report.
 
 Commands:
 
@@ -134,18 +163,18 @@ pnpm memory-space eval quality --compare-stage-a
 pnpm memory-space eval quality --compare-stage-a --json
 ```
 
-Recorded local validation on 2026-08-12:
+Recorded local validation on 2026-08-13:
 
 ```text
-focused retrieval/eval/MCP/Handoff tests  PASS — 24/24
-pnpm run check                            PASS — 114/114
-pnpm run check:workspace                  PASS — 114/114
+focused retrieval/eval/MCP/Handoff tests  PASS — 26/26
+pnpm run check                            PASS — 116/116
+pnpm run check:workspace                  PASS — 116/116
 quality human CLI                         PASS
 quality JSON CLI                          PASS
 Stage A comparison human CLI              PASS — acceptance gate PASS
 Stage A comparison JSON CLI               PASS — acceptance gate PASS
-two quality JSON serializations           PASS — byte-equivalent, 24,644 bytes
-two comparison JSON serializations        PASS — byte-equivalent, 16,053 bytes
+two quality JSON CLI runs                  PASS — byte-equivalent, 25,260 bytes
+two comparison JSON CLI runs               PASS — byte-equivalent, 18,216 bytes
 Codex P2 runner self-test                  PASS
 Claude P3 runner self-test                 PASS
 ```

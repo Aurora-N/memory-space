@@ -1,10 +1,11 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Spec
 
-**Status:** IMPLEMENTED / AWAITING CODE AND QUALITY REVIEW
+**Status:** CR-PHASE10 FIXES IMPLEMENTED / AWAITING RE-REVIEW
 **Phase:** P6 Stage B1  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Stage B1 implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
-**Depends on:** `MEMORY_QUALITY_V1_SPEC.md`, `quality/P6_BASELINE.md`, `code-review/CR-PHASE9.md`  
+**CR-PHASE10 hardening commit:** `ea3c50f3c652b431bec0a3f0332c9fbbbade90b1`
+**Depends on:** `MEMORY_QUALITY_V1_SPEC.md`, `quality/P6_BASELINE.md`, `code-review/CR-PHASE9.md`, `code-review/CR-PHASE10.md`
 **Primary goal:** Improve deterministic lexical retrieval precision, ranking, and abstention without changing Memory semantics or introducing semantic infrastructure.
 
 > Stage B1 changes the product retrieval policy, but it does not change what a Memory is, who owns it, how Spaces/Sessions bind, or the six-tool MCP contract.
@@ -215,6 +216,10 @@ Exact scoring weights are implementation details, but they must be centralized, 
 
 Generic structural key tokens must not dominate discriminating content evidence.
 
+`canonicalKey` is a small ranking prior for canonical keyed slots, not lexical
+evidence. It must remain weaker than one content-token match. Stage B1 does not
+apply a query-independent Memory-type prior.
+
 ### 6.3 Explicit relevance / abstention gate
 
 Search relevance must be a deliberate policy rather than an incidental `score > 0` filter.
@@ -232,6 +237,15 @@ score lexical evidence
 The relevance decision should be represented by a named helper/policy rather than a magic inline threshold when practical.
 
 Do not tune a single threshold solely because it removes the current `project database SQLite` fixture. The policy must have a semantic explanation and regression coverage beyond that one query.
+
+The hardened B1 policy retains every normalized raw query token; there is no
+English/domain stoplist. A true one-token query may use type/data evidence, while
+a multi-token query requires content/key evidence. For a compact two- or
+three-token query, an active keyed slot that covers at least two thirds of the
+query but lacks another supplied term signals a possible stale/conflicting value.
+Unless another eligible Memory has an exact key/content match, the search
+abstains rather than falling back to weaker topic-only results. The same rule is
+covered for database, API endpoint, and Han-token queries.
 
 ### 6.4 Preserve existing filters
 
@@ -301,6 +315,8 @@ The snapshot should contain enough stable data for before/after comparison, incl
 summary retrieval metrics
 negative retrieval metrics
 per-query classification
+per-query query text and relevant logical keys
+per-query family/type/tier/status filters
 per-query eligibleCorpusSize
 per-query returned logical keys
 per-query P@K/R@K values
@@ -312,6 +328,11 @@ Do not include random runtime UUIDs or machine-specific temporary paths.
 The snapshot is evidence, not an alternate source of truth for expected relevance. JSON fixture ground truth remains authoritative.
 
 A test should validate the committed snapshot schema/version and should fail if comparison code silently reads an incompatible baseline format.
+
+The CR-PHASE10 schema is version 2. It adds reviewable fixture-contract metadata
+without replacing any accepted Stage A output from `9490ebc`. Comparison rejects
+query-set, query-text, relevance-label, classification, filter, and eligible-corpus
+mutation before comparing candidate metrics.
 
 ---
 
@@ -406,19 +427,15 @@ P@1                         >= 0.727273
 P@3                         >= 0.303030
 R@1                         >= 0.681818
 R@3                         >= 0.818182
+P@5                         >= 0.180000
+R@5                         >= 0.800000
+P@10                        >= 0.090000
+R@10                        >= 0.800000
 ```
 
-And at least one of these positive-query precision signals must strictly improve:
-
-```text
-P@1 > 0.727273
-OR
-P@3 > 0.303030
-OR
-positive-query top-K failure count decreases with no new top-1 regression
-```
-
-P@5/P@10 remain reported diagnostics. They must not hide a regression, but B1 optimization should prioritize useful top ranks rather than maximizing low-value deep-list precision.
+The candidate must add no accepted-fixture retrieval failure. A strict positive
+precision increase is not required; this avoids incentivizing a query-independent
+ranking prior merely to improve a benchmark aggregate.
 
 ### 10.4 Per-query non-regression
 
@@ -588,12 +605,12 @@ Report:
 19. GitHub CI status if observed;
 20. recommendation: stop at lexical B1 or request semantic-recall architecture review.
 
-End with:
+For the CR-PHASE10 re-review pass, end with:
 
 ```text
-P6 Stage B1 implementation complete.
+P6 Stage B1 CR-PHASE10 fixes implemented.
 B2/B3/B4 NOT started.
-Awaiting Stage B1 code/quality review.
+Awaiting B1 re-review.
 ```
 
 Do not mark B1 review PASS yourself.

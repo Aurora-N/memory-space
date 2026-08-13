@@ -236,7 +236,10 @@ test("MemorySpace search applies field relevance, abstention, filters, and limit
       limit: 1
     });
     assert.equal(limited.length, 1, "limit is applied after relevance filtering/ranking");
-    assert.equal(limited[0]?.memory.id, bucketDistractor.id);
+    assert.ok(
+      [rateLimit.id, bucketDistractor.id].includes(limited[0]!.memory.id),
+      "an equally relevant bucket Memory is retained before limit"
+    );
   } finally {
     await memorySpace.close();
   }
