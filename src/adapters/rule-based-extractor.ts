@@ -59,7 +59,12 @@ const durableEnglishSubjectClasses = [
 const durableChineseSubjectClasses = [
   /^(?:项目|团队|服务|系统|数据库)/u,
   /(?:API|接口|凭证|令牌|配置|组件)/iu,
-  /(?:发布|迁移|部署|构建流程|流水线)/u
+  /(?:发布|上线|迁移|部署|里程碑|构建流程|流水线)/u
+] as const;
+
+const durableProjectBoundaryShapes = [
+  /^(?:(?:项目|团队|服务|系统|数据库|生产|正式|版本)(?:的)?)?(?:发布|上线|部署|迁移)(?:阶段|窗口|节点|里程碑)?$/u,
+  /^(?:项目|团队|服务|系统)(?:的)?(?:阶段|里程碑|交付节点)$/u
 ] as const;
 
 function isInteractionLocalSubject(subject: string): boolean {
@@ -74,6 +79,11 @@ function hasDurableProjectSubject(subject: string): boolean {
   if (isInteractionLocalSubject(subject)) return false;
   return durableEnglishSubjectClasses.some((pattern) => pattern.test(subject))
     || durableChineseSubjectClasses.some((pattern) => pattern.test(subject));
+}
+
+function hasDurableProjectScope(scope: string): boolean {
+  return hasDurableProjectSubject(scope)
+    && durableProjectBoundaryShapes.some((pattern) => pattern.test(scope.trim()));
 }
 
 function explicitDefinition(line: string): MatchedDefinition | undefined {
@@ -124,8 +134,12 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const durableTask = /^(?:(?:the\s+)?project(?:'s)?\s+(?:next\s+(?:phase|milestone)\s+)?(?:must|needs?\s+to|plans?\s+to)|before\s+.+?,?\s+(?:the\s+)?project\s+(?:must|needs?\s+to))\s+(?:complete|implement|deliver|migrate|prepare|finish|ship|add|remove|upgrade|deploy)\b.+$/iu.test(line)
-    || /^(?:(?:项目|团队)(?:的)?(?:下一阶段|下个阶段|下一里程碑)(?:需要|必须|计划)|.+(?:前|之前)必须)\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u.test(line);
+  const englishDurableTask = /^(?:(?:the\s+)?project(?:'s)?\s+(?:next\s+(?:phase|milestone)\s+)?(?:must|needs?\s+to|plans?\s+to)|before\s+.+?,?\s+(?:the\s+)?project\s+(?:must|needs?\s+to))\s+(?:complete|implement|deliver|migrate|prepare|finish|ship|add|remove|upgrade|deploy)\b.+$/iu.test(line);
+  const chineseProjectTask = /^(?:项目|团队)(?:的)?(?:下一阶段|下个阶段|下一里程碑)(?:需要|必须|计划)\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u.test(line);
+  const chineseBoundaryTask = line.match(/^(.+?)(?:之前|前)必须\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u);
+  const durableTask = englishDurableTask
+    || chineseProjectTask
+    || Boolean(chineseBoundaryTask && hasDurableProjectScope(chineseBoundaryTask[1]));
   if (durableTask) {
     return candidateFromDefinition(
       { family: "state", type: "task", core: true },
@@ -134,6 +148,7 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
       0.86
     );
   }
+  if (chineseBoundaryTask) return undefined;
 
   const englishConstraint = line.match(/^(.+?)\s+(?:must(?:\s+not)?|shall(?:\s+not)?|is\s+required\s+to)\s+.+$/iu);
   const chineseConstraint = line.match(/^(.+?)(?:必须|不得|只能).+[。！？]?$/u);

@@ -360,3 +360,28 @@ test("B2.1 preserves keyed database and explicit current-task compatibility", as
     { type: "task", key: "project.task.current", content: "完成 迁移回滚演练" }
   ]);
 });
+
+test("T1-T4 natural Chinese tasks require a durable project boundary", async () => {
+  assert.deepEqual(await extract([
+    "回复前必须完成测试。",
+    "输出结果前必须完成测试。",
+    "迁移测试输出结果前必须完成检查。"
+  ].join("\n")), []);
+
+  const durable = await extract([
+    "发布前必须完成 migration 回滚演练。",
+    "部署前必须完成数据库迁移。",
+    "上线之前必须完成回滚验证。",
+    "项目里程碑之前必须完成兼容性验证。"
+  ].join("\n"));
+  assert.deepEqual(durable.map(({ family, type, recommendedTier }) => ({
+    family,
+    type,
+    recommendedTier
+  })), [
+    { family: "state", type: "task", recommendedTier: "core" },
+    { family: "state", type: "task", recommendedTier: "core" },
+    { family: "state", type: "task", recommendedTier: "core" },
+    { family: "state", type: "task", recommendedTier: "core" }
+  ]);
+});
