@@ -16,11 +16,12 @@
 
 **B1.2 two-token hardening commit:** `e50d46846900c0d4281af0480fd0e90a596ac6b9`
 
-**Status:** REVIEW PASS / FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 
 This document records the reviewed and frozen deterministic B1 result. Its
-metrics are benchmark evidence, not a universal product-quality SLO. B2 is
-separately authorized; B3/B4 remain unstarted.
+metrics are benchmark evidence, not a universal product-quality SLO. B2 later
+completed review and is also frozen. The B3 spec is drafted but implementation
+has not started; B4 remains unauthorized.
 
 ## Change boundary
 

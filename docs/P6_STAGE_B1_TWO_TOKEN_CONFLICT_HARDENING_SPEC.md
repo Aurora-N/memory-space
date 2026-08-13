@@ -1,6 +1,6 @@
 # P6 Stage B1.2 — Two-Token Conflict Hardening Spec
 
-**Status:** REVIEW PASS / FROZEN WITH STAGE B1
+**Status:** COMPLETE / REVIEW PASS / FROZEN WITH STAGE B1
 **Parent phase:** P6 Stage B1 — Retrieval Precision & Abstention  
 **Previous hardening:** P6 Stage B1.1 — False-Abstention Hardening  
 **Reviewed candidate:** `5dcb14890caa74c610fae877ac3af6dd6c43a72c`  
@@ -8,8 +8,8 @@
 **B1.2 implementation:** `e50d46846900c0d4281af0480fd0e90a596ac6b9`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Depends on:** `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B1_FALSE_ABSTENTION_HARDENING_SPEC.md`, `code-review/CR-PHASE10.md`, `quality/P6_STAGE_B1_RESULT.md`  
-**B2:** AUTHORIZED AFTER B1 FREEZE
-**B3 / B4:** NOT AUTHORIZED
+**Historical next phase at B1 freeze:** B2 AUTHORIZED; B3/B4 NOT AUTHORIZED
+**Current later-phase status:** B2 FROZEN; B3 SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW; B4 NOT AUTHORIZED
 
 > This is the final narrow lexical-policy hardening requested before Stage B1 can be considered for freeze. It fixes the two-token stale/conflicting-value gap without reopening the B1 architecture or introducing semantic retrieval.
 

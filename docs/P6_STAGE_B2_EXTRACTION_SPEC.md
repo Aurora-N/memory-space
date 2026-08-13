@@ -1,6 +1,6 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Spec
 
-**Status:** B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW — NOT PASS / NOT FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Parent phase:** P6 Memory Quality  
 **Prerequisite:** P6 Stage B1 Retrieval Precision & Abstention — REVIEW PASS / FROZEN
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
@@ -8,13 +8,15 @@
 **B2 implementation:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`
 **B2.1 durability/eval hardening:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Final-review task-boundary hardening:** `4655124`
-**B3 / B4:** NOT AUTHORIZED
+**Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
+**B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**B4:** NOT AUTHORIZED
 
 > Stage B2 improves deterministic checkpoint-derived Memory candidate extraction only. It must not reopen retrieval, Core/Handoff policy, semantic deduplication, provider integration, storage semantics, or MCP contracts.
 
 ---
 
-## 1. Phase transition
+## 1. Historical phase transition before B2 implementation
 
 Before implementing B2, update project status so B1 is explicitly closed.
 
@@ -1010,9 +1012,10 @@ Remaining unsupported natural-language variants should be recorded as capability
 
 ---
 
-## 25. Completion statement
+## 25. Historical implementation handoff statement
 
-The Agent must end its report with:
+Before reviewer approval, the implementation Agent was required to end its report
+with:
 
 ```text
 P6 Stage B2 extraction generalization and transient rejection implemented.
@@ -1023,4 +1026,9 @@ P6 Stage B3/B4 NOT started.
 Awaiting B2 code review.
 ```
 
-The Agent must not self-mark B2 as `PASS`, `ACCEPTED`, or `FROZEN`.
+At that historical implementation point, the Agent was not permitted to
+self-mark B2 as `PASS`, `ACCEPTED`, or `FROZEN`. Final review subsequently passed
+at `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`; B2 is now frozen. Further
+Core/Handoff admission work is specified separately in
+`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md` and is not yet authorized for
+implementation.

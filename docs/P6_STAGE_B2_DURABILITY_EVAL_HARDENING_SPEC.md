@@ -1,15 +1,17 @@
 # P6 Stage B2.1 — Durability Boundary & Extraction Eval Hardening Spec
 
-**Status:** IMPLEMENTED / AWAITING B2 FINAL RE-REVIEW — NOT PASS / NOT FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Parent phase:** P6 Stage B2 — Extraction Generalization & Transient Rejection  
 **Current reviewed branch:** `agent/memory-quality-v1`  
 **Reviewed head:** `97d61c2a1287f9185247a4404f5a93f39f1d9dc1`  
 **B2 implementation under review:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`  
 **B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Final-review task-boundary hardening:** `4655124`
+**Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **P6 Stage B1:** REVIEW PASS / FROZEN  
-**P6 Stage B3 / B4:** NOT AUTHORIZED
+**P6 Stage B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**P6 Stage B4:** NOT AUTHORIZED
 
 > B2.1 is a narrow review hardening pass. It does not reopen B1 and does not authorize B3/B4. It closes the remaining durability-boundary and evaluator-contract blockers found during B2 code review.
 
@@ -1141,9 +1143,9 @@ Semantic extraction/dedup architecture changes require separate review and are n
 
 ---
 
-# 24. Required final handoff statement
+# 24. Historical implementation handoff statement
 
-End the implementation report with:
+Before final reviewer approval, the implementation report ended with:
 
 ```text
 P6 Stage B2.1 durability-boundary and extraction-eval hardening implemented.
@@ -1154,4 +1156,7 @@ P6 Stage B3/B4 NOT started.
 Awaiting B2 final re-review.
 ```
 
-Do not self-mark B2 as PASS, ACCEPTED, or FROZEN.
+At that historical implementation point, the Agent did not self-mark B2 as PASS,
+ACCEPTED, or FROZEN. Final review subsequently passed at
+`e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`; B2 is now frozen. B3 has only a
+draft spec and remains unauthorized for implementation. B4 remains unauthorized.

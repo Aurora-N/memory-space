@@ -104,10 +104,10 @@ hard correctness result
 
 Do not overwrite Stage A baseline evidence with candidate values, and do not change accepted fixture relevance labels merely to improve scores.
 
-Stage B1 changes lexical relevance/ranking only and is frozen. The Stage B2.1
-durability/eval-hardened extraction candidate awaits final re-review;
-Core/Handoff policy, semantic dedup, embeddings/vector search, and new providers
-remain out of scope.
+Stage B1 changes lexical relevance/ranking only and is frozen. Stage B2 changes
+deterministic extraction/transient rejection only and is also reviewed/frozen.
+The B3 Core/Handoff policy spec is drafted, but implementation is not authorized;
+semantic dedup, embeddings/vector search, and new providers remain out of scope.
 
 The comparison command exits non-zero when the Stage B1 delta gate or accepted
 hard-correctness checks fail. Regular `eval quality` still separates observational
@@ -136,3 +136,8 @@ correctness, and the B2 acceptance gate. It does not run or relabel the B1
 retrieval comparison.
 
 Candidate evidence: [`../docs/quality/P6_STAGE_B2_RESULT.md`](../docs/quality/P6_STAGE_B2_RESULT.md).
+
+The proposed B3 baseline/comparison contract is design-only and is documented in
+[`../docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](../docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md).
+No B3 baseline artifact or comparison command exists until implementation is
+separately authorized.

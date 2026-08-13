@@ -1,17 +1,19 @@
 # P6 Stage B2 — Extraction Generalization & Transient Rejection Result
 
-**Status:** B2 FINAL TASK-BOUNDARY HARDENING IMPLEMENTED / AWAITING FINAL RE-REVIEW — NOT PASS / NOT FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Source of Truth:** `docs/P6_STAGE_B2_EXTRACTION_SPEC.md`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Frozen B1 documentation commit:** `752abf7311bb3016e1184ab7435b195d0d6d22ac`
 **B2 implementation:** `12acd96ddada0b88d776ddaac77e6b05a6b16a4b`
 **B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Task-boundary hardening:** `4655124`
-**B3 / B4:** NOT STARTED / NOT AUTHORIZED
+**Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
+**B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**B4:** NOT AUTHORIZED
 
-This document records the measured Stage A extraction failures and the completed
-B2 candidate evidence. It is implementation evidence, not reviewer approval. B2
-does not modify the frozen retrieval policy or any downstream Core/Handoff policy.
+This document records the measured Stage A extraction failures, the reviewed B2
+candidate evidence, and the final freeze decision. B2 does not modify the frozen
+retrieval policy or any downstream Core/Handoff policy.
 
 ## Accepted before-state
 
@@ -307,9 +309,9 @@ GitHub CI                               not independently confirmed
 Production changes remain confined to the deterministic extractor. Frozen B1
 lexical retrieval/search ordering, extractor port, domain, storage, provider
 adapters/lifecycle, MCP, checkpoint/Handoff generation, Core promotion, Space
-binding, and accepted fixture labels were not changed. B3/B4 remain unstarted;
-the known Core/Handoff pollution and semantic duplicate limitations remain
-inputs for separately authorized stages.
+binding, and accepted fixture labels were not changed. At that implementation
+handoff, B3/B4 remained unstarted; the known Core/Handoff pollution and semantic
+duplicate limitations were recorded as inputs for separately authorized stages.
 
 ## Final-review task-boundary hardening
 
@@ -361,4 +363,40 @@ above. The production semantic diff for this follow-up is limited to
 `src/adapters/rule-based-extractor.ts`; B1 retrieval and B3/B4 surfaces are
 unchanged.
 
-P6 Stage B2 is not marked PASS or frozen. B3/B4 have not started.
+## B2 freeze record
+
+Final review at `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
+returned `P6 Stage B2 CODE REVIEW = PASS` and `P6 Stage B2 = READY TO
+FREEZE`. The current phase status is therefore COMPLETE / REVIEW PASS / FROZEN.
+
+| Evidence | Frozen result |
+| --- | --- |
+| Accepted Stage A extraction | 4 TP / 1 FP / 2 FN |
+| Accepted Stage A precision / recall | 0.800000 / 0.666667 |
+| Frozen B2 extraction | 6 TP / 0 FP / 0 FN |
+| Frozen B2 precision / recall | 1.000000 / 1.000000 |
+| New FP / FN | 0 / 0 |
+| B2 extraction comparison | PASS; all six gates |
+| Stage A extraction contract | FROZEN |
+| E1–E10 | PASS |
+| D1–D12 | PASS |
+| Final task-boundary holdouts | PASS |
+| Whole-quality regression | PASS / no regression |
+| GitHub CI | not independently confirmed |
+
+The earlier `awaiting review` and `NOT PASS / NOT FROZEN` statements in this
+document describe historical implementation handoff points before reviewer
+approval; they are not the current phase status.
+
+After B2 freeze, each of the following requires a new architecture/phase review:
+
+- adding natural-language extraction grammar;
+- expanding the durable-subject vocabulary;
+- adding a transient stoplist;
+- modifying the Stage A extraction fixture;
+- modifying the B2 extraction acceptance contract.
+
+The current conservative deterministic extraction boundary is an accepted v1
+capability boundary. Do not continue adding regular expressions merely to raise
+natural-language recall. B3 may review Core/Handoff admission for already-valid
+Memory, but its production implementation has not started. B4 is not authorized.

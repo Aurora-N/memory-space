@@ -7,8 +7,8 @@
 **CR-PHASE9 metric hardening commit:** `1fab987197fb46618769c601b898d80d6ef6fd87`
 **CR-PHASE9 tie-fixture commit:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`
 **Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
-**Status:** ACCEPTED — CR-PHASE9 REVIEW PASS
-**Follow-up:** P6 Stage B1 REVIEW PASS / FROZEN; Stage B2.1 extraction hardening implemented / awaiting final re-review
+**Status:** COMPLETE / REVIEW PASS / FROZEN — CR-PHASE9
+**Follow-up:** P6 Stage B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 spec drafted / implementation awaiting review; B4 not authorized
 
 This document is the immutable historical Stage A before-state for later quality comparisons. It records the current production Memory implementation before Stage B product retrieval changes.
 
@@ -175,12 +175,14 @@ The measured risks rank as:
 3. **Core/Handoff transient pollution control — high impact, low-to-medium risk.** One of nine Core items is over-local, and two unexpected Handoff facts repeat it.
 4. **Semantic dedup for unkeyed paraphrases — visible impact, high semantic and migration risk.** The measured rate is 2/4, while keyed dedup is already correct.
 
-This historical ranking initially authorized Stage B1. B1 is now frozen, and B2
-is separately authorized. See:
+This historical ranking initially authorized Stage B1. B1 and B2 are now
+reviewed and frozen. The B3 spec is drafted but not authorized for
+implementation. See:
 
 ```text
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 docs/P6_STAGE_B2_EXTRACTION_SPEC.md
+docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md
 ```
 
 Stage B1 must preserve this document as the accepted before-state. Candidate metrics belong in a separate B1 result/comparison document rather than replacing these values.

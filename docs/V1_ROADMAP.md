@@ -1,9 +1,9 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B2.1 Durability Boundary & Extraction Eval Hardening — IMPLEMENTED / AWAITING FINAL RE-REVIEW
+**Current phase:** P6 Stage B3 Core/Handoff Pollution Policy — SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
-**Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`
+**Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 
 ---
 
@@ -43,10 +43,10 @@ P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
 P5 — Productization                            COMPLETE / REVIEW PASS
 P6 — Memory Quality v1
-     Stage A deterministic baseline            COMPLETE / REVIEW PASS
+     Stage A deterministic baseline            COMPLETE / REVIEW PASS / FROZEN
      Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
-     Stage B2 Extraction Quality               B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW
-     Stage B3 Core/Handoff Pollution            NOT AUTHORIZED
+     Stage B2 Extraction Quality               COMPLETE / REVIEW PASS / FROZEN
+     Stage B3 Core/Handoff Pollution            SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
      Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
 
 P7 — Optional MCP-first Provider Validation    OPTIONAL
@@ -77,7 +77,7 @@ The CLI remains a loopback daemon client rather than a second SQLite owner. CR-P
 
 **Umbrella spec:** [`MEMORY_QUALITY_V1_SPEC.md`](./MEMORY_QUALITY_V1_SPEC.md)
 
-## 4.1 Stage A — Deterministic baseline — COMPLETE / REVIEW PASS
+## 4.1 Stage A — Deterministic baseline — COMPLETE / REVIEW PASS / FROZEN
 
 The accepted deterministic baseline lives under `eval/quality/` and is exposed through:
 
@@ -175,20 +175,29 @@ falls to 0, and abstention rises to 1. The committed comparison and detailed lim
 B1 completed reviewer approval and is frozen. Its production retrieval behavior
 is the non-regression baseline for B2.
 
-## 4.3 Stage B2 — Extraction Generalization & Transient Rejection — AWAITING FINAL RE-REVIEW
+## 4.3 Stage B2 — Extraction Generalization & Transient Rejection — COMPLETE / REVIEW PASS / FROZEN
 
 B2 is implemented under [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md),
 with the B2.1 durability/eval hardening governed by
 [`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](./P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md).
-It is awaiting final re-review. Its candidate changes deterministic checkpoint
-extraction, transient rejection, and extraction evaluation only.
+B2 completed final review at `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
+and is frozen. Its reviewed changes are limited to deterministic checkpoint
+extraction, transient rejection, and extraction evaluation.
 
-Later work remains unauthorized:
+The next phase state is:
 
 ```text
-B3 — Core / Handoff Pollution Policy
+B3 — Core / Handoff Pollution Policy spec drafted; implementation awaiting review
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
 ```
+
+## 4.4 Stage B3 — Core / Handoff Pollution Policy — SPEC DRAFTED / NOT IMPLEMENTED
+
+The normative draft is
+[`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md).
+It freezes the B2 Core/Handoff before-state and proposes a small deterministic
+admission/inclusion policy plus a B3-specific comparison contract. Drafting the
+spec does not authorize production implementation. B4 remains unauthorized.
 
 Changing corpus creation and search ranking in the same stage is intentionally avoided so quality deltas remain attributable.
 
@@ -245,5 +254,5 @@ accepted before-state
 → explicit authorization for the next stage
 ```
 
-Current work stops after B2.1 implementation for final re-review. B3/B4 are not
-authorized by B2.1 implementation results.
+Current work stops after the B3 spec draft for review. B3 production
+implementation and all B4 work remain unauthorized.

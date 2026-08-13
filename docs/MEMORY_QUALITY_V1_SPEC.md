@@ -1,11 +1,11 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A ACCEPTED; Stage B1 REVIEW PASS / FROZEN; Stage B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW
+**Status:** Stage A/B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW; B4 NOT AUTHORIZED
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
-**Related:** `V1_ROADMAP.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `quality/P6_BASELINE.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
+**Related:** `V1_ROADMAP.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B2_EXTRACTION_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, `quality/P6_BASELINE.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
 
 > P6 is benchmark-first and delta-driven: establish a trustworthy measurement before changing production behavior, then improve one measured failure class at a time with explicit before/after evidence.
 
@@ -31,7 +31,8 @@ Stage B
 → make targeted production improvements against that accepted baseline
 ```
 
-Stage A is complete and accepted after CR-PHASE9. Stage B proceeds only through separately scoped improvement stages.
+Stage A is complete, reviewer-approved, and frozen after CR-PHASE9. Stage B
+proceeds only through separately scoped improvement stages.
 
 ---
 
@@ -157,7 +158,7 @@ The accepted benchmark includes a 20 logical Session/step project evolution with
 
 P6 is intentionally split into an accepted baseline plus independently reviewed improvement stages.
 
-## Stage A — Deterministic baseline — ACCEPTED
+## Stage A — Deterministic baseline — COMPLETE / REVIEW PASS / FROZEN
 
 Stage A built:
 
@@ -195,13 +196,13 @@ It is decomposed so one change class can be attributed to one measured outcome:
 
 ```text
 B1 — Retrieval Precision & Abstention
-     REVIEW PASS / FROZEN
+     COMPLETE / REVIEW PASS / FROZEN
 
 B2 — Extraction Generalization & Transient Rejection
-     B2.1 IMPLEMENTED / AWAITING FINAL RE-REVIEW
+     COMPLETE / REVIEW PASS / FROZEN
 
 B3 — Core / Handoff Pollution Policy
-     NOT AUTHORIZED
+     SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
 
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
      OPTIONAL / NOT AUTHORIZED
@@ -213,8 +214,9 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1 completed code/quality review and is frozen. B2.1 is implemented and awaiting final re-review;
-B3/B4 remain unauthorized.
+B1 and B2 completed code/quality review and are frozen. The B3 normative spec is
+drafted but implementation remains unauthorized pending review. B4 remains
+unauthorized.
 
 ---
 
@@ -436,9 +438,9 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Item 1 completed review and is frozen. Item 2 is implemented and awaiting final
-re-review under `P6_STAGE_B2_EXTRACTION_SPEC.md` and
-`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`; items 3–4 remain unauthorized.
+Items 1 and 2 completed review and are frozen. Item 3 has a draft normative spec
+at `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, but implementation is not
+authorized until that spec passes review. Item 4 remains unauthorized.
 
 Stage B1 must:
 
@@ -457,7 +459,8 @@ See [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md) for the nor
 
 # 13. Later Stage B decisions
 
-After B1 review, B2 extraction quality was authorized. Later review may authorize:
+After B1 review, B2 extraction quality was authorized and is now frozen. The B3
+spec is drafted for review. Later review may authorize:
 
 ```text
 B3 Core/Handoff pollution policy
@@ -508,4 +511,6 @@ Stage B1 frozen evidence is in
 by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md), with
 B2.1 hardening governed by
 [`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](./P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md);
-B3/B4 remain blocked.
+B2 is reviewer-approved and frozen. The B3 draft is
+[`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md);
+B3 implementation and B4 remain blocked pending separate review.

@@ -1,6 +1,6 @@
 # P6 Stage B1 — Retrieval Precision & Abstention Spec
 
-**Status:** REVIEW PASS / FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Phase:** P6 Stage B1  
 **Stage A accepted reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Stage B1 implementation commits:** `4c71a665b2c7f7f8527e9d1e0be78591d8f600a5`, `d422083ea365236cdfac5d68c3b86926e7c38602`
@@ -14,7 +14,9 @@
 
 Implementation and local comparison evidence are recorded in
 [`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). Stage B1 is
-reviewed and frozen. B2 is separately authorized; B3/B4 remain unauthorized.
+reviewed and frozen. B2 subsequently completed review and is frozen. The B3 spec
+is drafted, but implementation has not started and awaits review; B4 remains
+unauthorized.
 
 ---
 
