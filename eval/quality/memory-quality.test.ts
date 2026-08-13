@@ -323,8 +323,33 @@ test("20-Session quality runner emits a deterministic report without random iden
   assert.deepEqual(second, first);
   assert.equal(first.version, 1);
   assert.equal(first.summary.longHorizonSessions, 20);
+  assert.deepEqual(first.summary.extraction, {
+    tp: 6,
+    fp: 0,
+    fn: 0,
+    precision: 1,
+    recall: 1
+  });
   assert.deepEqual(first.summary.retrieval.map((item) => item.k), [1, 3, 5, 10]);
+  assert.deepEqual(first.summary.retrieval.map(({ precision, recall, queryCount }) => ({
+    precision,
+    recall,
+    queryCount
+  })), [
+    { precision: 0.7272727272727273, recall: 0.6818181818181818, queryCount: 11 },
+    { precision: 0.30303030303030304, recall: 0.8181818181818182, queryCount: 11 },
+    { precision: 0.18, recall: 0.8, queryCount: 10 },
+    { precision: 0.09, recall: 0.8, queryCount: 10 }
+  ]);
   assert.equal(first.summary.negativeRetrieval.queryCount, 1);
+  assert.equal(first.summary.negativeRetrieval.falsePositiveRate, 0);
+  assert.equal(first.summary.negativeRetrieval.abstentionRate, 1);
+  assert.equal(first.summary.corePollution.value, 1 / 9);
+  assert.equal(first.summary.bootstrap.criticalCoverage.value, 1);
+  assert.equal(first.summary.handoff.value, 1);
+  assert.equal(first.summary.staleMemory.value, 0);
+  assert.equal(first.summary.duplicateMemory.value, 0.5);
+  assert.equal(first.summary.contradiction.value, 1);
   assert.ok(first.scenarios.every((scenario) =>
     scenario.observations.tieHandling === undefined
   ));
