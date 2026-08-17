@@ -122,7 +122,141 @@ test("pure promotion provenance and Handoff policy fail closed and use one task 
   });
 });
 
-test("C1-C22, promotion provenance, prospective transitions, and seeded upgrade all pass", async () => {
+test("pure Handoff working-state policy applies one provenance boundary to task, blocker, and question", async () => {
+  const corePolicy = await import(corePolicyModule);
+  const handoffPolicy = await import(handoffPolicyModule);
+  const now = "2026-08-17T00:00:00.000Z";
+  const memory = (input: {
+    id: string;
+    type: string;
+    content: string;
+    tier?: string;
+    status?: string;
+    data?: Record<string, unknown>;
+  }) => ({
+    id: input.id,
+    spaceId: "space",
+    family: "state",
+    type: input.type,
+    key: `operation.${input.type}.${input.id}`,
+    content: input.content,
+    ...(input.data === undefined ? {} : { data: input.data }),
+    tier: input.tier ?? "core",
+    status: input.status ?? "active",
+    importance: 0.5,
+    confidence: 1,
+    version: 2,
+    createdAt: now,
+    updatedAt: now
+  });
+  const history = (value: ReturnType<typeof memory>, operation?: string) => operation === undefined
+    ? []
+    : [{
+      id: 1,
+      memoryId: value.id,
+      operation,
+      before: { ...value, tier: "indexed", version: 1 },
+      after: value,
+      sourceEventIds: [],
+      createdAt: now
+    }];
+
+  const boundedTask = memory({
+    id: "task",
+    type: "task",
+    content: "Remove the generated file after this run."
+  });
+  const boundedBlocker = memory({
+    id: "blocker",
+    type: "blocker",
+    content: "This blocker applies only during the current tool call.",
+    data: { nextStep: "blocker injection" }
+  });
+  const boundedQuestion = memory({
+    id: "question",
+    type: "question",
+    content: "这个问题只影响当前这一轮运行。",
+    data: { nextSteps: ["question injection"] }
+  });
+  const durableBlocker = memory({
+    id: "durable-blocker",
+    type: "blocker",
+    content: "The release is blocked on production credentials."
+  });
+  const durableQuestion = memory({
+    id: "durable-question",
+    type: "question",
+    content: "Which release window is approved?"
+  });
+  const progress = memory({
+    id: "progress",
+    type: "progress",
+    content: "The project rollout is underway.",
+    data: { nextStep: "progress injection" }
+  });
+  const indexedBlocker = memory({
+    id: "indexed-blocker",
+    type: "blocker",
+    content: "The release remains blocked.",
+    tier: "indexed"
+  });
+  const inactiveQuestion = memory({
+    id: "inactive-question",
+    type: "question",
+    content: "Which release window was approved?",
+    status: "resolved"
+  });
+
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedTask, history(boundedTask, "promote")
+  ), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedBlocker, history(boundedBlocker, "promote:automatic")
+  ), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedBlocker, history(boundedBlocker)
+  ), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedQuestion, history(boundedQuestion, "promote:unknown")
+  ), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedBlocker, history(boundedBlocker, "promote:explicit-agent")
+  ), true);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(
+    boundedQuestion, history(boundedQuestion, "promote:explicit-user")
+  ), true);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(durableBlocker, []), true);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(durableQuestion, []), true);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(indexedBlocker, []), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(inactiveQuestion, []), false);
+  assert.equal(handoffPolicy.isHandoffContinuationWorkingState(progress, []), false);
+  assert.equal(corePolicy.promotionProvenanceFromOperation("promote"), "AMBIGUOUS_LEGACY");
+  assert.equal(corePolicy.promotionProvenanceFromOperation("promote:unknown"), "AMBIGUOUS_LEGACY");
+
+  const histories = new Map([
+    [boundedBlocker.id, history(boundedBlocker, "promote")],
+    [boundedQuestion.id, history(boundedQuestion, "promote:explicit-user")]
+  ]);
+  const projection = handoffPolicy.buildHandoffProjection({
+    activeCore: [
+      boundedBlocker,
+      boundedQuestion,
+      durableBlocker,
+      durableQuestion,
+      progress,
+      indexedBlocker,
+      inactiveQuestion
+    ],
+    completedTasks: [],
+    historiesByMemoryId: histories
+  });
+  assert.deepEqual(projection.blockers, [durableBlocker.content]);
+  assert.deepEqual(projection.openQuestions, [boundedQuestion.content, durableQuestion.content]);
+  assert.deepEqual(projection.activeTasks, []);
+  assert.deepEqual(projection.nextSteps, []);
+});
+
+test("C1-C22, promotion provenance, prospective transitions, seeded upgrade, and H1-H4 all pass", async () => {
   const report = await runB3PolicyEvaluation();
   assert.deepEqual(report.cases.map((item) => item.id),
     Array.from({ length: 22 }, (_, index) => `C${index + 1}`));
@@ -130,6 +264,8 @@ test("C1-C22, promotion provenance, prospective transitions, and seeded upgrade 
   assert.deepEqual(report.promotionProvenance.filter((item) => item.status === "fail"), []);
   assert.deepEqual(report.prospectiveTransitions.filter((item) => item.status === "fail"), []);
   assert.deepEqual(report.seededUpgrade.filter((item) => item.status === "fail"), []);
+  assert.deepEqual(report.workingStateProvenance.map((item) => item.id), ["H1", "H2", "H3", "H4"]);
+  assert.deepEqual(report.workingStateProvenance.filter((item) => item.status === "fail"), []);
 });
 
 test("accepted B2 Core/Handoff baseline matches the live frozen fixture contract", async () => {

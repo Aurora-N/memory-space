@@ -27,17 +27,27 @@ function nonEmptyStrings(value: unknown): string[] {
     .filter(Boolean);
 }
 
-export function isHandoffContinuationTask(
+const directlyProjectedWorkingStateTypes = new Set(["task", "blocker", "question"]);
+
+export function isHandoffContinuationWorkingState(
   memory: Memory,
   history: readonly MemoryHistoryRecord[]
 ): boolean {
-  return memory.type === "task"
+  return directlyProjectedWorkingStateTypes.has(memory.type)
     && memory.status === "active"
     && memory.tier === "core"
     && (
       !isBoundedLocalWorkingState(memory)
       || hasEffectiveExplicitPromotion(memory, history)
     );
+}
+
+export function isHandoffContinuationTask(
+  memory: Memory,
+  history: readonly MemoryHistoryRecord[]
+): boolean {
+  return memory.type === "task"
+    && isHandoffContinuationWorkingState(memory, history);
 }
 
 export function handoffTaskValues(
@@ -74,10 +84,18 @@ export function buildHandoffProjection(input: {
       .filter((memory) => memory.type === "decision")
       .map((memory) => memory.content)),
     blockers: unique(input.activeCore
-      .filter((memory) => memory.type === "blocker")
+      .filter((memory) => memory.type === "blocker"
+        && isHandoffContinuationWorkingState(
+          memory,
+          input.historiesByMemoryId.get(memory.id) ?? []
+        ))
       .map((memory) => memory.content)),
     openQuestions: unique(input.activeCore
-      .filter((memory) => memory.type === "question")
+      .filter((memory) => memory.type === "question"
+        && isHandoffContinuationWorkingState(
+          memory,
+          input.historiesByMemoryId.get(memory.id) ?? []
+        ))
       .map((memory) => memory.content)),
     nextSteps: unique(taskValues.flatMap((value) => value.nextSteps))
   };

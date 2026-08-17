@@ -1,8 +1,9 @@
 # P6 Stage B3 — Core / Handoff Pollution Policy Result
 
 **Date:** 2026-08-17
-**Status:** IMPLEMENTED / AWAITING CODE REVIEW — NOT PASS / NOT FROZEN
+**Status:** CR HARDENING IMPLEMENTED / AWAITING FINAL CODE RE-REVIEW — NOT PASS / NOT FROZEN
 **Source of Truth:** `docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
+**Hardening Source of Truth:** `docs/P6_STAGE_B3_HANDOFF_WORKING_STATE_PROVENANCE_HARDENING_CR_SPEC.md`
 **Reviewed spec head:** `b3ce4219cde8c07eae7a4af2eb9c67c2de096231`
 **Frozen B2 source:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Stage A/B1/B2:** COMPLETE / REVIEW PASS / FROZEN
@@ -83,16 +84,49 @@ supersession.
 
 ### Handoff inclusion
 
-`src/application/handoff-policy.ts` is a pure projection policy. `activeTasks`
-and `nextSteps` use the same continuation-eligible active Core task predicate.
-Only that task may contribute its content and non-empty string values from
-`data.nextStep` or `data.nextSteps`.
+`src/application/handoff-policy.ts` is a pure projection policy. Directly
+projected working state (`task`, `blocker`, and `question`) now uses one shared
+continuation predicate: the Memory must be active Core and must either be
+non-bounded or have effective EXPLICIT_AGENT / EXPLICIT_USER promotion intent.
+Legacy generic, automatic, missing, and unknown provenance therefore fail
+closed for bounded-local state in every directly projected working-state field.
 
+`MemorySpace.#buildSnapshot()` supplies immutable history for active Core task,
+blocker, and question Memory. Opening or bootstrapping a store still performs no
+write or tier reconciliation.
+
+Only an eligible task may contribute its content and non-empty string values
+from `data.nextStep` or `data.nextSteps` to `nextSteps`. Eligible blockers and
+questions contribute only to `blockers` and `openQuestions`, respectively.
 Decision, constraint, fact, progress, goal, blocker, question, convention, rule,
 instruction, and roadmap data cannot inject `nextSteps`. Indexed, inactive, and
-bounded-local tasks without effective trusted explicit intent cannot contribute
-either task field. Existing goal, decision, blocker, question, and resolved
-former-Core task projections otherwise remain unchanged.
+bounded-local directly projected working state without effective trusted
+explicit intent cannot contribute its named Handoff field. Existing goal,
+decision, and resolved former-Core task projections otherwise remain unchanged;
+progress still has no direct Handoff projection.
+
+## Handoff working-state provenance hardening
+
+Four independent persisted upgrade holdouts seed B2-compatible active Core rows
+and immutable promotion histories directly, without using the B3 extractor to
+create an invalid state.
+
+| Holdout | Seeded state | Result |
+| --- | --- | --- |
+| H1 | bounded-local blocker + generic `promote` | PASS — Core row/version/history retained; new `blockers` omits it |
+| H2 | bounded-local blocker + `promote:explicit-agent` | PASS — included exactly once in `blockers` |
+| H3 | bounded-local question + generic `promote` | PASS — Core row/version/history retained; new `openQuestions` omits it |
+| H4 | bounded-local question + `promote:explicit-user` | PASS — included exactly once in `openQuestions` |
+
+The English and Chinese/paraphrased cases reuse the existing bounded-local
+classifier without fixture-specific production exceptions. Each case preserves
+the stored pre-B3 Handoff, creates a distinct new Snapshot, keeps unrelated
+decisions stable, and rejects blocker/question `data.nextStep(s)` injection.
+
+Pure-policy holdouts additionally prove that non-bounded active Core blockers
+and questions remain included; Indexed/inactive items are excluded; automatic,
+missing, and unknown provenance do not authorize bounded-local continuation;
+and progress receives no fabricated projection.
 
 ## Fresh-store before / after
 
@@ -198,16 +232,19 @@ addition/removal/order, source-mode changes, promotion provenance, accepted
 metrics, correctness status, and seeded-upgrade tier/version/history/Handoff
 changes.
 
+The comparison also requires the independent H1–H4 working-state provenance
+lane to be complete and PASS before overall acceptance can pass.
+
 ## Verification
 
 ```text
-Focused B3 policy/contract tests        PASS (8/8)
-pnpm run check                          PASS (153/153; both smoke self-tests PASS)
-pnpm run check:workspace                PASS (153/153; both smoke self-tests PASS)
+Focused B3 policy/contract tests        PASS (9/9)
+pnpm run check                          PASS (154/154; both smoke self-tests PASS)
+pnpm run check:workspace                PASS (154/154; both smoke self-tests PASS)
 quality human report                    PASS; hard correctness PASS
-quality JSON                            PASS; two explicit runs byte-identical
+quality JSON                            PASS; two runs SHA-256 03faed50f6728f025116302ff66cad43155b6a885ccda3b359430e54cf5ced5d
 B3 comparison human                     PASS; all acceptance gates PASS
-B3 comparison JSON                      PASS; two explicit runs byte-identical
+B3 comparison JSON                      PASS; two runs SHA-256 65cfec7a45203d23f9df22091720171608baba1646fe4b8ba471092208239b27
 Codex P2 smoke runner self-test         PASS
 Claude P3 smoke runner self-test        PASS
 GitHub CI                               not independently confirmed
@@ -219,6 +256,12 @@ Production changes are limited to the two provider-neutral application policy
 modules, minimal `MemorySpace` admission/history/update/Handoff wiring, and the
 daemon-independent CLI comparison surface. Evaluation, tests, and documentation
 add the frozen B2 contract and candidate evidence.
+
+The CR hardening production delta is narrower: one shared Handoff continuation
+predicate and blocker/question projection routing in `handoff-policy.ts`, plus
+the task/blocker/question history-read filter in `memory-space.ts`. It does not
+change Core admission, transition, extraction, retrieval, checkpoint, storage,
+domain, provider, MCP, or Space behavior.
 
 The frozen B1 lexical scorer, `MemorySpace.search` ranking/order, frozen B2
 extractor, extractor port, domain model, storage interface/schema, provider
@@ -241,9 +284,9 @@ deduplication, new tier, new provider, or B4 work was added.
   provider-neutral; both existing smoke runner self-tests are required and pass;
 - GitHub CI was not independently observed.
 
-P6 Stage B3 Core/Handoff policy implemented.
+P6 Stage B3 Handoff working-state provenance hardening implemented.
 
 P6 Stage A/B1/B2 remain frozen.
-P6 Stage B4 NOT started / NOT authorized.
+P6 Stage B4 NOT started.
 
-Awaiting B3 code review.
+Awaiting B3 final code re-review.

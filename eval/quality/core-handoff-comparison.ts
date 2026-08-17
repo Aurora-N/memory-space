@@ -19,6 +19,7 @@ export interface B3PolicyEvaluationReport {
   promotionProvenance: B3PolicyCheck[];
   prospectiveTransitions: B3PolicyCheck[];
   seededUpgrade: B3PolicyCheck[];
+  workingStateProvenance: B3PolicyCheck[];
 }
 
 export interface StageB3CoreHandoffComparisonReport {
@@ -109,7 +110,8 @@ function allPolicyChecks(report: B3PolicyEvaluationReport): B3PolicyCheck[] {
     ...report.cases,
     ...report.promotionProvenance,
     ...report.prospectiveTransitions,
-    ...report.seededUpgrade
+    ...report.seededUpgrade,
+    ...report.workingStateProvenance
   ];
 }
 
@@ -200,6 +202,13 @@ export async function runStageB3CoreHandoffComparison(
       policy.seededUpgrade.length > 0
         && policy.seededUpgrade.every((item) => item.status === "pass"),
       "Seeded B2-to-B3 upgrade behavior must preserve legacy state and apply new Handoff policy."
+    ),
+    check(
+      "working-state-provenance",
+      JSON.stringify(policy.workingStateProvenance.map((item) => item.id))
+        === JSON.stringify(["H1", "H2", "H3", "H4"])
+        && policy.workingStateProvenance.every((item) => item.status === "pass"),
+      "Seeded blocker/question Handoff provenance holdouts H1-H4 must pass."
     ),
     check(
       "retrieval-non-regression",

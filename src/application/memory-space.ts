@@ -779,7 +779,7 @@ export class MemorySpace {
     }
     const historiesByMemoryId = new Map<string, MemoryHistoryRecord[]>();
     for (const memory of activeCore) {
-      if (memory.type === "task") {
+      if (memory.type === "task" || memory.type === "blocker" || memory.type === "question") {
         historiesByMemoryId.set(memory.id, await this.store.listMemoryHistory(memory.id));
       }
     }

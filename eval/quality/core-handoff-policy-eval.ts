@@ -15,6 +15,10 @@ import {
   type SessionEvent
 } from "../../src/index.ts";
 import type { B3PolicyCheck, B3PolicyEvaluationReport } from "./core-handoff-comparison.ts";
+import {
+  hasEffectiveExplicitPromotion,
+  promotionProvenanceFromOperation
+} from "../../src/application/core-admission-policy.ts";
 
 type CandidateInput = Omit<MemoryCandidate, "sourceEventIds">;
 
@@ -270,6 +274,227 @@ async function seededUpgradeEvaluation(): Promise<SeededUpgradeResult> {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+interface SeededWorkingStateInput {
+  id: "H1" | "H2" | "H3" | "H4";
+  type: "blocker" | "question";
+  content: string;
+  promotionOperation: "promote" | "promote:explicit-agent" | "promote:explicit-user";
+  expectedIncluded: boolean;
+}
+
+async function seededWorkingStateProvenanceCase(
+  input: SeededWorkingStateInput
+): Promise<B3PolicyCheck> {
+  const directory = await mkdtemp(join(tmpdir(), `memory-space-b3-${input.id.toLowerCase()}-`));
+  const databasePath = join(directory, "memory.db");
+  const createdAt = "2026-08-17T00:00:00.000Z";
+  const memoryId = `${input.id.toLowerCase()}-${input.type}`;
+  const handoffId = `${input.id.toLowerCase()}-legacy-handoff`;
+  const decisionContent = `Unrelated durable decision for ${input.id}.`;
+  const expectedProvenance = input.promotionOperation === "promote:explicit-agent"
+    ? "EXPLICIT_AGENT"
+    : input.promotionOperation === "promote:explicit-user"
+      ? "EXPLICIT_USER"
+      : "AMBIGUOUS_LEGACY";
+  try {
+    const seedStore = new SqliteMemoryStore(databasePath);
+    const seed = new MemorySpace({
+      store: seedStore,
+      extractor: new NoopExtractor(),
+      cache: new NoopCache()
+    });
+    const space = await seed.createSpace({ id: `${input.id.toLowerCase()}-space`, name: input.id });
+    const session = await seed.createSession({
+      id: `${input.id.toLowerCase()}-session`,
+      spaceId: space.id
+    });
+    const event = await seed.appendEvent({
+      id: `${input.id.toLowerCase()}-event`,
+      sessionId: session.id,
+      type: "message",
+      payload: { content: `${input.id} legacy seed` },
+      createdAt
+    });
+    const memory: Memory = {
+      id: memoryId,
+      spaceId: space.id,
+      family: "state",
+      type: input.type,
+      key: `operation.${input.type}.${input.id.toLowerCase()}`,
+      content: input.content,
+      data: { nextSteps: [`${input.id} forbidden next-step injection`] },
+      tier: "core",
+      status: "active",
+      importance: 0.5,
+      confidence: 1,
+      version: 2,
+      sourceSessionId: session.id,
+      createdAt,
+      updatedAt: createdAt
+    };
+    const indexed = { ...memory, tier: "indexed" as const, version: 1 };
+    const decision: Memory = {
+      id: `${input.id.toLowerCase()}-decision`,
+      spaceId: space.id,
+      family: "knowledge",
+      type: "decision",
+      key: `decision.${input.id.toLowerCase()}`,
+      content: decisionContent,
+      tier: "core",
+      status: "active",
+      importance: 0.5,
+      confidence: 1,
+      version: 1,
+      sourceSessionId: session.id,
+      createdAt,
+      updatedAt: createdAt
+    };
+    await seedStore.insertMemory(memory);
+    await seedStore.insertMemory(decision);
+    await seedStore.addMemoryHistory({
+      memoryId,
+      operation: "create",
+      after: indexed,
+      sourceEventIds: [event.id],
+      createdAt
+    });
+    await seedStore.addMemoryHistory({
+      memoryId,
+      operation: input.promotionOperation,
+      before: indexed,
+      after: memory,
+      sourceEventIds: [],
+      createdAt
+    });
+    await seedStore.insertCheckpoint({
+      id: `${input.id.toLowerCase()}-legacy-checkpoint`,
+      spaceId: space.id,
+      sessionId: session.id,
+      toEventId: event.id,
+      idempotencyKey: `${input.id.toLowerCase()}-legacy-checkpoint`,
+      status: "completed",
+      handoffSnapshotId: handoffId,
+      createdAt,
+      completedAt: createdAt
+    });
+    await seedStore.insertHandoff({
+      id: handoffId,
+      spaceId: space.id,
+      sessionId: session.id,
+      checkpointId: `${input.id.toLowerCase()}-legacy-checkpoint`,
+      completed: [],
+      activeTasks: [],
+      decisions: [decisionContent],
+      blockers: input.type === "blocker" ? [input.content] : [],
+      openQuestions: input.type === "question" ? [input.content] : [],
+      nextSteps: [],
+      createdAt
+    });
+    await seed.close();
+
+    const current = createDefaultMemorySpace({ databasePath, extractor: new NoopExtractor() });
+    const beforeMemory = await current.getMemory(memoryId);
+    const beforeHistory = await current.getMemoryHistory(memoryId);
+    const beforeHandoff = await current.getLatestHandoff(space.id);
+    const bootstrap = await current.bootstrap(space.id);
+    const afterBootstrapMemory = await current.getMemory(memoryId);
+    const afterBootstrapHistory = await current.getMemoryHistory(memoryId);
+    const preCheckpointHandoff = await current.getLatestHandoff(space.id);
+    const nextEvent = await current.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { content: `${input.id} no matching Memory evidence` }
+    });
+    await current.checkpoint({
+      sessionId: session.id,
+      toEventId: nextEvent.id,
+      idempotencyKey: `${input.id.toLowerCase()}-b3-checkpoint`
+    });
+    const afterCheckpointMemory = await current.getMemory(memoryId);
+    const afterCheckpointHistory = await current.getMemoryHistory(memoryId);
+    const newHandoff = await current.getLatestHandoff(space.id);
+    const storedOldHandoff = await current.getHandoff(handoffId);
+    await current.close();
+
+    const namedValues = input.type === "blocker"
+      ? newHandoff.blockers
+      : newHandoff.openQuestions;
+    const otherValues = input.type === "blocker"
+      ? newHandoff.openQuestions
+      : newHandoff.blockers;
+    const expectedCount = input.expectedIncluded ? 1 : 0;
+    const statePreserved = JSON.stringify(afterBootstrapMemory) === JSON.stringify(beforeMemory)
+      && JSON.stringify(afterCheckpointMemory) === JSON.stringify(beforeMemory)
+      && afterCheckpointMemory.tier === "core"
+      && afterCheckpointMemory.version === 2
+      && bootstrap.coreMemories.some((item) => item.id === memoryId);
+    const historyPreserved = JSON.stringify(afterBootstrapHistory) === JSON.stringify(beforeHistory)
+      && JSON.stringify(afterCheckpointHistory) === JSON.stringify(beforeHistory);
+    const oldHandoffPreserved = JSON.stringify(preCheckpointHandoff) === JSON.stringify(beforeHandoff)
+      && JSON.stringify(storedOldHandoff) === JSON.stringify(beforeHandoff);
+    const projectionCorrect = namedValues.filter((value) => value === input.content).length
+      === expectedCount;
+    const unrelatedFieldsPreserved = newHandoff.id !== handoffId
+      && JSON.stringify(newHandoff.decisions) === JSON.stringify([decisionContent])
+      && newHandoff.activeTasks.length === 0
+      && newHandoff.completed.length === 0
+      && otherValues.length === 0
+      && newHandoff.nextSteps.length === 0;
+    const provenanceCorrect = promotionProvenanceFromOperation(input.promotionOperation)
+      === expectedProvenance
+      && hasEffectiveExplicitPromotion(memory, beforeHistory) === input.expectedIncluded;
+
+    return check(
+      input.id,
+      statePreserved
+        && historyPreserved
+        && oldHandoffPreserved
+        && projectionCorrect
+        && unrelatedFieldsPreserved
+        && provenanceCorrect,
+      `${input.type} ${expectedProvenance} projection=${input.expectedIncluded ? "included" : "excluded"}; no-clobber preserved.`
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function seededWorkingStateProvenanceEvaluation(): Promise<B3PolicyCheck[]> {
+  const inputs: SeededWorkingStateInput[] = [
+    {
+      id: "H1",
+      type: "blocker",
+      content: "This blocker applies only during the current tool call.",
+      promotionOperation: "promote",
+      expectedIncluded: false
+    },
+    {
+      id: "H2",
+      type: "blocker",
+      content: "这个阻塞只影响当前这一轮运行。",
+      promotionOperation: "promote:explicit-agent",
+      expectedIncluded: true
+    },
+    {
+      id: "H3",
+      type: "question",
+      content: "Which region should be used during this run?",
+      promotionOperation: "promote",
+      expectedIncluded: false
+    },
+    {
+      id: "H4",
+      type: "question",
+      content: "本次测试应使用哪个区域？",
+      promotionOperation: "promote:explicit-user",
+      expectedIncluded: true
+    }
+  ];
+  const results: B3PolicyCheck[] = [];
+  for (const input of inputs) results.push(await seededWorkingStateProvenanceCase(input));
+  return results;
 }
 
 export async function runB3PolicyEvaluation(): Promise<B3PolicyEvaluationReport> {
@@ -701,6 +926,7 @@ export async function runB3PolicyEvaluation(): Promise<B3PolicyEvaluationReport>
     && supersessionInvalidated;
   cases.push(check("C22", allOverrideBoundaries, "Explicit intent survives equivalent evidence and is invalidated by changed state, demotion, non-active status, or supersession."));
 
+  const workingStateProvenance = await seededWorkingStateProvenanceEvaluation();
   return {
     version: 1,
     cases,
@@ -722,6 +948,7 @@ export async function runB3PolicyEvaluation(): Promise<B3PolicyEvaluationReport>
       check("upgrade-new-handoff-policy", seeded.checkpointPreservedTier && seeded.checkpointExcludedHandoff, "First B3 checkpoint applies Handoff policy without tier reconciliation."),
       check("upgrade-old-handoff-immutable", seeded.oldHandoffImmutable, "Stored B2 Handoff remains immutable."),
       check("upgrade-trusted-transition", seeded.trustedDemotionRemovedDisclosure, "Trusted demotion removes active disclosure.")
-    ]
+    ],
+    workingStateProvenance
   };
 }
