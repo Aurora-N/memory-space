@@ -20,6 +20,14 @@ import type { CachePort } from "../ports/cache.ts";
 import type { MemoryExtractor } from "../ports/extractor.ts";
 import type { MemoryHistoryRecord, MemoryStore } from "../ports/store.ts";
 import {
+  PROMOTION_OPERATION,
+  decideCoreAdmission,
+  hasEffectiveExplicitPromotion,
+  isCoreEligible,
+  type CoreAdmissionReason
+} from "./core-admission-policy.ts";
+import { buildHandoffProjection } from "./handoff-policy.ts";
+import {
   compareLexicalResults,
   normalizeLexicalText,
   scoreLexicalMemory
@@ -30,10 +38,6 @@ const tiers = new Set<MemoryTier>(["core", "indexed"]);
 const statuses = new Set<MemoryStatus>(["active", "resolved", "superseded", "archived"]);
 const eventTypes = new Set<SessionEventType>(["message", "tool_call", "artifact", "memory", "custom"]);
 const operations = new Set<CandidateOperation>(["create", "update", "supersede", "ignore"]);
-const coreEligibleTypes = new Set([
-  "goal", "roadmap", "progress", "task", "blocker", "decision", "constraint",
-  "convention", "question", "rule", "instruction"
-]);
 const sections = [
   "Goal", "Current Roadmap", "Current Progress", "Active Tasks", "Decisions",
   "Constraints / Conventions", "Blockers", "Open Questions"
@@ -74,6 +78,7 @@ interface CommitInput extends ValidatedMemory {
   spaceId: string; sourceSessionId?: string; sourceAgentId?: string;
   sourceEventIds: string[]; operation: CandidateOperation; targetMemoryId?: string;
   reason?: string;
+  admissionReason?: CoreAdmissionReason;
 }
 
 function timestamp(): string { return new Date().toISOString(); }
@@ -97,7 +102,6 @@ function score(value: unknown, fallback: number, label: string): number {
   return result;
 }
 
-function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
 function list(values: string[]): string { return values.length ? values.map((value) => `- ${value}`).join("\n") : "(none)"; }
 function summary(memory: Memory): string {
   return memory.key ? `[${memory.id}] (${memory.key}) ${memory.content}` : `[${memory.id}] ${memory.content}`;
@@ -277,12 +281,17 @@ export class MemorySpace {
     const actor = options.actor ?? "agent";
     if (actor === "agent") {
       requiredString(options.reason, "promotion reason");
-      if (!this.#coreEligible(memory)) {
+      if (!isCoreEligible(memory)) {
         throw new ConflictError("Memory is not deterministically eligible for agent promotion", "PROMOTION_REJECTED");
       }
     }
     const result = await this.store.transaction(() =>
-      this.#changeTier(memory, "core", options.reason ?? "user requested promotion")
+      this.#changeTier(
+        memory,
+        "core",
+        options.reason ?? "user requested promotion",
+        actor === "agent" ? PROMOTION_OPERATION.explicitAgent : PROMOTION_OPERATION.explicitUser
+      )
     );
     await this.#safeInvalidate(memory.spaceId);
     return result;
@@ -484,9 +493,11 @@ export class MemorySpace {
         }
         for (const candidate of normalized) {
           if (candidate.operation !== "ignore") {
+            const admission = decideCoreAdmission(candidate);
             await this.#commitMemory({
               ...candidate, spaceId: session.spaceId, sourceSessionId: session.id,
-              sourceAgentId: session.agentId, tier: this.#candidateTier(candidate),
+              sourceAgentId: session.agentId, tier: admission.tier,
+              admissionReason: admission.reason,
               reason: candidate.promoteReason ?? "checkpoint extraction"
             }, "extractor");
           }
@@ -614,19 +625,34 @@ export class MemorySpace {
     return event;
   }
 
-  #coreEligible(memory: Pick<Memory, "type" | "key">): boolean {
-    return coreEligibleTypes.has(memory.type) || (memory.type === "fact" && Boolean(memory.key));
-  }
-
-  #candidateTier(candidate: MemoryCandidate): MemoryTier {
-    return candidate.recommendedTier === "core" && candidate.promoteReason && this.#coreEligible(candidate)
-      ? "core" : "indexed";
-  }
-
   async #assertCoreCapacity(spaceId: string, excludeMemoryId?: string): Promise<void> {
     const core = await this.store.listMemories({ spaceId, tiers: ["core"], statuses: ["active"] });
     if (core.filter((memory) => memory.id !== excludeMemoryId).length >= this.coreLimit) {
       throw new ConflictError(`Core Memory capacity of ${this.coreLimit} reached`, "CORE_CAPACITY_REACHED");
+    }
+  }
+
+  async #existingTierForAdmission(
+    existing: Memory,
+    input: CommitInput,
+    actor: "explicit" | "extractor",
+    equivalent: boolean
+  ): Promise<MemoryTier> {
+    if (actor === "explicit") return existing.tier;
+    switch (input.admissionReason) {
+      case "eligible":
+        return "core";
+      case "bounded-local":
+        if (equivalent && existing.tier === "core") {
+          const history = await this.store.listMemoryHistory(existing.id);
+          if (hasEffectiveExplicitPromotion(existing, history)) return "core";
+        }
+        return "indexed";
+      case "not-recommended":
+      case "missing-promotion-reason":
+      case "type-ineligible":
+      default:
+        return existing.tier;
     }
   }
 
@@ -657,10 +683,17 @@ export class MemorySpace {
     const now = timestamp();
     if (existing) {
       for (const eventId of input.sourceEventIds) await this.store.addMemorySource(existing.id, eventId, now);
-      if (normalizeLexicalText(existing.content) === normalizeLexicalText(input.content)) {
+      const equivalent = normalizeLexicalText(existing.content) === normalizeLexicalText(input.content);
+      if (equivalent) {
         let result = existing;
-        if (actor === "extractor" && input.tier === "core" && existing.tier === "indexed") {
-          result = await this.#changeTier(existing, "core", input.reason);
+        const nextTier = await this.#existingTierForAdmission(existing, input, actor, true);
+        if (nextTier !== existing.tier) {
+          result = await this.#changeTier(
+            existing,
+            nextTier,
+            input.reason,
+            nextTier === "core" ? PROMOTION_OPERATION.automatic : "demote:automatic-bounded"
+          );
         }
         await this.#history(
           existing.id, "deduplicate", existing, result, input.reason,
@@ -668,7 +701,9 @@ export class MemorySpace {
         );
         return result;
       }
-      const nextTier = actor === "extractor" && input.tier === "core" ? "core" : existing.tier;
+      const nextTier = input.status === "active"
+        ? await this.#existingTierForAdmission(existing, input, actor, false)
+        : "indexed";
       if (nextTier === "core") await this.#assertCoreCapacity(input.spaceId, existing.id);
       const updated: Memory = {
         ...existing, family: input.family, type: input.type, content: input.content, data: input.data,
@@ -681,6 +716,17 @@ export class MemorySpace {
         updated.id, "update", existing, updated, input.reason,
         input.sourceSessionId, input.sourceEventIds
       );
+      if (existing.tier === "indexed" && updated.tier === "core") {
+        await this.#history(
+          updated.id,
+          PROMOTION_OPERATION.automatic,
+          { ...updated, tier: "indexed" },
+          updated,
+          input.reason,
+          input.sourceSessionId,
+          input.sourceEventIds
+        );
+      }
       return updated;
     }
     const tier = input.status === "active" ? input.tier : "indexed";
@@ -698,11 +744,16 @@ export class MemorySpace {
     return created;
   }
 
-  async #changeTier(memory: Memory, tier: MemoryTier, reason?: string): Promise<Memory> {
+  async #changeTier(
+    memory: Memory,
+    tier: MemoryTier,
+    reason?: string,
+    operation = tier === "core" ? PROMOTION_OPERATION.automatic : "demote"
+  ): Promise<Memory> {
     if (tier === "core") await this.#assertCoreCapacity(memory.spaceId, memory.id);
     const updated = { ...memory, tier, version: memory.version + 1, updatedAt: timestamp() };
     await this.store.updateMemory(updated);
-    await this.#history(updated.id, tier === "core" ? "promote" : "demote", memory, updated, reason);
+    await this.#history(updated.id, operation, memory, updated, reason);
     return updated;
   }
 
@@ -726,21 +777,21 @@ export class MemorySpace {
     for (const memory of resolvedTasks) {
       if (await this.#wasEverCore(memory.id)) completedTasks.push(memory);
     }
-    const tasks = activeCore.filter((memory) => memory.type === "task").map((memory) => memory.content);
-    const explicitNext = activeCore.flatMap((memory) => {
-      const value = memory.data?.nextStep ?? memory.data?.nextSteps;
-      return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string")
-        : typeof value === "string" ? [value] : [];
+    const historiesByMemoryId = new Map<string, MemoryHistoryRecord[]>();
+    for (const memory of activeCore) {
+      if (memory.type === "task") {
+        historiesByMemoryId.set(memory.id, await this.store.listMemoryHistory(memory.id));
+      }
+    }
+    const projection = buildHandoffProjection({
+      activeCore,
+      completedTasks,
+      historiesByMemoryId
     });
     return {
       id: randomUUID(), spaceId: session.spaceId, sessionId: session.id, checkpointId,
-      goal: activeCore.filter((memory) => memory.type === "goal").at(-1)?.content,
-      completed: unique(completedTasks.map((memory) => memory.content)),
-      activeTasks: unique(tasks),
-      decisions: unique(activeCore.filter((memory) => memory.type === "decision").map((memory) => memory.content)),
-      blockers: unique(activeCore.filter((memory) => memory.type === "blocker").map((memory) => memory.content)),
-      openQuestions: unique(activeCore.filter((memory) => memory.type === "question").map((memory) => memory.content)),
-      nextSteps: unique([...explicitNext, ...tasks]), createdAt: timestamp()
+      ...projection,
+      createdAt: timestamp()
     };
   }
 

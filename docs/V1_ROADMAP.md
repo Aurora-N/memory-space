@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B3 Core/Handoff Pollution Policy — SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**Current phase:** P6 Stage B3 Core/Handoff Pollution Policy — IMPLEMENTED / AWAITING CODE REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 
@@ -46,7 +46,7 @@ P6 — Memory Quality v1
      Stage A deterministic baseline            COMPLETE / REVIEW PASS / FROZEN
      Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
      Stage B2 Extraction Quality               COMPLETE / REVIEW PASS / FROZEN
-     Stage B3 Core/Handoff Pollution            SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+     Stage B3 Core/Handoff Pollution            IMPLEMENTED / AWAITING CODE REVIEW
      Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
 
 P7 — Optional MCP-first Provider Validation    OPTIONAL
@@ -187,17 +187,19 @@ extraction, transient rejection, and extraction evaluation.
 The next phase state is:
 
 ```text
-B3 — Core / Handoff Pollution Policy spec drafted; implementation awaiting review
+B3 — Core / Handoff Pollution Policy implemented; awaiting code review
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
 ```
 
-## 4.4 Stage B3 — Core / Handoff Pollution Policy — SPEC DRAFTED / NOT IMPLEMENTED
+## 4.4 Stage B3 — Core / Handoff Pollution Policy — IMPLEMENTED / AWAITING CODE REVIEW
 
-The normative draft is
+The reviewed normative spec is
 [`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md).
-It freezes the B2 Core/Handoff before-state and proposes a small deterministic
-admission/inclusion policy plus a B3-specific comparison contract. Drafting the
-spec does not authorize production implementation. B4 remains unauthorized.
+It freezes the B2 Core/Handoff before-state and governs the implemented small
+deterministic admission/inclusion policy plus the B3-specific comparison
+contract. Candidate evidence is recorded in
+[`quality/P6_STAGE_B3_RESULT.md`](./quality/P6_STAGE_B3_RESULT.md). B3 remains
+awaiting code review and is not PASS/FROZEN. B4 remains unauthorized.
 
 Changing corpus creation and search ranking in the same stage is intentionally avoided so quality deltas remain attributable.
 
@@ -254,5 +256,5 @@ accepted before-state
 → explicit authorization for the next stage
 ```
 
-Current work stops after the B3 spec draft for review. B3 production
-implementation and all B4 work remain unauthorized.
+Current work stops after the B3 implementation for code review. B3 is not
+PASS/FROZEN, and all B4 work remains unauthorized.

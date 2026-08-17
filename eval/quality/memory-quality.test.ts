@@ -441,9 +441,12 @@ test("20-Session quality runner emits a deterministic report without random iden
   assert.equal(first.summary.negativeRetrieval.queryCount, 1);
   assert.equal(first.summary.negativeRetrieval.falsePositiveRate, 0);
   assert.equal(first.summary.negativeRetrieval.abstentionRate, 1);
-  assert.equal(first.summary.corePollution.value, 1 / 9);
+  assert.equal(first.summary.corePollution.value, 0);
+  assert.deepEqual(first.summary.corePollution.pollutedKeys, []);
   assert.equal(first.summary.bootstrap.criticalCoverage.value, 1);
+  assert.deepEqual(first.summary.bootstrap.unexpectedDefaultKeys, []);
   assert.equal(first.summary.handoff.value, 1);
+  assert.deepEqual(first.summary.handoff.unexpectedFacts, []);
   assert.equal(first.summary.staleMemory.value, 0);
   assert.equal(first.summary.duplicateMemory.value, 0.5);
   assert.equal(first.summary.contradiction.value, 1);

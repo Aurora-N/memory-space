@@ -11,6 +11,10 @@ import {
   formatStageB2ExtractionComparison,
   type StageB2ExtractionComparisonReport
 } from "../../eval/quality/extraction-comparison.ts";
+import {
+  formatStageB3CoreHandoffComparison,
+  type StageB3CoreHandoffComparisonReport
+} from "../../eval/quality/core-handoff-comparison.ts";
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { Space } from "../domain/types.ts";
@@ -395,6 +399,20 @@ export async function runQualityExtractionComparison(
     write(JSON.stringify(report, null, 2));
   } else {
     for (const line of formatStageB2ExtractionComparison(report)) write(line);
+  }
+  return report.acceptance.overall === "pass" ? 0 : 1;
+}
+
+export async function runQualityCoreHandoffComparison(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<StageB3CoreHandoffComparisonReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of formatStageB3CoreHandoffComparison(report)) write(line);
   }
   return report.acceptance.overall === "pass" ? 0 : 1;
 }

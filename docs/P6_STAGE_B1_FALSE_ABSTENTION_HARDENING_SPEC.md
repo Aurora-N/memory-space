@@ -7,7 +7,7 @@
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **Depends on:** `P6_STAGE_B_RETRIEVAL_SPEC.md`, `code-review/CR-PHASE10.md`, `quality/P6_STAGE_B1_RESULT.md`  
 **Historical next phase at B1 freeze:** B2 AUTHORIZED; B3/B4 NOT AUTHORIZED
-**Current later-phase status:** B2 FROZEN; B3 SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW; B4 NOT AUTHORIZED
+**Current later-phase status:** B2 FROZEN; B3 IMPLEMENTED / AWAITING CODE REVIEW; B4 NOT AUTHORIZED
 
 > This is a narrow hardening addendum for the existing deterministic lexical B1 candidate. It does not reopen extraction, Memory semantics, storage, provider integration, MCP, Handoff/Core policy, or semantic retrieval.
 

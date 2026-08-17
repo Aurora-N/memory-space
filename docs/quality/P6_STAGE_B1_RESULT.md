@@ -20,8 +20,8 @@
 
 This document records the reviewed and frozen deterministic B1 result. Its
 metrics are benchmark evidence, not a universal product-quality SLO. B2 later
-completed review and is also frozen. The B3 spec is drafted but implementation
-has not started; B4 remains unauthorized.
+completed review and is also frozen. The B3 candidate is implemented and awaits
+code review; B4 remains unauthorized.
 
 ## Change boundary
 

@@ -9,7 +9,7 @@
 **B2.1 durability/eval hardening:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Final-review task-boundary hardening:** `4655124`
 **Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
-**B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**B3:** IMPLEMENTED / AWAITING CODE REVIEW
 **B4:** NOT AUTHORIZED
 
 > Stage B2 improves deterministic checkpoint-derived Memory candidate extraction only. It must not reopen retrieval, Core/Handoff policy, semantic deduplication, provider integration, storage semantics, or MCP contracts.

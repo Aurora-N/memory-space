@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A/B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW; B4 NOT AUTHORIZED
+**Status:** Stage A/B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 IMPLEMENTED / AWAITING CODE REVIEW; B4 NOT AUTHORIZED
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -202,7 +202,7 @@ B2 — Extraction Generalization & Transient Rejection
      COMPLETE / REVIEW PASS / FROZEN
 
 B3 — Core / Handoff Pollution Policy
-     SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+     IMPLEMENTED / AWAITING CODE REVIEW
 
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
      OPTIONAL / NOT AUTHORIZED
@@ -214,9 +214,9 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1 and B2 completed code/quality review and are frozen. The B3 normative spec is
-drafted but implementation remains unauthorized pending review. B4 remains
-unauthorized.
+B1 and B2 completed code/quality review and are frozen. The B3 normative spec
+passed review and its scoped candidate is implemented pending code review. B3
+is not PASS/FROZEN. B4 remains unauthorized.
 
 ---
 
@@ -438,9 +438,9 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Items 1 and 2 completed review and are frozen. Item 3 has a draft normative spec
-at `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, but implementation is not
-authorized until that spec passes review. Item 4 remains unauthorized.
+Items 1 and 2 completed review and are frozen. Item 3's normative spec at
+`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md` passed review; its candidate is
+implemented and awaiting code review. Item 4 remains unauthorized.
 
 Stage B1 must:
 
@@ -460,7 +460,8 @@ See [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md) for the nor
 # 13. Later Stage B decisions
 
 After B1 review, B2 extraction quality was authorized and is now frozen. The B3
-spec is drafted for review. Later review may authorize:
+spec passed review and the implementation now awaits code review. Later review
+may authorize:
 
 ```text
 B3 Core/Handoff pollution policy
@@ -511,6 +512,7 @@ Stage B1 frozen evidence is in
 by [`P6_STAGE_B2_EXTRACTION_SPEC.md`](./P6_STAGE_B2_EXTRACTION_SPEC.md), with
 B2.1 hardening governed by
 [`P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](./P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md);
-B2 is reviewer-approved and frozen. The B3 draft is
+B2 is reviewer-approved and frozen. The reviewed B3 spec is
 [`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md);
-B3 implementation and B4 remain blocked pending separate review.
+the B3 candidate is implemented but not PASS/FROZEN pending code review. B4
+remains blocked pending separate authorization.

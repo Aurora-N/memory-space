@@ -8,7 +8,7 @@
 **CR-PHASE9 tie-fixture commit:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`
 **Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Status:** COMPLETE / REVIEW PASS / FROZEN — CR-PHASE9
-**Follow-up:** P6 Stage B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 spec drafted / implementation awaiting review; B4 not authorized
+**Follow-up:** P6 Stage B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 IMPLEMENTED / AWAITING CODE REVIEW; B4 not authorized
 
 This document is the immutable historical Stage A before-state for later quality comparisons. It records the current production Memory implementation before Stage B product retrieval changes.
 
@@ -176,8 +176,8 @@ The measured risks rank as:
 4. **Semantic dedup for unkeyed paraphrases — visible impact, high semantic and migration risk.** The measured rate is 2/4, while keyed dedup is already correct.
 
 This historical ranking initially authorized Stage B1. B1 and B2 are now
-reviewed and frozen. The B3 spec is drafted but not authorized for
-implementation. See:
+reviewed and frozen. The B3 spec passed review and its scoped candidate is
+implemented pending code review. See:
 
 ```text
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md

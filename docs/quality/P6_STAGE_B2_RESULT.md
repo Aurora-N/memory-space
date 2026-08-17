@@ -8,7 +8,7 @@
 **B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Task-boundary hardening:** `4655124`
 **Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
-**B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**B3:** SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
 **B4:** NOT AUTHORIZED
 
 This document records the measured Stage A extraction failures, the reviewed B2

@@ -10,7 +10,7 @@
 **Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **P6 Stage B1:** REVIEW PASS / FROZEN  
-**P6 Stage B3:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**P6 Stage B3:** IMPLEMENTED / AWAITING CODE REVIEW
 **P6 Stage B4:** NOT AUTHORIZED
 
 > B2.1 is a narrow review hardening pass. It does not reopen B1 and does not authorize B3/B4. It closes the remaining durability-boundary and evaluator-contract blockers found during B2 code review.

@@ -8,11 +8,15 @@ import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
 import type {
   StageB2ExtractionComparisonReport
 } from "../../eval/quality/extraction-comparison.ts";
+import type {
+  StageB3CoreHandoffComparisonReport
+} from "../../eval/quality/core-handoff-comparison.ts";
 import {
   runDoctor,
   runEval,
   runInit,
   runQualityComparison,
+  runQualityCoreHandoffComparison,
   runQualityExtractionComparison,
   runQualityEval,
   runStatus
@@ -25,7 +29,11 @@ import {
 } from "./local-client.ts";
 
 type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
-type BooleanOption = "json" | "compare-stage-a" | "compare-stage-a-extraction";
+type BooleanOption =
+  | "json"
+  | "compare-stage-a"
+  | "compare-stage-a-extraction"
+  | "compare-stage-b2-core-handoff";
 
 interface ParsedOptions {
   cwd?: string;
@@ -35,6 +43,7 @@ interface ParsedOptions {
   json?: boolean;
   compareStageA?: boolean;
   compareStageAExtraction?: boolean;
+  compareStageB2CoreHandoff?: boolean;
 }
 
 export interface CliDependencies {
@@ -48,6 +57,7 @@ export interface CliDependencies {
   qualityEvalRunner?: () => Promise<MemoryQualityReport>;
   qualityComparisonRunner?: () => Promise<StageB1ComparisonReport>;
   qualityExtractionComparisonRunner?: () => Promise<StageB2ExtractionComparisonReport>;
+  qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
 }
 
@@ -58,7 +68,7 @@ Usage:
   memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
   memory-space status [--cwd <path>] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
-  memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction]
+  memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
 Development invocation:
   pnpm memory-space <command>`;
@@ -81,6 +91,7 @@ function parseOptions(
     if (allowedBooleans.includes(name as BooleanOption)) {
       if (name === "compare-stage-a") result.compareStageA = true;
       else if (name === "compare-stage-a-extraction") result.compareStageAExtraction = true;
+      else if (name === "compare-stage-b2-core-handoff") result.compareStageB2CoreHandoff = true;
       else result.json = true;
       continue;
     }
@@ -123,6 +134,11 @@ async function defaultQualityExtractionComparisonRunner(): Promise<StageB2Extrac
   return module.runStageB2ExtractionComparison();
 }
 
+async function defaultQualityCoreHandoffComparisonRunner(): Promise<StageB3CoreHandoffComparisonReport> {
+  const module = await import("../../eval/quality/core-handoff-comparison.ts");
+  return module.runStageB3CoreHandoffComparison();
+}
+
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {}
@@ -151,18 +167,30 @@ export async function runCli(
         argv.slice(2),
         [],
         target === "quality"
-          ? ["json", "compare-stage-a", "compare-stage-a-extraction"]
+          ? ["json", "compare-stage-a", "compare-stage-a-extraction", "compare-stage-b2-core-handoff"]
           : ["json"]
       );
-      if (options.compareStageA && options.compareStageAExtraction) {
+      const comparisonModes = [
+        options.compareStageA,
+        options.compareStageAExtraction,
+        options.compareStageB2CoreHandoff
+      ].filter(Boolean).length;
+      if (comparisonModes > 1) {
         throw new CliError(
           "USAGE_ERROR",
-          "Choose only one Stage A comparison mode.",
+          "Choose only one Stage A comparison mode or the B3 Core/Handoff comparison.",
           { exitCode: 2 }
         );
       }
       return target === "cross-session"
         ? await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner)
+        : options.compareStageB2CoreHandoff
+          ? await runQualityCoreHandoffComparison(
+            options,
+            write,
+            dependencies.qualityCoreHandoffComparisonRunner
+              ?? defaultQualityCoreHandoffComparisonRunner
+          )
         : options.compareStageAExtraction
           ? await runQualityExtractionComparison(
             options,

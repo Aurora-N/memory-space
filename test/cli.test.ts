@@ -15,6 +15,7 @@ import type { CrossSessionEvalReport } from "../eval/support/cross-session-runne
 import type { MemoryQualityReport } from "../eval/quality/types.ts";
 import { runStageB1Comparison } from "../eval/quality/comparison.ts";
 import { runStageB2ExtractionComparison } from "../eval/quality/extraction-comparison.ts";
+import { runStageB3CoreHandoffComparison } from "../eval/quality/core-handoff-comparison.ts";
 import { runCli, type CliDependencies } from "../src/cli/main.ts";
 import { CliError } from "../src/cli/errors.ts";
 import { detectProviderConfigs } from "../src/cli/provider-config.ts";
@@ -771,6 +772,49 @@ test("quality eval CLI exposes a distinct B2 extraction comparison", async () =>
 
     const ambiguous = await cli([
       "eval", "quality", "--compare-stage-a", "--compare-stage-a-extraction"
+    ], { cwd: project });
+    assert.equal(ambiguous.code, 2);
+    assert.match(ambiguous.stderr, /only one Stage A comparison mode/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("quality eval CLI exposes a distinct B3 Core/Handoff comparison", async () => {
+  const { directory, project } = temporaryProject("quality-core-handoff-comparison");
+  try {
+    const report = await runStageB3CoreHandoffComparison();
+    let calls = 0;
+    const human = await cli(["eval", "quality", "--compare-stage-b2-core-handoff"], {
+      cwd: project,
+      dependencies: {
+        qualityCoreHandoffComparisonRunner: async () => {
+          calls += 1;
+          return report;
+        },
+        clientFactory: () => {
+          throw new Error("Core/Handoff comparison must not construct a daemon client");
+        }
+      }
+    });
+    assert.equal(human.code, 0, human.stderr);
+    assert.equal(calls, 1);
+    assert.match(human.stdout, /P6 Stage B3 — Core\/Handoff comparison/u);
+    assert.doesNotMatch(human.stdout, /Retrieval comparison|Extraction comparison/u);
+    assert.match(human.stdout, /Overall PASS/u);
+
+    const json = await cli([
+      "eval", "quality", "--compare-stage-b2-core-handoff", "--json"
+    ], {
+      cwd: project,
+      dependencies: { qualityCoreHandoffComparisonRunner: async () => report }
+    });
+    assert.equal(json.code, 0, json.stderr);
+    const parsed = JSON.parse(json.stdout) as { acceptance: { overall: string } };
+    assert.equal(parsed.acceptance.overall, "pass");
+
+    const ambiguous = await cli([
+      "eval", "quality", "--compare-stage-a", "--compare-stage-b2-core-handoff"
     ], { cwd: project });
     assert.equal(ambiguous.code, 2);
     assert.match(ambiguous.stderr, /only one Stage A comparison mode/u);

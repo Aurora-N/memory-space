@@ -1,0 +1,845 @@
+{
+  "version": 1,
+  "id": "p6-stage-b2-core-handoff",
+  "sourceCommit": "e0ff2ac0248920c7c853162e4ea2f09dd2b7d260",
+  "reportVersion": 1,
+  "fixture": {
+    "version": 1,
+    "id": "saas-commerce-api-20-session-evolution",
+    "spaceId": "quality-long-horizon",
+    "steps": [
+      {
+        "id": "S01",
+        "label": "Establish the project goal",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Goal: Deliver a production-ready SaaS commerce API."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "goal.commerce-api",
+                "family": "state",
+                "type": "goal",
+                "key": "project.goal.primary",
+                "content": "Deliver a production-ready SaaS commerce API.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "update"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S02",
+        "label": "Choose SQLite for the early phase",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "数据库确定使用 SQLite。"
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "decision.database.sqlite",
+                "family": "knowledge",
+                "type": "decision",
+                "key": "project.database",
+                "content": "数据库使用 SQLite",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "update"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S03",
+        "label": "Choose JWT authentication",
+        "actions": [
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember",
+              "explicit-user-promotion"
+            ],
+            "explicitMemory": {
+              "logicalKey": "decision.auth.jwt",
+              "family": "knowledge",
+              "type": "decision",
+              "key": "project.auth.strategy",
+              "content": "Authentication uses signed JWT access tokens.",
+              "status": "active",
+              "shouldBeCore": true,
+              "promote": true
+            },
+            "requestedPromotionProvenance": "EXPLICIT_USER",
+            "observedB2PromotionProvenance": "AMBIGUOUS_LEGACY"
+          }
+        ]
+      },
+      {
+        "id": "S04",
+        "label": "Record the migration helper path",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Fact: Migration helper lives in scripts/db/migrate.ts."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "knowledge.migration.path",
+                "family": "knowledge",
+                "type": "fact",
+                "content": "Migration helper lives in scripts/db/migrate.ts.",
+                "status": "active",
+                "shouldBeCore": false,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S05",
+        "label": "Open the rate limiting blocker",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Blocker: Rate limiting strategy is undecided."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "blocker.rate-limit",
+                "family": "state",
+                "type": "blocker",
+                "content": "Rate limiting strategy is undecided.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S06",
+        "label": "Publish API v1",
+        "actions": [
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember",
+              "explicit-user-promotion"
+            ],
+            "explicitMemory": {
+              "logicalKey": "decision.api.v1",
+              "family": "knowledge",
+              "type": "decision",
+              "key": "project.api.endpoint",
+              "content": "Public API endpoint is /v1/orders.",
+              "status": "active",
+              "shouldBeCore": true,
+              "promote": true
+            },
+            "requestedPromotionProvenance": "EXPLICIT_USER",
+            "observedB2PromotionProvenance": "AMBIGUOUS_LEGACY"
+          }
+        ]
+      },
+      {
+        "id": "S07",
+        "label": "Resolve rate limiting and record the decision",
+        "actions": [
+          {
+            "sourceMode": "status-change",
+            "transitionOperations": [
+              "status-change"
+            ],
+            "statusChange": {
+              "logicalKey": "blocker.rate-limit",
+              "status": "resolved",
+              "reason": "Redis token bucket selected."
+            }
+          },
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember",
+              "explicit-user-promotion"
+            ],
+            "explicitMemory": {
+              "logicalKey": "decision.rate-limit.redis",
+              "family": "knowledge",
+              "type": "decision",
+              "key": "project.rate-limit",
+              "content": "Rate limiting uses a Redis token bucket.",
+              "status": "active",
+              "shouldBeCore": true,
+              "promote": true
+            },
+            "requestedPromotionProvenance": "EXPLICIT_USER",
+            "observedB2PromotionProvenance": "AMBIGUOUS_LEGACY"
+          }
+        ]
+      },
+      {
+        "id": "S08",
+        "label": "Supersede SQLite with PostgreSQL",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "数据库确定使用 PostgreSQL。"
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "decision.database.postgresql",
+                "family": "knowledge",
+                "type": "decision",
+                "key": "project.database",
+                "content": "数据库使用 PostgreSQL",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "update"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S09",
+        "label": "Start the production data migration",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Task: Migrate production data from SQLite to PostgreSQL."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "task.database-migration",
+                "family": "state",
+                "type": "task",
+                "content": "Migrate production data from SQLite to PostgreSQL.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S10",
+        "label": "Repeat keyed PostgreSQL evidence and add a paraphrase",
+        "actions": [
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember"
+            ],
+            "explicitMemory": {
+              "logicalKey": "knowledge.database.paraphrase.1",
+              "family": "knowledge",
+              "type": "fact",
+              "content": "Production storage runs on PostgreSQL.",
+              "status": "active",
+              "shouldBeCore": false,
+              "promote": false
+            }
+          },
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "数据库确定使用 PostgreSQL。"
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "decision.database.postgresql",
+                "family": "knowledge",
+                "type": "decision",
+                "key": "project.database",
+                "content": "数据库使用 PostgreSQL",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "update"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S11",
+        "label": "Capture a one-off debug cleanup task",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Task: Remove the temporary debug log after this run."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "task.temporary-debug-cleanup",
+                "family": "state",
+                "type": "task",
+                "content": "Remove the temporary debug log after this run.",
+                "status": "active",
+                "shouldBeCore": false,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S12",
+        "label": "Open the migration script blocker",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Blocker: Migration script fails on empty databases."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "blocker.migration-script",
+                "family": "state",
+                "type": "blocker",
+                "content": "Migration script fails on empty databases.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S13",
+        "label": "Resolve the migration blocker and repeat database evidence",
+        "actions": [
+          {
+            "sourceMode": "status-change",
+            "transitionOperations": [
+              "status-change"
+            ],
+            "statusChange": {
+              "logicalKey": "blocker.migration-script",
+              "status": "resolved",
+              "reason": "Empty database migration path fixed."
+            }
+          },
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember"
+            ],
+            "explicitMemory": {
+              "logicalKey": "knowledge.database.paraphrase.2",
+              "family": "knowledge",
+              "type": "fact",
+              "content": "We decided to keep PostgreSQL for production.",
+              "status": "active",
+              "shouldBeCore": false,
+              "promote": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "S14",
+        "label": "Complete migration and add another paraphrase",
+        "actions": [
+          {
+            "sourceMode": "status-change",
+            "transitionOperations": [
+              "status-change"
+            ],
+            "statusChange": {
+              "logicalKey": "task.database-migration",
+              "status": "resolved",
+              "reason": "Production migration completed."
+            }
+          },
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember"
+            ],
+            "explicitMemory": {
+              "logicalKey": "knowledge.database.paraphrase.3",
+              "family": "knowledge",
+              "type": "fact",
+              "content": "The production database remains PostgreSQL.",
+              "status": "active",
+              "shouldBeCore": false,
+              "promote": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "S15",
+        "label": "Record migration completion progress",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Progress: PostgreSQL migration is complete."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "progress.migration-complete",
+                "family": "state",
+                "type": "progress",
+                "key": "project.progress.current",
+                "content": "PostgreSQL migration is complete.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "update"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S16",
+        "label": "Supersede API v1 with API v2",
+        "actions": [
+          {
+            "sourceMode": "explicit-remember",
+            "transitionOperations": [
+              "remember",
+              "idempotent-promote-noop"
+            ],
+            "explicitMemory": {
+              "logicalKey": "decision.api.v2",
+              "family": "knowledge",
+              "type": "decision",
+              "key": "project.api.endpoint",
+              "content": "Public API endpoint is /v2/orders.",
+              "status": "active",
+              "shouldBeCore": true,
+              "promote": true
+            }
+          }
+        ]
+      },
+      {
+        "id": "S17",
+        "label": "Adopt order idempotency keys",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Decision: Order idempotency keys are required for writes."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "decision.order-idempotency",
+                "family": "knowledge",
+                "type": "decision",
+                "content": "Order idempotency keys are required for writes.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S18",
+        "label": "Open the canary metrics blocker",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Blocker: Canary metrics dashboard is unavailable."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "blocker.canary-metrics",
+                "family": "state",
+                "type": "blocker",
+                "content": "Canary metrics dashboard is unavailable.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "S19",
+        "label": "Resolve the canary metrics blocker",
+        "actions": [
+          {
+            "sourceMode": "status-change",
+            "transitionOperations": [
+              "status-change"
+            ],
+            "statusChange": {
+              "logicalKey": "blocker.canary-metrics",
+              "status": "resolved",
+              "reason": "Dashboard access restored."
+            }
+          }
+        ]
+      },
+      {
+        "id": "S20",
+        "label": "Define the next rollout task",
+        "actions": [
+          {
+            "sourceMode": "checkpoint-message",
+            "transitionOperations": [
+              "checkpoint"
+            ],
+            "events": [
+              "Task: Prepare the canary rollout checklist."
+            ],
+            "expectedMemories": [
+              {
+                "logicalKey": "task.canary-rollout",
+                "family": "state",
+                "type": "task",
+                "content": "Prepare the canary rollout checklist.",
+                "status": "active",
+                "shouldBeCore": true,
+                "candidateOperation": "create"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "criticalBootstrapKeys": [
+      "goal.commerce-api",
+      "decision.database.postgresql",
+      "decision.auth.jwt",
+      "decision.rate-limit.redis",
+      "decision.api.v2",
+      "progress.migration-complete",
+      "task.canary-rollout"
+    ]
+  },
+  "expectedHandoffFacts": [
+    "activeTasks:Prepare the canary rollout checklist.",
+    "completed:Migrate production data from SQLite to PostgreSQL.",
+    "decisions:Authentication uses signed JWT access tokens.",
+    "decisions:Order idempotency keys are required for writes.",
+    "decisions:Public API endpoint is /v2/orders.",
+    "decisions:Rate limiting uses a Redis token bucket.",
+    "decisions:数据库使用 PostgreSQL",
+    "goal:Deliver a production-ready SaaS commerce API.",
+    "nextSteps:Prepare the canary rollout checklist."
+  ],
+  "acceptedResult": {
+    "activeCoreKeys": [
+      "decision.api.v2",
+      "decision.auth.jwt",
+      "decision.database.postgresql",
+      "decision.order-idempotency",
+      "decision.rate-limit.redis",
+      "goal.commerce-api",
+      "progress.migration-complete",
+      "task.canary-rollout",
+      "task.temporary-debug-cleanup"
+    ],
+    "corePollution": {
+      "numerator": 1,
+      "denominator": 9,
+      "value": 0.1111111111111111,
+      "pollutedKeys": [
+        "task.temporary-debug-cleanup"
+      ]
+    },
+    "bootstrap": {
+      "criticalCoverage": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1
+      },
+      "coveredCriticalKeys": [
+        "goal.commerce-api",
+        "decision.database.postgresql",
+        "decision.auth.jwt",
+        "decision.rate-limit.redis",
+        "decision.api.v2",
+        "progress.migration-complete",
+        "task.canary-rollout"
+      ],
+      "missingCriticalKeys": [],
+      "unexpectedDefaultKeys": [
+        "task.temporary-debug-cleanup"
+      ],
+      "coreItemCount": 9,
+      "handoffFactCount": 11,
+      "chars": 1654,
+      "bytes": 1674
+    },
+    "handoff": {
+      "numerator": 9,
+      "denominator": 9,
+      "value": 1,
+      "observedFacts": [
+        "activeTasks:Prepare the canary rollout checklist.",
+        "activeTasks:Remove the temporary debug log after this run.",
+        "completed:Migrate production data from SQLite to PostgreSQL.",
+        "decisions:Authentication uses signed JWT access tokens.",
+        "decisions:Order idempotency keys are required for writes.",
+        "decisions:Public API endpoint is /v2/orders.",
+        "decisions:Rate limiting uses a Redis token bucket.",
+        "decisions:数据库使用 PostgreSQL",
+        "goal:Deliver a production-ready SaaS commerce API.",
+        "nextSteps:Prepare the canary rollout checklist.",
+        "nextSteps:Remove the temporary debug log after this run."
+      ],
+      "missingFacts": [],
+      "unexpectedFacts": [
+        "activeTasks:Remove the temporary debug log after this run.",
+        "nextSteps:Remove the temporary debug log after this run."
+      ]
+    },
+    "retrieval": [
+      {
+        "k": 1,
+        "precision": 0.7272727272727273,
+        "recall": 0.6818181818181818,
+        "queryCount": 11
+      },
+      {
+        "k": 3,
+        "precision": 0.30303030303030304,
+        "recall": 0.8181818181818182,
+        "queryCount": 11
+      },
+      {
+        "k": 5,
+        "precision": 0.18,
+        "recall": 0.8,
+        "queryCount": 10
+      },
+      {
+        "k": 10,
+        "precision": 0.09,
+        "recall": 0.8,
+        "queryCount": 10
+      }
+    ],
+    "negativeRetrieval": {
+      "queryCount": 1,
+      "falsePositiveQueries": 0,
+      "abstainedQueries": 1,
+      "falsePositiveRate": 0,
+      "abstentionRate": 1
+    },
+    "extraction": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "staleMemory": {
+      "numerator": 0,
+      "denominator": 13,
+      "value": 0,
+      "staleKeys": []
+    },
+    "duplicateMemory": {
+      "numerator": 2,
+      "denominator": 4,
+      "value": 0.5,
+      "groups": [
+        {
+          "id": "keyed-database-decision",
+          "activeMembers": [
+            "decision.database.postgresql"
+          ],
+          "avoidableDuplicates": 0
+        },
+        {
+          "id": "unkeyed-database-paraphrases",
+          "activeMembers": [
+            "knowledge.database.paraphrase.1",
+            "knowledge.database.paraphrase.2",
+            "knowledge.database.paraphrase.3"
+          ],
+          "avoidableDuplicates": 2
+        }
+      ]
+    },
+    "contradiction": {
+      "numerator": 10,
+      "denominator": 10,
+      "value": 1,
+      "checks": [
+        {
+          "id": "database-slot.current-active",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "database-slot.stale-not-active",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "database-slot.bootstrap-current",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "database-slot.bootstrap-no-stale",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "database-slot.search-current-first",
+          "kind": "quality",
+          "passed": true
+        },
+        {
+          "id": "api-endpoint-slot.current-active",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "api-endpoint-slot.stale-not-active",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "api-endpoint-slot.bootstrap-current",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "api-endpoint-slot.bootstrap-no-stale",
+          "kind": "hard",
+          "passed": true
+        },
+        {
+          "id": "api-endpoint-slot.search-current-first",
+          "kind": "quality",
+          "passed": true
+        }
+      ]
+    },
+    "correctness": {
+      "overall": "pass",
+      "checks": [
+        { "id": "long-horizon.latest-handoff-boundary", "status": "pass" },
+        { "id": "long-horizon.inactive-excluded-from-bootstrap", "status": "pass" },
+        { "id": "long-horizon.database-slot.current-active", "status": "pass" },
+        { "id": "long-horizon.database-slot.stale-not-active", "status": "pass" },
+        { "id": "long-horizon.database-slot.bootstrap-current", "status": "pass" },
+        { "id": "long-horizon.database-slot.bootstrap-no-stale", "status": "pass" },
+        { "id": "long-horizon.api-endpoint-slot.current-active", "status": "pass" },
+        { "id": "long-horizon.api-endpoint-slot.stale-not-active", "status": "pass" },
+        { "id": "long-horizon.api-endpoint-slot.bootstrap-current", "status": "pass" },
+        { "id": "long-horizon.api-endpoint-slot.bootstrap-no-stale", "status": "pass" },
+        { "id": "provider.codex-to-claude-bootstrap", "status": "pass" },
+        { "id": "provider.provenance-preserved", "status": "pass" },
+        { "id": "provider.cross-space-isolation", "status": "pass" },
+        { "id": "provider.inactive-bootstrap-exclusion", "status": "pass" },
+        { "id": "provider.exact-six-mcp", "status": "pass" }
+      ]
+    }
+  },
+  "seededUpgrade": {
+    "id": "b2-bounded-local-core-upgrade",
+    "memory": {
+      "logicalKey": "upgrade.task.temporary-debug-cleanup",
+      "family": "state",
+      "type": "task",
+      "content": "Remove the temporary debug log after this run.",
+      "tier": "core",
+      "status": "active",
+      "version": 2
+    },
+    "history": [
+      {
+        "operation": "create",
+        "semanticPromotionProvenance": null
+      },
+      {
+        "operation": "promote",
+        "semanticPromotionProvenance": "AMBIGUOUS_LEGACY"
+      }
+    ],
+    "latestHandoff": {
+      "activeTasks": [
+        "Remove the temporary debug log after this run."
+      ],
+      "nextSteps": [
+        "Remove the temporary debug log after this run."
+      ]
+    },
+    "expectedAfterOpen": {
+      "tier": "core",
+      "status": "active",
+      "version": 2,
+      "historyOperations": [
+        "create",
+        "promote"
+      ],
+      "latestHandoffUnchanged": true
+    },
+    "expectedAfterFirstB3Checkpoint": {
+      "tier": "core",
+      "version": 2,
+      "historyOperations": [
+        "create",
+        "promote"
+      ],
+      "activeTasks": [],
+      "nextSteps": []
+    }
+  }
+}

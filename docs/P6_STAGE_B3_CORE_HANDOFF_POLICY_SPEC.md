@@ -1,14 +1,16 @@
 # P6 Stage B3 — Core / Handoff Pollution Policy Spec
 
-**Status:** SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+**Status:** SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
 **Phase:** P6 Stage B3
 **Reviewed B2 head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Prerequisites:** Stage A, Stage B1, and Stage B2 COMPLETE / REVIEW PASS / FROZEN
 **B4:** NOT AUTHORIZED
 **Related:** `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B2_EXTRACTION_SPEC.md`, `quality/P6_STAGE_B2_RESULT.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
 
-> This draft defines a reviewable B3 boundary. It does not authorize production,
-> fixture, evaluator, schema, lifecycle, provider, or MCP changes.
+> Spec review passed at `b3ce4219cde8c07eae7a4af2eb9c67c2de096231`
+> and authorized the scoped implementation recorded by
+> `quality/P6_STAGE_B3_RESULT.md`. The normative boundaries below remain the
+> reviewed implementation contract; B3 is not PASS or FROZEN pending code review.
 
 ---
 
@@ -273,7 +275,7 @@ provider-neutral, and case-testable.
 
 ## 7. Proposed deterministic Core admission policy
 
-This proposal is subject to B3 spec review. It is not authorized for code.
+This proposal passed B3 spec review and is the authorized B3 implementation policy.
 
 ### 7.1 Admission result
 
@@ -660,7 +662,7 @@ This source rule does not add a provider-specific path or schema. Structured
 Memory events remain compatible only after they have passed the frozen B2
 extractor validation and the ordinary task admission path.
 
-## 10. Required holdouts (design only)
+## 10. Required holdouts
 
 These cases must be implemented only after this spec is approved.
 
@@ -796,7 +798,7 @@ baseline; it does not extend or rewrite accepted prior-phase artifacts.
 
 ## 12. B3-specific comparison
 
-A future B3 comparison must have a distinct API/CLI identity, for example:
+The B3 comparison has a distinct API/CLI identity:
 
 ```text
 pnpm memory-space eval quality --compare-stage-b2-core-handoff
@@ -912,9 +914,10 @@ Real provider smoke reruns are not required solely for provider-neutral admissio
 policy unless implementation review identifies provider-visible behavior outside
 bootstrap/Handoff content.
 
-## 16. Implementation sequence after approval
+## 16. Authorized implementation sequence
 
-Do not begin this sequence until the reviewer authorizes B3 implementation.
+The reviewer authorized this sequence at the reviewed spec head. The candidate
+must still stop for code review before B3 can be declared PASS or FROZEN.
 
 ```text
 1. freeze B2 Core/Handoff before-state and fixture contract
@@ -944,9 +947,9 @@ The conservative deterministic extraction boundary is an accepted v1 capability
 boundary. B3 may decide disclosure for already-extracted Memory; it must not tune
 extraction for additional natural-language recall.
 
-## 18. Exit condition for this draft
+## 18. Spec-review exit condition
 
-This document is ready for review when the reviewer can determine:
+Spec review passed after the reviewer determined:
 
 - whether the proposed automatic Core gates are sufficiently small;
 - whether bounded-local scope belongs in B3 admission without reopening B2;
@@ -966,9 +969,9 @@ This document is ready for review when the reviewer can determine:
   drift;
 - whether C1–C22 and the delta gate protect critical context.
 
-Until that review completes:
+Current implementation-review state:
 
 ```text
-P6 Stage B3 = SPEC DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+P6 Stage B3 = SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
 P6 Stage B4 = NOT AUTHORIZED
 ```
