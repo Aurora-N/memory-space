@@ -15,7 +15,8 @@ import {
   ProviderSessionResolver,
   renderImplicitRecallContext,
   SpaceResolver,
-  type Memory
+  type Memory,
+  type Session
 } from "../src/index.ts";
 
 function bind(
@@ -80,6 +81,72 @@ test("exact candidate extraction applies distinctiveness before its bound", () =
   assert.deepEqual(extractExactKeyCandidates("abc lower ordinary 123 xyz_1 ABC", 2), [
     "123", "xyz_1"
   ]);
+  const maximumKey = `${"A".repeat(127)}1`;
+  assert.deepEqual(extractExactKeyCandidates(`${maximumKey}X`), []);
+  assert.deepEqual(extractExactKeyCandidates("_ABC_123"), []);
+});
+
+test("exact recall never prefix- or suffix-matches an invalid complete token", async () => {
+  const memorySpace = createDefaultMemorySpace({ extractor: new NoopExtractor() });
+  try {
+    const space = await memorySpace.createSpace({ id: "space-token-boundary", name: "Tokens" });
+    const source = await memorySpace.createSession({ spaceId: space.id });
+    const target = await memorySpace.createSession({ spaceId: space.id });
+    const maximumKey = `${"A".repeat(127)}1`;
+    await memorySpace.remember({
+      spaceId: space.id,
+      sourceSessionId: source.id,
+      family: "knowledge",
+      type: "fact",
+      key: maximumKey,
+      content: "must not disclose from an overlong prefix"
+    });
+    await memorySpace.remember({
+      spaceId: space.id,
+      sourceSessionId: source.id,
+      family: "knowledge",
+      type: "fact",
+      key: "ABC_123",
+      content: "must not disclose from an invalid leading character"
+    });
+    const service = new ImplicitRecallService(memorySpace);
+    for (const prompt of [`${maximumKey}X`, "_ABC_123"]) {
+      const result = await service.recall({ sessionId: target.id, prompt, mode: "exact" });
+      assert.equal(result.context, undefined);
+      assert.deepEqual(result.debugItems, []);
+    }
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("lexical mode runs bounded exact and full-prompt Memory searches concurrently", async () => {
+  let active = 0;
+  let maximumActive = 0;
+  const queries: string[] = [];
+  const now = new Date(0).toISOString();
+  const session: Session = {
+    id: "concurrent-session",
+    spaceId: "concurrent-space",
+    createdAt: now,
+    updatedAt: now
+  };
+  const service = new ImplicitRecallService({
+    async getSession() { return session; },
+    async search(input) {
+      queries.push(input.query);
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return [];
+    }
+  });
+  const prompt = "Compare ABC_1 DEF_2 with current repository evidence";
+  const result = await service.recall({ sessionId: session.id, prompt, mode: "lexical" });
+  assert.equal(result.context, undefined);
+  assert.deepEqual(queries.sort(), ["ABC_1", "DEF_2", prompt].sort());
+  assert.equal(maximumActive, 3);
 });
 
 test("prompt Memory directive is narrow and deterministic", () => {

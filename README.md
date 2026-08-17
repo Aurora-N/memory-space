@@ -166,6 +166,11 @@ pnpm memory-space unbind /absolute/path/to/project
 
 将 `mode` 改为 `lexical` 可再启用完整 prompt 的确定性词面召回；改为 `off` 可关闭自动 Indexed 披露。旧绑定缺少该字段时仍兼容并按 `exact` 工作。配置损坏、当前目录绑定与 Session Space 不一致，或召回服务故障时，本次召回会关闭，但 prompt 仍会正常继续。
 
+如果希望 Agent 在检查当前代码时也稳定参考记忆库，使用 `lexical`。Memory
+Space 会在 Agent 开始处理 prompt 前，并发执行有界 exact-key 与完整 prompt
+词面查询，把结果作为不可信历史上下文交给 Agent；Agent 随后可照常并行使用
+代码搜索/读取工具。daemon 不会为了“并发”而越权扫描仓库，当前代码证据仍优先。
+
 如果只需要绑定、不希望启动 Inspector，仍可在已运行的 daemon 上使用 `init`。它只创建或确认 Space，并原子写入项目绑定，不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
 
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
@@ -239,7 +244,7 @@ pnpm memory-space inspect /absolute/path/to/project
 - P5 Productization：Complete / Review Pass。
 - P6 Memory Quality v1：Complete / Review Pass / Frozen。
 - P6 B4 Semantic Retrieval / Dedup：经过评估后主动延期到 v2，而不是遗漏功能。详见 [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md)。
-- P7 Implicit Prompt-Time Recall：实现与自动化/真实 Provider 验证已完成，等待独立 code review，尚未 Frozen。
+- P7 Implicit Prompt-Time Recall：review hardening 与自动化/真实 Provider 验证已完成，等待独立 re-review，尚未 Frozen。
 
 v1 已知仍存在无词面重叠的语义表达不一致（semantic wording mismatch）和无稳定 key 的重复记忆（unkeyed duplicate）；当前证据不足以证明 embedding/vector infrastructure 的收益值得引入其存储、迁移、隐私、离线和模型版本复杂度。后续由真实自用（dogfooding）数据决定是否在 v2 重启。
 
@@ -422,6 +427,13 @@ to `off` to disable automatic Indexed disclosure. Older bindings without the
 field remain valid and default to `exact`. Invalid/mismatched binding policy or
 a recall-service failure disables recall for that prompt without blocking it.
 
+Use `lexical` when the agent should consistently consult Memory while inspecting
+current code. Before the agent processes the prompt, Memory Space concurrently
+runs bounded exact-key lookups and the full-prompt lexical lookup, then supplies
+the result as untrusted historical context. The agent can still use repository
+search/read tools normally; the daemon does not gain implicit repository-read
+authority, and current code remains authoritative.
+
 If you only need a binding and already have a daemon running, `init` remains available. It creates or confirms the Space and atomically writes the project binding without editing global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
 
 #### Open the local Memory Inspector
@@ -492,7 +504,7 @@ SQLite is the zero-configuration v1 implementation. The application depends on a
 - P5 Productization: Complete / Review Pass.
 - P6 Memory Quality v1: Complete / Review Pass / Frozen.
 - P6 B4 Semantic Retrieval / Dedup: deliberately deferred to v2. See [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md).
-- P7 Implicit Prompt-Time Recall: implemented and validated with deterministic and real-provider evidence; awaiting independent code review, not frozen.
+- P7 Implicit Prompt-Time Recall: review hardening is implemented and validated with deterministic and real-provider evidence; awaiting independent re-review, not frozen.
 
 Known v1 limitations include semantic wording mismatches with no lexical overlap and unkeyed duplicates. Current evidence does not show that embedding/vector infrastructure is worth its storage, migration, privacy, offline, and model-version complexity. Real dogfooding data should drive any v2 reopening.
 

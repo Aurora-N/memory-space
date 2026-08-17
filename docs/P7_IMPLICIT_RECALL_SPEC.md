@@ -1,6 +1,6 @@
 # P7 — Implicit Prompt-Time Recall Spec
 
-**Status:** P7.0A + P7.0B PASS; IMPLEMENTED / VALIDATED / AWAITING CODE REVIEW; NOT FROZEN
+**Status:** P7.0A + P7.0B PASS; CR HARDENING IMPLEMENTED / VALIDATED / AWAITING RE-REVIEW; NOT FROZEN
 **Phase:** P7  
 **Depends on:** P4 cross-session/provider durability, P5 productization, P6 Stage B1 retrieval precision & abstention, P6 Stage B3 Core/Handoff policy, Provider Integration v1  
 **Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PRODUCTIZATION_SPEC.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, `DOMAIN_MODEL.md`, `PRODUCT_SPEC.md`
@@ -543,13 +543,23 @@ Exact mode must reliably support opaque identifiers without turning ordinary pro
 
 ## 8.1 Base token shape
 
-A potential token may first satisfy:
+A potential token is first extracted as one complete maximal run of:
 
 ```text
-[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}
+[A-Za-z0-9._:/-]+
 ```
 
-This base regex alone is NOT sufficient to make it a key candidate.
+The complete run, not a matching prefix or suffix, must then satisfy:
+
+```text
+length = 3..128
+first character = [A-Za-z0-9]
+```
+
+An overlong run that shares a 128-character prefix with a Memory key is not a
+candidate. A run with an invalid leading allowed character such as `_ABC_123`
+must not suffix-match `ABC_123`. The base shape alone is NOT sufficient to make
+the run a key candidate.
 
 ## 8.2 Distinctive-condition gate
 
@@ -657,6 +667,10 @@ exact hits in prompt occurrence order
 then remaining lexical hits in frozen search order
 then de-duplicate
 ```
+
+The bounded exact-candidate lookups and the full-prompt lexical lookup MAY run
+concurrently. Concurrency must not affect the merge order above, eligibility,
+deduplication, budget, or production lexical ordering.
 
 `mode = exact` MUST NOT run full-prompt lexical retrieval.
 

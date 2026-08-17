@@ -1,9 +1,14 @@
 # P7 Implicit Prompt-Time Recall Result
 
-**Date:** 2026-08-17  
-**Review base:** `4a32ebb387a4d56627bb61554fcfb8332ffa4071`  
-**Implementation:** working tree, awaiting code review  
-**Status:** IMPLEMENTED / VALIDATED / AWAITING REVIEW — NOT FROZEN
+**Date:** 2026-08-17
+
+**Spec commit:** `4a32ebb387a4d56627bb61554fcfb8332ffa4071`
+
+**Implementation commit:** `5bedf63a7bcc5e3731c8b5ef2cba618b21be8219`
+
+**Hardening:** working tree on `5bedf63`, awaiting re-review commit
+
+**Status:** CR HARDENING IMPLEMENTED / VALIDATED / AWAITING RE-REVIEW — NOT FROZEN
 
 ## Outcome
 
@@ -73,15 +78,34 @@ See [`P7_PROVIDER_CAPABILITY_SPIKE.md`](./P7_PROVIDER_CAPABILITY_SPIKE.md).
 - Prompt opt-out prevents implicit retrieval and emits only a small trusted control.
 - No retrieval/extraction/domain/storage/MCP policy was changed.
 
+## Code-review hardening
+
+The initial review requested four closeout changes. The working tree now:
+
+- extracts a complete allowed-character run before enforcing the 3–128 exact-key
+  boundary, preventing overlong-prefix and invalid-leading-character disclosure;
+- wires recall-only diagnostics into the production daemon with a sanitized
+  default log and an injectable diagnostic callback;
+- runs the deterministic provider matrix through the real Codex/Claude lifecycle
+  integrations instead of manually invoking provider renderers;
+- runs bounded exact candidate lookups and the lexical full-prompt lookup
+  concurrently while preserving exact-first deterministic merge order.
+
+Regression tests cover both exact token boundary attacks, diagnostic fail-open
+behavior and non-disclosure of prompt/path data, integration-level provider
+output, and concurrent Memory query execution.
+
 ## Remaining gate
 
-P7 has not been declared review pass or frozen. Independent code review remains
-the only closeout blocker. GitHub CI was not independently confirmed.
+P7 has not been declared review pass or frozen. Independent re-review and a real
+hardening/review commit remain closeout blockers. The implementation commit is
+pinned above; no review SHA is fabricated from the current working tree. GitHub
+CI was not independently confirmed.
 
 ## Verification
 
 ```text
-pnpm run check                                      PASS (188/188)
+pnpm run check                                      PASS (191/191)
 pnpm run check:workspace                            PASS (root + Inspector)
 pnpm memory-space eval implicit-recall              PASS
 pnpm memory-space eval implicit-recall --json × 2   PASS (parsed JSON byte-equivalent)

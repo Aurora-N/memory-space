@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CheckpointPolicy,
-  claudeCodePromptContextOutput,
-  codexPromptContextOutput,
+  ClaudeCodeLifecycleIntegration,
+  CodexLifecycleIntegration,
   createDefaultMemorySpace,
   ImplicitRecallService,
   LifecycleHandler,
@@ -264,45 +264,51 @@ async function runScenario(
       checkpointPolicy: new CheckpointPolicy(memorySpace),
       implicitRecall: new ImplicitRecallService(memorySpace)
     });
-    const adapter = scenario.targetProvider === "codex"
-      ? new (await import("../src/adapters/providers/codex/adapter.ts")).CodexAdapter()
-      : new (await import("../src/adapters/providers/claude-code/adapter.ts")).ClaudeAdapter();
+    const integration = scenario.targetProvider === "codex"
+      ? new CodexLifecycleIntegration({ lifecycleHandler: handler })
+      : new ClaudeCodeLifecycleIntegration({ lifecycleHandler: handler });
     const externalSessionId = `target-${scenario.scenarioId}`;
-    const startEvent = adapter.normalizeEvent(nativeEvent(
+    const started = await integration.handleNative(nativeEvent(
       scenario.targetProvider,
       "SessionStart",
       externalSessionId,
       root
     ));
-    assert.ok(startEvent);
-    const started = await handler.handle(startEvent);
+    assert.equal(started.status, "ok");
     assert.equal(started.type, "session_start");
-    if (started.type !== "session_start") throw new Error("Expected session_start");
-    const bootstrapKeys = started.bootstrap.coreMemories.map((item) => item.key).filter(Boolean);
+    if (started.status !== "ok" || started.type !== "session_start") {
+      throw new Error("Expected provider SessionStart success");
+    }
+    const targetSession = await memorySpace.getSession(started.sessionId);
+    const bootstrap = await memorySpace.bootstrap(targetSession.spaceId);
+    const bootstrapKeys = bootstrap.coreMemories.map((item) => item.key).filter(Boolean);
     const bootstrapExcluded = scenario.bootstrapExcludedKeys.every(
       (key) => !bootstrapKeys.includes(key)
     );
 
-    const promptEvent = adapter.normalizeEvent(nativeEvent(
+    const response = await integration.handleNative(nativeEvent(
       scenario.targetProvider,
       "UserPromptSubmit",
       externalSessionId,
       root,
       scenario.prompt
     ));
-    assert.ok(promptEvent);
-    const result = await handler.handle(promptEvent);
-    assert.equal(result.type, "user_prompt");
-    if (result.type !== "user_prompt") throw new Error("Expected user_prompt");
-    const injectedKeys = result.recall?.debugItems.map((item) => item.key).filter(
-      (key): key is string => key !== undefined
-    ) ?? [];
-    const context = result.recall?.context;
-    const output = context
-      ? scenario.targetProvider === "codex"
-        ? codexPromptContextOutput(context)
-        : claudeCodePromptContextOutput(context)
+    assert.equal(response.status, "ok");
+    assert.equal(response.type, "user_prompt");
+    if (response.status !== "ok" || response.type !== "user_prompt") {
+      throw new Error("Expected provider UserPromptSubmit success");
+    }
+    const output = response.output;
+    const context = output?.hookSpecificOutput?.hookEventName === "UserPromptSubmit"
+      ? output.hookSpecificOutput.additionalContext
       : undefined;
+    const injectedKeys = Object.entries(fixture.memoryCatalog)
+      .filter(([, item]) => context?.includes(item.content) ?? false)
+      .sort((left, right) => (
+        (context?.indexOf(left[1].content) ?? -1)
+        - (context?.indexOf(right[1].content) ?? -1)
+      ))
+      .map(([key]) => key);
     const contentAssertionsPassed = scenario.expectedInjectedKeys.every(
       (key) => context?.includes(fixture.memoryCatalog[key]!.content) ?? false
     ) && Object.entries(fixture.memoryCatalog).every(([key, item]) => (
@@ -328,8 +334,9 @@ async function runScenario(
       sourceProvider: scenario.sourceProvider,
       targetProvider: scenario.targetProvider,
       classification: scenario.classification,
-      effectiveMode: result.recall?.effectiveMode ?? "off",
-      bypassed: result.recall?.bypassed ?? false,
+      effectiveMode: scenario.classification === "opt-out" ? "off" : scenario.mode,
+      bypassed: scenario.classification === "opt-out"
+        && (context?.includes("disabled Memory Space reads") ?? false),
       bootstrapExcluded,
       injectedKeys,
       firstKey,

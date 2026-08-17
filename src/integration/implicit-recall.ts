@@ -54,7 +54,7 @@ export const implicitRecallDefaults = Object.freeze({
 
 export const exactPromptControl = "The complete user prompt matched a durable Memory key. Answer using the recalled content. Do not call Memory tools unless the recalled information is incomplete.";
 
-const baseCandidatePattern = /[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}/gu;
+const allowedCandidateRunPattern = /[A-Za-z0-9._:/-]+/gu;
 const truncationMarker = "… [truncated]";
 const wrapperStart = [
   "<memory_space_recall trust=\"untrusted-project-data\">",
@@ -85,8 +85,10 @@ export function extractExactKeyCandidates(prompt: string, limit = 8): string[] {
     "maxExactKeyCandidates");
   const result: string[] = [];
   const seen = new Set<string>();
-  for (const match of prompt.matchAll(baseCandidatePattern)) {
+  for (const match of prompt.matchAll(allowedCandidateRunPattern)) {
     const candidate = match[0];
+    if (candidate.length < 3 || candidate.length > 128) continue;
+    if (!/^[A-Za-z0-9]/u.test(candidate)) continue;
     if (!distinctiveCandidate(candidate)) continue;
     const normalized = normalizeLexicalText(candidate);
     if (seen.has(normalized)) continue;
@@ -189,11 +191,11 @@ export class ImplicitRecallService implements ImplicitRecallServicePort {
       score?: number;
     }> = [];
     const selectedIds = new Set<string>();
-
-    for (const candidate of extractExactKeyCandidates(
+    const candidates = extractExactKeyCandidates(
       input.prompt,
       this.maxExactKeyCandidates
-    )) {
+    );
+    const exactRequest = Promise.all(candidates.map(async (candidate) => {
       const matches = await this.memorySpace.search({
         spaceId: session.spaceId,
         query: candidate,
@@ -204,20 +206,32 @@ export class ImplicitRecallService implements ImplicitRecallServicePort {
       const normalizedCandidate = normalizeLexicalText(candidate);
       const exact = matches.find(({ memory }) => memory.key !== undefined
         && normalizeLexicalText(memory.key) === normalizedCandidate);
-      if (!exact || selectedIds.has(exact.memory.id)) continue;
-      selectedIds.add(exact.memory.id);
-      selected.push({ memory: exact.memory, reason: "exact_key", score: exact.score });
-    }
-
-    if (input.mode === "lexical") {
-      const matches = await this.memorySpace.search({
+      return exact
+        ? { memory: exact.memory, reason: "exact_key" as const, score: exact.score }
+        : undefined;
+    }));
+    const lexicalRequest = input.mode === "lexical"
+      ? this.memorySpace.search({
         spaceId: session.spaceId,
         query: input.prompt,
         tiers: ["indexed"],
         statuses: ["active"],
         limit: 20
-      });
-      for (const match of matches) {
+      })
+      : Promise.resolve([]);
+    const [exactMatches, lexicalMatches] = await Promise.all([
+      exactRequest,
+      lexicalRequest
+    ]);
+
+    for (const exact of exactMatches) {
+      if (!exact || selectedIds.has(exact.memory.id)) continue;
+      selectedIds.add(exact.memory.id);
+      selected.push(exact);
+    }
+
+    if (input.mode === "lexical") {
+      for (const match of lexicalMatches) {
         if (selectedIds.has(match.memory.id)) continue;
         selectedIds.add(match.memory.id);
         selected.push({ memory: match.memory, reason: "lexical", score: match.score });

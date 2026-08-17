@@ -431,3 +431,54 @@ test("daemon accepts only an explicit loopback host set before owner constructio
   );
   assert.equal(factoryCalls, 0);
 });
+
+test("daemon logs sanitized recall diagnostics while keeping provider prompts fail-open", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "memory-space-daemon-diagnostic-"));
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...values: unknown[]): void => { warnings.push(values); };
+  const daemon = createMemorySpaceDaemon({
+    host: "127.0.0.1",
+    port: 0,
+    databasePath: join(directory, "memory.db"),
+    codexRuntime: {
+      cwd: join(directory, "secret-project-path"),
+      explicitSpaceId: "diagnostic-space"
+    }
+  });
+  try {
+    await daemon.memorySpace.createSpace({ id: "diagnostic-space", name: "Diagnostics" });
+    const start = await daemon.codexIntegration.handleNative({
+      session_id: "diagnostic-native-session",
+      transcript_path: join(directory, "secret-transcript.jsonl"),
+      cwd: join(directory, "secret-project-path"),
+      hook_event_name: "SessionStart",
+      source: "startup"
+    });
+    assert.equal(start.status, "ok");
+    if (start.status !== "ok") throw new Error("Expected session start success");
+    const prompt = await daemon.codexIntegration.handleNative({
+      session_id: "diagnostic-native-session",
+      transcript_path: join(directory, "secret-transcript.jsonl"),
+      cwd: join(directory, "secret-project-path"),
+      hook_event_name: "UserPromptSubmit",
+      turn_id: "diagnostic-turn",
+      prompt: "SECRET_PROMPT_CONTENT"
+    });
+    assert.deepEqual(prompt, {
+      status: "ok",
+      type: "user_prompt",
+      sessionId: start.sessionId
+    });
+    assert.equal(warnings.length, 1);
+    const logged = warnings.flat().join(" ");
+    assert.match(logged, /IMPLICIT_RECALL_UNAVAILABLE/u);
+    assert.match(logged, /Implicit Memory recall unavailable/u);
+    assert.doesNotMatch(logged, /SECRET_PROMPT_CONTENT|secret-project-path|secret-transcript/u);
+    assert.equal((await daemon.memorySpace.listEvents(start.sessionId)).length, 1);
+  } finally {
+    console.warn = originalWarn;
+    await daemon.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

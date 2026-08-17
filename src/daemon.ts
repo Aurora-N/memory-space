@@ -22,7 +22,10 @@ import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { createInspectorRequestHandler } from "./http/inspector.ts";
 import { createInspectorStaticHandler } from "./http/inspector-static.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
-import { LifecycleHandler } from "./integration/lifecycle-handler.ts";
+import {
+  LifecycleHandler,
+  type LifecycleDiagnostic
+} from "./integration/lifecycle-handler.ts";
 import { ImplicitRecallService } from "./integration/implicit-recall.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
 import { createMemoryMcpServerForGateway } from "./mcp/server.ts";
@@ -37,6 +40,7 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   claudeCodeRuntime?: ClaudeCodeLifecycleRuntimeContext;
   memorySpaceFactory?: (options: DefaultMemorySpaceOptions) => MemorySpace;
   onMcpError?: (error: Error) => void;
+  onLifecycleDiagnostic?: (diagnostic: LifecycleDiagnostic) => void;
   inspectorDirectory?: string | false;
 }
 
@@ -53,6 +57,12 @@ export interface MemorySpaceDaemon {
 }
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+function logLifecycleDiagnostic(diagnostic: LifecycleDiagnostic): void {
+  console.warn(
+    `[memory-space] ${diagnostic.warning.error.code}: ${diagnostic.warning.error.message}`
+  );
+}
 
 export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.trim().toLowerCase());
@@ -97,7 +107,8 @@ export function createMemorySpaceDaemon(
     spaceResolver,
     sessionResolver: new ProviderSessionResolver(memorySpace),
     checkpointPolicy,
-    implicitRecall: new ImplicitRecallService(memorySpace)
+    implicitRecall: new ImplicitRecallService(memorySpace),
+    onWarning: options.onLifecycleDiagnostic ?? logLifecycleDiagnostic
   });
   const runtime: MCPRuntimeContext = {
     cwd: options.mcpRuntime?.cwd ?? process.env.MEMORY_SPACE_CWD ?? process.cwd(),

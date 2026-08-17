@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P7 Implicit Prompt-Time Recall — IMPLEMENTED / VALIDATED / AWAITING REVIEW
+**Current phase:** P7 Implicit Prompt-Time Recall — CR HARDENING IMPLEMENTED / VALIDATED / AWAITING RE-REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 
@@ -49,7 +49,7 @@ P6 — Memory Quality v1                         COMPLETE / REVIEW PASS / FROZEN
      Stage B3 Core/Handoff Pollution            COMPLETE / REVIEW PASS / FROZEN
      Stage B4 Semantic Retrieval/Dedup          DEFERRED TO V2
 
-P7 — Implicit Prompt-Time Indexed Recall       IMPLEMENTED / AWAITING REVIEW
+P7 — Implicit Prompt-Time Indexed Recall       CR HARDENING / AWAITING RE-REVIEW
 ```
 
 P3's real Claude model-driven MCP check remains externally blocked under the existing scoped waiver. P6 must not add Claude-specific aliases or otherwise weaken the exact shared MCP contract.
