@@ -146,8 +146,9 @@ abstention rises from 0 to 1.0. The frozen Stage B2 policy raises extraction fro
 metric set unchanged. It also freezes the accepted Stage A extraction contract
 and exposes a B2-specific comparison gate. B2 passed final review and is frozen.
 The Stage B3 Core/Handoff policy and its working-state provenance hardening passed
-final review and are frozen. Embeddings, vector search, semantic dedup, and all
-Stage B4 work remain unauthorized.
+final review and are frozen. P6 Memory Quality v1 is therefore COMPLETE / REVIEW
+PASS / FROZEN. Stage B4 semantic retrieval and dedup are deliberately deferred
+to v2 rather than treated as unfinished v1 scope.
 
 See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md),
 [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md),
@@ -163,11 +164,12 @@ P5 Productization
 → COMPLETE / REVIEW PASS
 
 P6 Memory Quality v1
+→ COMPLETE / REVIEW PASS / FROZEN
 → Stage A deterministic baseline COMPLETE / REVIEW PASS / FROZEN
 → Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
 → Stage B2 Extraction Quality COMPLETE / REVIEW PASS / FROZEN
 → Stage B3 Core/Handoff Policy COMPLETE / REVIEW PASS / FROZEN
-→ Stage B4 NOT AUTHORIZED
+→ Stage B4 Semantic Retrieval / Dedup DEFERRED TO V2
 
 P7 Optional MCP-first provider validation
 → only if it proves additional compatibility value
@@ -207,6 +209,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/P6_STAGE_B2_EXTRACTION_SPEC.md`](docs/P6_STAGE_B2_EXTRACTION_SPEC.md) — normative P6 Stage B2 deterministic extraction execution spec
 - [`docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md) — normative B2.1 durability-boundary and extraction-eval hardening spec
 - [`docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md) — frozen P6 Stage B3 Core/Handoff admission and evaluation policy
+- [`docs/adr/0004-semantic-recall-options-after-b1.md`](docs/adr/0004-semantic-recall-options-after-b1.md) — accepted decision to defer semantic memory to v2
 - [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
 - [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md) — Stage B1 candidate metrics, deltas, and local validation evidence
 
@@ -228,7 +231,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A, B1, B2, and B3 are COMPLETE / REVIEW PASS / FROZEN. B4 is not authorized.**
+**P6 Memory Quality v1: COMPLETE / REVIEW PASS / FROZEN. Stage A, B1, B2, and B3 are frozen; B4 Semantic Retrieval / Dedup is DEFERRED TO V2 by ADR 0004.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 

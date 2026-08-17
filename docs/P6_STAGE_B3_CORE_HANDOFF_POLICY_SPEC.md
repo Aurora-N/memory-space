@@ -1,16 +1,17 @@
 # P6 Stage B3 — Core / Handoff Pollution Policy Spec
 
-**Status:** SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Phase:** P6 Stage B3
 **Reviewed B2 head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Prerequisites:** Stage A, Stage B1, and Stage B2 COMPLETE / REVIEW PASS / FROZEN
-**B4:** NOT AUTHORIZED
+**B4:** DEFERRED TO V2
 **Related:** `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B2_EXTRACTION_SPEC.md`, `quality/P6_STAGE_B2_RESULT.md`, `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`
 
 > Spec review passed at `b3ce4219cde8c07eae7a4af2eb9c67c2de096231`
 > and authorized the scoped implementation recorded by
 > `quality/P6_STAGE_B3_RESULT.md`. The normative boundaries below remain the
-> reviewed implementation contract; B3 is not PASS or FROZEN pending code review.
+> reviewed and frozen implementation contract. B4 semantic retrieval/dedup is
+> deferred to v2 by ADR 0004.
 
 ---
 
@@ -969,9 +970,9 @@ Spec review passed after the reviewer determined:
   drift;
 - whether C1–C22 and the delta gate protect critical context.
 
-Current implementation-review state:
+Final phase state:
 
 ```text
-P6 Stage B3 = SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
-P6 Stage B4 = NOT AUTHORIZED
+P6 Stage B3 = COMPLETE / REVIEW PASS / FROZEN
+P6 Stage B4 = DEFERRED TO V2
 ```

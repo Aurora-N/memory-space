@@ -1,6 +1,6 @@
 # P6 — Memory Quality v1 Spec
 
-**Status:** Stage A/B1/B2/B3 COMPLETE / REVIEW PASS / FROZEN; B4 NOT AUTHORIZED
+**Status:** P6 COMPLETE / REVIEW PASS / FROZEN; Stage A/B1/B2/B3 FROZEN; B4 DEFERRED TO V2
 **Phase:** P6  
 **Primary goal:** Measure and improve whether durable Memory remains useful and correct over long horizons  
 **Depends on:** P5 reviewed; P4 durable cross-session proof retained  
@@ -205,7 +205,7 @@ B3 — Core / Handoff Pollution Policy
      COMPLETE / REVIEW PASS / FROZEN
 
 B4 — Semantic Dedup / Semantic Retrieval architecture decision
-     OPTIONAL / NOT AUTHORIZED
+     DEFERRED TO V2
 ```
 
 The normative B1 execution spec is:
@@ -214,8 +214,9 @@ The normative B1 execution spec is:
 docs/P6_STAGE_B_RETRIEVAL_SPEC.md
 ```
 
-B1, B2, and B3 completed code/quality review and are frozen. B4 remains
-unauthorized.
+B1, B2, and B3 completed code/quality review and are frozen. Together with the
+accepted Stage A baseline, they complete P6 Memory Quality v1. B4 is deferred to
+v2 by ADR 0004 and is not unfinished v1 scope.
 
 ---
 
@@ -338,7 +339,8 @@ For B1, the accepted reference metrics and non-regression/improvement gates are 
 
 Do not present benchmark-specific thresholds as generic production guarantees.
 
-Later B2/B3/B4 thresholds must be added through their own reviewed execution specs.
+Any future v2 semantic-memory thresholds must be added through their own
+reviewed execution specs.
 
 ---
 
@@ -437,7 +439,8 @@ The accepted baseline ranks retrieval precision/abstention as the highest-value 
 4. semantic dedup / semantic retrieval architecture
 ```
 
-Items 1, 2, and 3 completed review and are frozen. Item 4 remains unauthorized.
+Items 1, 2, and 3 completed review and are frozen. Item 4 is a known limitation
+deferred to v2 under ADR 0004.
 
 Stage B1 must:
 
@@ -454,17 +457,22 @@ See [`P6_STAGE_B_RETRIEVAL_SPEC.md`](./P6_STAGE_B_RETRIEVAL_SPEC.md) for the nor
 
 ---
 
-# 13. Later Stage B decisions
+# 13. Stage B4 v2 deferral
 
 After B1 review, B2 extraction quality and B3 Core/Handoff policy were
-authorized, reviewed, and frozen. Later review may authorize:
+authorized, reviewed, and frozen. P6 v1 is complete. The following capabilities
+are deferred to v2:
 
 ```text
 semantic-recall architecture experiment
 semantic dedup architecture work
 ```
 
-Do not infer authorization from roadmap ordering alone.
+This is a deliberate product/architecture decision, not an incomplete phase.
+The deterministic v1 goals are met; semantic wording mismatch and unkeyed
+duplicates remain documented limitations; and current benchmark evidence does
+not justify embedding/vector complexity. A v2 proposal must be driven by real
+dogfooding evidence and pass a separate architecture review.
 
 If B1 shows that remaining retrieval failures have little/no lexical overlap, treat that as evidence of a lexical capability boundary. Stop and compare semantic options before adding embeddings/vector infrastructure.
 
@@ -510,4 +518,5 @@ B2.1 hardening governed by
 B2 is reviewer-approved and frozen. The reviewed B3 spec is
 [`P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md);
 the B3 policy and working-state provenance hardening are reviewer-approved and
-frozen. B4 remains blocked pending separate authorization.
+frozen. P6 is complete and frozen. ADR 0004 defers B4 semantic retrieval and
+dedup to v2.

@@ -14,9 +14,9 @@
 
 Implementation and local comparison evidence are recorded in
 [`quality/P6_STAGE_B1_RESULT.md`](./quality/P6_STAGE_B1_RESULT.md). Stage B1 is
-reviewed and frozen. B2 subsequently completed review and is frozen. The B3 spec
-is drafted, but implementation has not started and awaits review; B4 remains
-unauthorized.
+reviewed and frozen. B2 and B3 subsequently completed review and are frozen. P6
+Memory Quality v1 is complete; B4 semantic retrieval/dedup is deferred to v2 by
+ADR 0004.
 
 ---
 

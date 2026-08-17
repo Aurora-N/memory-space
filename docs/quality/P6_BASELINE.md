@@ -8,7 +8,7 @@
 **CR-PHASE9 tie-fixture commit:** `39bfc6266ad412c3188c0f8c173e5c84a0f37b9f`
 **Accepted evidence commit:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`
 **Status:** COMPLETE / REVIEW PASS / FROZEN — CR-PHASE9
-**Follow-up:** P6 Stage B1/B2 COMPLETE / REVIEW PASS / FROZEN; Stage B3 IMPLEMENTED / AWAITING CODE REVIEW; B4 not authorized
+**Follow-up:** P6 Memory Quality v1 COMPLETE / REVIEW PASS / FROZEN; Stage B1/B2/B3 frozen; B4 Semantic Retrieval / Dedup DEFERRED TO V2
 
 This document is the immutable historical Stage A before-state for later quality comparisons. It records the current production Memory implementation before Stage B product retrieval changes.
 

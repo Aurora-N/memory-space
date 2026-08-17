@@ -10,8 +10,8 @@
 **Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Accepted Stage A reference:** `9490ebce94928132a2fb16aca247c8ae4888a7cf`  
 **P6 Stage B1:** REVIEW PASS / FROZEN  
-**P6 Stage B3:** IMPLEMENTED / AWAITING CODE REVIEW
-**P6 Stage B4:** NOT AUTHORIZED
+**P6 Stage B3:** COMPLETE / REVIEW PASS / FROZEN
+**P6 Stage B4:** DEFERRED TO V2
 
 > B2.1 is a narrow review hardening pass. It does not reopen B1 and does not authorize B3/B4. It closes the remaining durability-boundary and evaluator-contract blockers found during B2 code review.
 
@@ -1158,5 +1158,6 @@ Awaiting B2 final re-review.
 
 At that historical implementation point, the Agent did not self-mark B2 as PASS,
 ACCEPTED, or FROZEN. Final review subsequently passed at
-`e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`; B2 is now frozen. B3 has only a
-draft spec and remains unauthorized for implementation. B4 remains unauthorized.
+`e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`; B2 is now frozen. B3 subsequently
+passed final review and is frozen. P6 v1 is complete, and B4 semantic
+retrieval/dedup is deferred to v2 by ADR 0004.

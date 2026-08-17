@@ -20,8 +20,8 @@
 
 This document records the reviewed and frozen deterministic B1 result. Its
 metrics are benchmark evidence, not a universal product-quality SLO. B2 later
-completed review and is also frozen. The B3 candidate is implemented and awaits
-code review; B4 remains unauthorized.
+completed review and is also frozen. B3 later completed review and is frozen;
+P6 is complete, and B4 semantic retrieval/dedup is deferred to v2 by ADR 0004.
 
 ## Change boundary
 
@@ -175,8 +175,8 @@ negative-query-false-positive
 ```
 
 New retrieval failure examples: none. The two wording-mismatch Recall@3 failures
-remain unchanged. Extraction, Core pollution, and duplicate failures also remain
-unchanged because B2/B3/B4 were not started.
+remain unchanged. At the time of this B1 measurement, extraction, Core pollution,
+and duplicate failures were also unchanged because later stages had not started.
 
 ## Correctness and determinism
 
@@ -228,6 +228,6 @@ overlap. B1 stops here instead of adding semantic infrastructure. The separately
 reviewable alternatives are compared in
 [`../adr/0004-semantic-recall-options-after-b1.md`](../adr/0004-semantic-recall-options-after-b1.md).
 
-Frozen decision: keep the deterministic lexical B1 policy. Semantic-recall work
-still requires a separate B4 architecture review. B2 extraction work proceeds
-under its own spec and must not modify this retrieval policy.
+Frozen decision: keep the deterministic lexical B1 policy. ADR 0004 subsequently
+deferred semantic-memory work to v2, where any implementation still requires a
+separate architecture review. Later stages do not modify this retrieval policy.

@@ -7,7 +7,8 @@
 **Reviewed spec head:** `b3ce4219cde8c07eae7a4af2eb9c67c2de096231`
 **Frozen B2 source:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
 **Stage A/B1/B2:** COMPLETE / REVIEW PASS / FROZEN
-**Stage B4:** NOT STARTED / NOT AUTHORIZED
+**P6 Memory Quality v1:** COMPLETE / REVIEW PASS / FROZEN
+**Stage B4:** DEFERRED TO V2
 
 This document records the reviewed and frozen B3 implementation plus its
 deterministic local evidence.
@@ -279,7 +280,7 @@ deduplication, new tier, new provider, or B4 work was added.
 - importance/confidence remain audit-only and do not optimize Core admission;
 - resolved former-Core task completion semantics remain unchanged;
 - lexical wording mismatch and unkeyed semantic duplicates remain the frozen
-  B1/B4 capability inputs;
+  v2 semantic-memory capability inputs;
 - real provider smoke sessions were not rerun because the policy is
   provider-neutral; both existing smoke runner self-tests are required and pass;
 - GitHub CI was not independently observed.
@@ -287,6 +288,7 @@ deduplication, new tier, new provider, or B4 work was added.
 P6 Stage B3 Handoff working-state provenance hardening COMPLETE / REVIEW PASS / FROZEN.
 
 P6 Stage A/B1/B2 remain frozen.
-P6 Stage B4 NOT started.
+P6 Memory Quality v1 is COMPLETE / REVIEW PASS / FROZEN.
+P6 Stage B4 Semantic Retrieval / Dedup is DEFERRED TO V2.
 
-B3 review is complete. Stage B4 remains unauthorized.
+B3 review is complete. B4 is an evaluated v2 deferral, not unfinished v1 work.

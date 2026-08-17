@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Stage B3 Core/Handoff Pollution Policy — COMPLETE / REVIEW PASS / FROZEN
+**Current phase:** P6 Memory Quality v1 — COMPLETE / REVIEW PASS / FROZEN
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 
@@ -42,12 +42,12 @@ P3 — Claude Code Provider Integration          ACCEPTED WITH SCOPED WAIVER
 P4 — Cross-Session & Cross-Provider Eval       COMPLETE / REVIEW PASS
 
 P5 — Productization                            COMPLETE / REVIEW PASS
-P6 — Memory Quality v1
+P6 — Memory Quality v1                         COMPLETE / REVIEW PASS / FROZEN
      Stage A deterministic baseline            COMPLETE / REVIEW PASS / FROZEN
      Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
      Stage B2 Extraction Quality               COMPLETE / REVIEW PASS / FROZEN
      Stage B3 Core/Handoff Pollution            COMPLETE / REVIEW PASS / FROZEN
-     Stage B4 Semantic Retrieval/Dedup          OPTIONAL / NOT AUTHORIZED
+     Stage B4 Semantic Retrieval/Dedup          DEFERRED TO V2
 
 P7 — Optional MCP-first Provider Validation    OPTIONAL
 ```
@@ -188,7 +188,7 @@ The next phase state is:
 
 ```text
 B3 — Core / Handoff Pollution Policy COMPLETE / REVIEW PASS / FROZEN
-B4 — Semantic Dedup / Semantic Retrieval architecture decision
+B4 — Semantic Retrieval / Dedup DEFERRED TO V2
 ```
 
 ## 4.4 Stage B3 — Core / Handoff Pollution Policy — COMPLETE / REVIEW PASS / FROZEN
@@ -200,7 +200,19 @@ deterministic admission/inclusion policy plus the B3-specific comparison
 contract. Reviewed evidence is recorded in
 [`quality/P6_STAGE_B3_RESULT.md`](./quality/P6_STAGE_B3_RESULT.md). The policy,
 working-state provenance hardening, and deterministic comparison gates passed
-final review and are frozen. B4 remains unauthorized.
+final review and are frozen.
+
+## 4.5 Stage B4 — Semantic Retrieval / Dedup — DEFERRED TO V2
+
+B4 is an evaluated deferral, not unfinished P6 work. ADR 0004 records the
+decision: deterministic v1 quality goals are complete, while the remaining
+semantic wording mismatches and unkeyed duplicates are known limitations.
+Current evidence does not show that embedding/vector infrastructure is worth
+its storage, migration, privacy, offline, model-governance, and operational
+complexity. Semantic retrieval and consolidation will be reconsidered for v2
+only with representative dogfooding evidence and a separately reviewed design.
+
+See [`adr/0004-semantic-recall-options-after-b1.md`](./adr/0004-semantic-recall-options-after-b1.md).
 
 Changing corpus creation and search ranking in the same stage is intentionally avoided so quality deltas remain attributable.
 
@@ -257,5 +269,5 @@ accepted before-state
 → explicit authorization for the next stage
 ```
 
-Current work stops after the reviewed and frozen B3 policy. All B4 work remains
-unauthorized pending a separate reviewed specification.
+P6 closes after the reviewed and frozen B3 policy. B4 is deferred to v2 and is
+not a missing v1 deliverable.

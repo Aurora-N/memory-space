@@ -8,8 +8,8 @@
 **B2.1 hardening implementation:** `5ea1bffac6ee2774880a5bad181bfed0f75e8355`
 **Task-boundary hardening:** `4655124`
 **Final reviewed head:** `e0ff2ac0248920c7c853162e4ea2f09dd2b7d260`
-**B3:** SPEC REVIEW PASS / IMPLEMENTED / AWAITING CODE REVIEW
-**B4:** NOT AUTHORIZED
+**B3:** COMPLETE / REVIEW PASS / FROZEN
+**B4:** DEFERRED TO V2
 
 This document records the measured Stage A extraction failures, the reviewed B2
 candidate evidence, and the final freeze decision. B2 does not modify the frozen
@@ -398,5 +398,5 @@ After B2 freeze, each of the following requires a new architecture/phase review:
 
 The current conservative deterministic extraction boundary is an accepted v1
 capability boundary. Do not continue adding regular expressions merely to raise
-natural-language recall. B3 may review Core/Handoff admission for already-valid
-Memory, but its production implementation has not started. B4 is not authorized.
+natural-language recall. B3 Core/Handoff admission subsequently passed review
+and is frozen. ADR 0004 defers B4 semantic retrieval/dedup to v2.
