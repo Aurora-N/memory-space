@@ -1,7 +1,7 @@
 # P6 Stage B3 — Core / Handoff Pollution Policy Result
 
 **Date:** 2026-08-17
-**Status:** CR HARDENING IMPLEMENTED / AWAITING FINAL CODE RE-REVIEW — NOT PASS / NOT FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Source of Truth:** `docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 **Hardening Source of Truth:** `docs/P6_STAGE_B3_HANDOFF_WORKING_STATE_PROVENANCE_HARDENING_CR_SPEC.md`
 **Reviewed spec head:** `b3ce4219cde8c07eae7a4af2eb9c67c2de096231`
@@ -9,8 +9,8 @@
 **Stage A/B1/B2:** COMPLETE / REVIEW PASS / FROZEN
 **Stage B4:** NOT STARTED / NOT AUTHORIZED
 
-This document records the B3 implementation candidate and deterministic local
-evidence. It does not declare B3 review PASS or freeze the policy.
+This document records the reviewed and frozen B3 implementation plus its
+deterministic local evidence.
 
 ## Frozen before-state
 
@@ -284,9 +284,9 @@ deduplication, new tier, new provider, or B4 work was added.
   provider-neutral; both existing smoke runner self-tests are required and pass;
 - GitHub CI was not independently observed.
 
-P6 Stage B3 Handoff working-state provenance hardening implemented.
+P6 Stage B3 Handoff working-state provenance hardening COMPLETE / REVIEW PASS / FROZEN.
 
 P6 Stage A/B1/B2 remain frozen.
 P6 Stage B4 NOT started.
 
-Awaiting B3 final code re-review.
+B3 review is complete. Stage B4 remains unauthorized.

@@ -21,7 +21,7 @@ The MVP implements a durable, provider-independent memory layer that proves **Cr
 - frozen deterministic 20-Session Memory Quality Stage A baseline
 - frozen Stage B1 deterministic retrieval policy and before/after comparison
 - frozen Stage B2 deterministic extraction policy and before/after comparison
-- Stage B3 Core/Handoff policy spec drafted; implementation awaiting review
+- frozen Stage B3 deterministic Core/Handoff admission and provenance-aware projection policy
 
 ## Run locally
 
@@ -145,12 +145,14 @@ abstention rises from 0 to 1.0. The frozen Stage B2 policy raises extraction fro
 4 TP / 1 FP / 2 FN to 6 TP / 0 FP / 0 FN while leaving the full B1/downstream
 metric set unchanged. It also freezes the accepted Stage A extraction contract
 and exposes a B2-specific comparison gate. B2 passed final review and is frozen.
-The B3 Core/Handoff policy spec is drafted, but implementation is not authorized;
-embeddings, vector search, and semantic dedup remain unauthorized.
+The Stage B3 Core/Handoff policy and its working-state provenance hardening passed
+final review and are frozen. Embeddings, vector search, semantic dedup, and all
+Stage B4 work remain unauthorized.
 
 See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md),
-[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md), and
-[`docs/quality/P6_STAGE_B2_RESULT.md`](docs/quality/P6_STAGE_B2_RESULT.md).
+[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md),
+[`docs/quality/P6_STAGE_B2_RESULT.md`](docs/quality/P6_STAGE_B2_RESULT.md), and
+[`docs/quality/P6_STAGE_B3_RESULT.md`](docs/quality/P6_STAGE_B3_RESULT.md).
 
 ## Next roadmap
 
@@ -164,7 +166,7 @@ P6 Memory Quality v1
 → Stage A deterministic baseline COMPLETE / REVIEW PASS / FROZEN
 → Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
 → Stage B2 Extraction Quality COMPLETE / REVIEW PASS / FROZEN
-→ Stage B3 Core/Handoff spec DRAFTED / NOT IMPLEMENTED / AWAITING REVIEW
+→ Stage B3 Core/Handoff Policy COMPLETE / REVIEW PASS / FROZEN
 → Stage B4 NOT AUTHORIZED
 
 P7 Optional MCP-first provider validation
@@ -204,7 +206,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 - [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) — normative P6 Stage B1 retrieval precision/abstention execution spec
 - [`docs/P6_STAGE_B2_EXTRACTION_SPEC.md`](docs/P6_STAGE_B2_EXTRACTION_SPEC.md) — normative P6 Stage B2 deterministic extraction execution spec
 - [`docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md) — normative B2.1 durability-boundary and extraction-eval hardening spec
-- [`docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md) — draft P6 Stage B3 Core/Handoff admission and evaluation policy; implementation not authorized
+- [`docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md) — frozen P6 Stage B3 Core/Handoff admission and evaluation policy
 - [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
 - [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md) — Stage B1 candidate metrics, deltas, and local validation evidence
 
@@ -226,7 +228,7 @@ The MVP's single-active-process checkpoint assumption and future Provider-to-can
 
 **P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
 
-**P6 Memory Quality v1: Stage A, B1, and B2 are COMPLETE / REVIEW PASS / FROZEN. The B3 Core/Handoff policy spec is drafted but implementation has not started and awaits review. B4 is not authorized.**
+**P6 Memory Quality v1: Stage A, B1, B2, and B3 are COMPLETE / REVIEW PASS / FROZEN. B4 is not authorized.**
 
 P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
 
