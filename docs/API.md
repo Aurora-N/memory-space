@@ -35,6 +35,9 @@ error responses use:
 | `memory.remember` | `POST /spaces/:spaceId/memories` |
 | `memory.get` | `GET /memories/:memoryId` |
 | `memory.search` | `GET /spaces/:spaceId/memories/search?query=...` |
+| Inspector Memory browse | `GET /spaces/:spaceId/memories` |
+| Inspector overview | `GET /spaces/:spaceId/overview` |
+| Inspector trusted binding | `GET /inspector/api/binding` |
 | `memory.context` | `POST /spaces/:spaceId/memory-context` |
 | `memory.promote` | `POST /memories/:memoryId/promote` |
 | `memory.demote` | `POST /memories/:memoryId/demote` |
@@ -46,6 +49,13 @@ error responses use:
 | `bootstrap` | `GET /spaces/:spaceId/bootstrap` |
 
 Search supports comma-separated `families`, `types`, `tiers`, and `statuses`, plus a `limit` from 1 to 100. Omitted statuses default to `active`.
+
+Inspector browse supports the same comma-separated filters, a `limit` from 1
+to 100, and an opaque `cursor`. It is a database-browse operation ordered by
+latest update, not a relevance search; omitted statuses include all statuses.
+The binding endpoint resolves the daemon's trusted explicit Space or nearest
+project config and does not accept a caller-selected Space. See
+[`LOCAL_INSPECTOR_SPEC.md`](./LOCAL_INSPECTOR_SPEC.md).
 
 The Codex lifecycle endpoint accepts native Codex hook JSON and always returns
 a provider-facing `ok`, `ignored`, or fail-open `warning` result after a valid

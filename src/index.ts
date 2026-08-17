@@ -4,10 +4,13 @@ export type { DefaultMemorySpaceOptions } from "./composition.ts";
 export type {
   AppendEventInput,
   BootstrapResult,
+  BrowseMemoriesInput,
+  BrowseMemoriesResult,
   CheckpointInput,
   ContextResult,
   CreateSessionInput,
   CreateSpaceInput,
+  MemoryOverviewResult,
   ProviderSessionInput,
   RememberInput
 } from "./application/memory-space.ts";

@@ -59,6 +59,69 @@ test("HTTP adapter exposes the Space/Session/Memory path", async () => {
   }
 });
 
+test("Inspector read APIs browse deterministically and summarize one Space", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const request = createClient(memorySpace);
+  try {
+    const space = (await request("POST", "/spaces", {
+      id: "inspector-space", name: "Inspector"
+    })).body;
+    const goal = (await request("POST", `/spaces/${space.id}/memories`, {
+      family: "state", type: "goal", key: "project.goal", content: "Ship the Inspector"
+    })).body;
+    await request("POST", `/memories/${goal.id}/promote`, { reason: "Primary project goal" });
+    const task = (await request("POST", `/spaces/${space.id}/memories`, {
+      family: "state", type: "task", key: "task.docs", content: "Document the Inspector"
+    })).body;
+    await request("POST", `/memories/${task.id}/status`, {
+      status: "resolved", reason: "Documentation complete"
+    });
+    const fact = (await request("POST", `/spaces/${space.id}/memories`, {
+      family: "knowledge", type: "fact", key: "project.port", content: "Daemon uses port 4310"
+    })).body;
+
+    const firstPage = await request(
+      "GET", `/spaces/${space.id}/memories?limit=2`
+    );
+    assert.equal(firstPage.status, 200);
+    assert.equal(firstPage.body.total, 3);
+    assert.equal(firstPage.body.items.length, 2);
+    assert.equal(typeof firstPage.body.nextCursor, "string");
+    const secondPage = await request(
+      "GET",
+      `/spaces/${space.id}/memories?limit=2&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`
+    );
+    assert.equal(secondPage.body.items.length, 1);
+    assert.equal(secondPage.body.nextCursor, undefined);
+    assert.deepEqual(
+      new Set([...firstPage.body.items, ...secondPage.body.items].map((memory: { id: string }) => memory.id)),
+      new Set([goal.id, task.id, fact.id])
+    );
+
+    const resolved = await request(
+      "GET", `/spaces/${space.id}/memories?statuses=resolved`
+    );
+    assert.deepEqual(resolved.body.items.map((memory: { id: string }) => memory.id), [task.id]);
+
+    const overview = await request("GET", `/spaces/${space.id}/overview`);
+    assert.equal(overview.status, 200);
+    assert.equal(overview.body.space.id, space.id);
+    assert.equal(overview.body.totalMemories, 3);
+    assert.deepEqual(overview.body.counts.tiers, { core: 1, indexed: 2 });
+    assert.deepEqual(overview.body.counts.statuses, { active: 2, resolved: 1 });
+    assert.deepEqual(overview.body.counts.types, { fact: 1, goal: 1, task: 1 });
+    assert.equal(overview.body.recentMemories.length, 3);
+
+    const invalidCursor = await request(
+      "GET", `/spaces/${space.id}/memories?cursor=not-a-cursor`
+    );
+    assert.equal(invalidCursor.status, 422);
+    assert.equal(invalidCursor.body.error.code, "VALIDATION_ERROR");
+  } finally {
+    await memorySpace.close();
+  }
+});
+
 test("HTTP rejects missing or wrong JSON media types before mutation", async () => {
   const memorySpace = createDefaultMemorySpace();
   const request = createClient(memorySpace);

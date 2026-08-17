@@ -81,6 +81,7 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 | 可控记忆写入 | 显式记忆默认进入 Indexed；提升到 Core 需要经过策略与容量检查。 |
 | 确定性 Checkpoint | Memory 更新、Handoff 创建和事件边界推进在一个事务中提交，并支持幂等重试。 |
 | 来源与变更历史 | Memory 保留来源 Session/Event、版本、状态变化和提升/降级（promotion/demotion）历史。 |
+| 本地可视化检查 | 只读 Inspector 展示 Memory、历史、真实 bootstrap、最新 Handoff，以及 Stored 与 Disclosed 的差异。 |
 | 本地优先 | v1 daemon 只监听 loopback，SQLite 是默认且唯一的持久权威数据源（Source of Truth）。 |
 
 ### 它如何工作
@@ -144,6 +145,19 @@ pnpm memory-space status --cwd /absolute/path/to/project
 
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
 - [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
+
+#### 打开本地 Memory Inspector
+
+Inspector 是 daemon 同源托管的只读可视化界面。先构建一次前端，然后让 daemon 使用目标项目的可信绑定：
+
+```bash
+pnpm inspector:build
+MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+```
+
+打开 <http://127.0.0.1:4310/inspector/>。你可以查看 Overview、搜索和筛选 Memories、打开 provenance/history 详情、核对真实 bootstrap context、查看最新 Handoff，并在 Validation 中比较 Stored 与 Disclosed 状态。界面没有创建、编辑、删除、提升或状态变更操作，不会污染用于验证的 Memory。
+
+开发界面时可保持 daemon 运行，另开终端执行 `pnpm inspector:dev`，再访问 <http://127.0.0.1:5173/inspector/>。
 
 最短的跨 Session 验证路径：在已绑定项目中启动 Provider，确认 bootstrap 注入 Memory Space Session handle；让 Agent 通过 MCP 记住一个项目决策并执行 checkpoint；随后启动一个新 Session，确认它能从同一 Space 的 Core/Handoff 或显式搜索中恢复该信息。完整自动化验证命令见下文。
 
@@ -245,6 +259,7 @@ pnpm run smoke:claude:p3 -- --hooks-only
 - [产品规格](docs/PRODUCT_SPEC.md)
 - [领域模型](docs/DOMAIN_MODEL.md)
 - [HTTP / daemon API](docs/API.md)
+- [本地 Memory Inspector](docs/LOCAL_INSPECTOR_SPEC.md)
 - [Provider Integration Guardrails](docs/PROVIDER_INTEGRATION_GUARDRAILS.md)
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
 - [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
@@ -284,6 +299,7 @@ memory-space separates conversation evidence from durable project memory:
 | Governed writes | Explicit Memory starts Indexed; Core promotion is policy- and capacity-checked. |
 | Deterministic checkpoints | Memory updates, Handoff creation, and event-boundary advancement commit transactionally and retry safely. |
 | Provenance and history | Memory retains source Session/Event information, versions, status changes, and tier-transition history. |
+| Local visual inspection | A read-only Inspector presents Memory, history, real bootstrap, latest Handoff, and Stored-versus-Disclosed validation. |
 | Local-first runtime | The v1 daemon is loopback-only and SQLite is the default and only durable source of truth. |
 
 ### How it works
@@ -344,6 +360,19 @@ pnpm memory-space status --cwd /absolute/path/to/project
 ```
 
 `init` creates or confirms the Space and atomically writes the project binding. It does not edit global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
+
+#### Open the local Memory Inspector
+
+The daemon serves the read-only Inspector on the same local origin. Build the frontend once and start the daemon with the target project's trusted binding:
+
+```bash
+pnpm inspector:build
+MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+```
+
+Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search and filters, provenance/history detail, the exact production bootstrap context, the latest Handoff, and Stored-versus-Disclosed validation. It has no create, edit, delete, promote, or status-change controls.
+
+For frontend development, keep the daemon running, execute `pnpm inspector:dev` in another terminal, and open <http://127.0.0.1:5173/inspector/>.
 
 For a minimal cross-session exercise, start the configured provider in the bound project and confirm bootstrap injected a Memory Space Session handle. Ask the agent to remember one project decision through MCP and checkpoint it. Start a new Session, then confirm the decision returns through Core/Handoff or explicit search. The automated validation commands are below.
 
@@ -436,6 +465,7 @@ pnpm run smoke:claude:p3 -- --hooks-only
 - [Product spec](docs/PRODUCT_SPEC.md)
 - [Domain model](docs/DOMAIN_MODEL.md)
 - [HTTP / daemon API](docs/API.md)
+- [Local Memory Inspector](docs/LOCAL_INSPECTOR_SPEC.md)
 - [Provider Integration Guardrails](docs/PROVIDER_INTEGRATION_GUARDRAILS.md)
 - [Codex integration](docs/CODEX_INTEGRATION.md)
 - [Claude Code integration](docs/CLAUDE_CODE_INTEGRATION.md)

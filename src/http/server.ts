@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   MemorySpace,
   type AppendEventInput,
+  type BrowseMemoriesInput,
   type CreateSessionInput,
   type CreateSpaceInput,
   type RememberInput
@@ -73,6 +74,18 @@ function searchInput(spaceId: string, url: URL): MemorySearchInput {
   };
 }
 
+function browseInput(spaceId: string, url: URL): BrowseMemoriesInput {
+  return {
+    spaceId,
+    families: csv(url.searchParams.get("families")) as BrowseMemoriesInput["families"],
+    types: csv(url.searchParams.get("types")),
+    tiers: csv(url.searchParams.get("tiers")) as BrowseMemoriesInput["tiers"],
+    statuses: csv(url.searchParams.get("statuses")) as BrowseMemoriesInput["statuses"],
+    limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
+    cursor: url.searchParams.get("cursor") ?? undefined
+  };
+}
+
 export function createRequestHandler(memorySpace: MemorySpace) {
   return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     try {
@@ -127,6 +140,10 @@ export function createRequestHandler(memorySpace: MemorySpace) {
         );
       } else if ((params = route("GET", "/spaces/:spaceId/memories/search"))) {
         result = await memorySpace.search(searchInput(params.spaceId, url));
+      } else if ((params = route("GET", "/spaces/:spaceId/memories"))) {
+        result = await memorySpace.browseMemories(browseInput(params.spaceId, url));
+      } else if ((params = route("GET", "/spaces/:spaceId/overview"))) {
+        result = await memorySpace.overview(params.spaceId);
       } else if ((params = route("POST", "/spaces/:spaceId/memory-context"))) {
         const body = await readJsonBody(request);
         result = await memorySpace.context({ ...body, spaceId: params.spaceId } as unknown as MemorySearchInput);

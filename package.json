@@ -16,6 +16,8 @@
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
     "memory-space": "node --experimental-strip-types src/cli/main.ts",
+    "inspector:dev": "corepack pnpm --filter @memory-space/inspector dev",
+    "inspector:build": "corepack pnpm --filter @memory-space/inspector build",
     "claude-code:hook": "node --experimental-strip-types src/adapters/providers/claude-code/hook.ts",
     "codex:hook": "node --experimental-strip-types src/adapters/providers/codex/hook.ts",
     "smoke:claude:p3": "node scripts/claude-p3-real-smoke.mjs",

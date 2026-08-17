@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 import { createMcpHandler, type McpHttpHandler } from "@modelcontextprotocol/server";
 import {
   localhostHostValidation,
@@ -18,6 +19,8 @@ import {
 } from "./composition.ts";
 import { MemorySpaceError, ValidationError } from "./domain/errors.ts";
 import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
+import { createInspectorRequestHandler } from "./http/inspector.ts";
+import { createInspectorStaticHandler } from "./http/inspector-static.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
 import { LifecycleHandler } from "./integration/lifecycle-handler.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
@@ -33,6 +36,7 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   claudeCodeRuntime?: ClaudeCodeLifecycleRuntimeContext;
   memorySpaceFactory?: (options: DefaultMemorySpaceOptions) => MemorySpace;
   onMcpError?: (error: Error) => void;
+  inspectorDirectory?: string | false;
 }
 
 export interface MemorySpaceDaemon {
@@ -130,6 +134,14 @@ export function createMemorySpaceDaemon(
     onerror: options.onMcpError ?? ((error) => console.error(error))
   });
   const httpHandler = createRequestHandler(memorySpace);
+  const inspectorHandler = createInspectorRequestHandler({
+    memorySpace,
+    spaceResolver,
+    runtime
+  });
+  const inspectorDirectory = options.inspectorDirectory
+    ?? fileURLToPath(new URL("../apps/inspector/dist", import.meta.url));
+  const inspectorStaticHandler = createInspectorStaticHandler(inspectorDirectory);
   const validateLocalHost = localhostHostValidation();
   const validateLocalOrigin = localhostOriginValidation();
   const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
@@ -154,6 +166,8 @@ export function createMemorySpaceDaemon(
       );
       return;
     }
+    if (await inspectorHandler(request, response)) return;
+    if (await inspectorStaticHandler(request, response)) return;
     await httpHandler(request, response);
   };
   const server = createServer((request, response) => {
@@ -233,6 +247,7 @@ export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpace
     console.log(`memory-space MCP endpoint: http://${address.address}:${address.port}/mcp`);
     console.log(`memory-space Codex lifecycle endpoint: http://${address.address}:${address.port}/providers/codex/lifecycle`);
     console.log(`memory-space Claude Code lifecycle endpoint: http://${address.address}:${address.port}/providers/claude-code/lifecycle`);
+    console.log(`memory-space Inspector: http://${address.address}:${address.port}/inspector/`);
   }).catch(async (error: unknown) => {
     console.error(error);
     process.exitCode = 1;

@@ -67,6 +67,32 @@ export interface BootstrapResult {
   space: Space; coreMemories: Memory[]; handoffSnapshot?: HandoffSnapshot; context: string;
 }
 export interface ContextResult { query: string; results: MemorySearchResult[]; rendered: string }
+export interface BrowseMemoriesInput {
+  spaceId: string;
+  families?: MemoryFamily[];
+  types?: string[];
+  tiers?: MemoryTier[];
+  statuses?: MemoryStatus[];
+  limit?: number;
+  cursor?: string;
+}
+export interface BrowseMemoriesResult {
+  items: Memory[];
+  total: number;
+  nextCursor?: string;
+}
+export interface MemoryOverviewResult {
+  space: Space;
+  totalMemories: number;
+  counts: {
+    tiers: Record<string, number>;
+    statuses: Record<string, number>;
+    families: Record<string, number>;
+    types: Record<string, number>;
+  };
+  recentMemories: Memory[];
+  latestHandoff?: HandoffSnapshot;
+}
 
 interface ValidatedMemory {
   family: MemoryFamily; type: string; key?: string; content: string;
@@ -82,6 +108,34 @@ interface CommitInput extends ValidatedMemory {
 }
 
 function timestamp(): string { return new Date().toISOString(); }
+
+function compareRecentlyUpdated(a: Memory, b: Memory): number {
+  return b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id);
+}
+
+function countBy(memories: Memory[], value: (memory: Memory) => string): Record<string, number> {
+  const counts = new Map<string, number>();
+  for (const memory of memories) counts.set(value(memory), (counts.get(value(memory)) ?? 0) + 1);
+  return Object.fromEntries([...counts].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function encodeBrowseCursor(memory: Memory): string {
+  return Buffer.from(JSON.stringify({ updatedAt: memory.updatedAt, id: memory.id }), "utf8")
+    .toString("base64url");
+}
+
+function decodeBrowseCursor(value: string): { updatedAt: string; id: string } {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
+    const cursor = parsed as Record<string, unknown>;
+    if (typeof cursor.updatedAt !== "string" || typeof cursor.id !== "string"
+      || cursor.updatedAt === "" || cursor.id === "") throw new Error("invalid");
+    return { updatedAt: cursor.updatedAt, id: cursor.id };
+  } catch {
+    throw new ValidationError("browse cursor is invalid");
+  }
+}
 
 function requiredString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim() === "") {
@@ -272,6 +326,50 @@ export class MemorySpace {
   async getMemoryHistory(id: string): Promise<MemoryHistoryRecord[]> {
     await this.getMemory(id);
     return this.store.listMemoryHistory(id);
+  }
+
+  async browseMemories(input: BrowseMemoriesInput): Promise<BrowseMemoriesResult> {
+    await this.getSpace(input.spaceId);
+    const limit = input.limit ?? 50;
+    this.#validateFilters({ ...input, query: "", limit });
+    const memories = (await this.store.listMemories({
+      spaceId: input.spaceId,
+      families: input.families,
+      types: input.types,
+      tiers: input.tiers,
+      statuses: input.statuses
+    })).sort(compareRecentlyUpdated);
+    const cursor = input.cursor === undefined ? undefined : decodeBrowseCursor(input.cursor);
+    const pageStart = cursor === undefined ? 0 : memories.findIndex((memory) => (
+      memory.updatedAt < cursor.updatedAt
+      || (memory.updatedAt === cursor.updatedAt && memory.id < cursor.id)
+    ));
+    const start = pageStart < 0 ? memories.length : pageStart;
+    const items = memories.slice(start, start + limit);
+    const hasMore = start + items.length < memories.length;
+    return {
+      items,
+      total: memories.length,
+      nextCursor: hasMore && items.length > 0 ? encodeBrowseCursor(items.at(-1)!) : undefined
+    };
+  }
+
+  async overview(spaceId: string): Promise<MemoryOverviewResult> {
+    const space = await this.getSpace(spaceId);
+    const memories = (await this.store.listMemories({ spaceId })).sort(compareRecentlyUpdated);
+    const latestHandoff = await this.store.findLatestHandoff(spaceId);
+    return {
+      space,
+      totalMemories: memories.length,
+      counts: {
+        tiers: countBy(memories, (memory) => memory.tier),
+        statuses: countBy(memories, (memory) => memory.status),
+        families: countBy(memories, (memory) => memory.family),
+        types: countBy(memories, (memory) => memory.type)
+      },
+      recentMemories: memories.slice(0, 8),
+      latestHandoff
+    };
   }
 
   async promote(memoryId: string, options: { reason?: string; actor?: "user" | "agent" } = {}): Promise<Memory> {

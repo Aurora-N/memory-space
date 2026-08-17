@@ -1,5 +1,7 @@
 import { pathToFileURL } from "node:url";
 export { createRequestHandler } from "./http/server.ts";
+export { createInspectorRequestHandler } from "./http/inspector.ts";
+export { createInspectorStaticHandler } from "./http/inspector-static.ts";
 export { createMemorySpaceDaemon, startServer } from "./daemon.ts";
 import { startServer } from "./daemon.ts";
 
