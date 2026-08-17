@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
+import type { P7ImplicitRecallReport } from "../eval/p7-implicit-recall.ts";
 import type { MemoryQualityReport } from "../eval/quality/types.ts";
 import { runStageB1Comparison } from "../eval/quality/comparison.ts";
 import { runStageB2ExtractionComparison } from "../eval/quality/extraction-comparison.ts";
@@ -189,7 +190,7 @@ test("init creates an atomic v1 binding and is idempotent for the same Space", a
     assert.equal(client.createCalls, 1);
     assert.deepEqual(
       JSON.parse(readFileSync(join(project, ".memory-space", "config.json"), "utf8")),
-      { version: 1, spaceId: "space-init" }
+      { version: 1, spaceId: "space-init", implicitRecall: { mode: "exact" } }
     );
     assert.match(first.stdout, /global configuration was not modified/u);
 
@@ -1249,6 +1250,49 @@ test("status fails safely when unbound or daemon is unavailable", async () => {
   }
 });
 
+test("doctor and status expose invalid recall config as effective off without invalidating binding", async () => {
+  const { directory, project } = temporaryProject("invalid-recall-status");
+  const client = new FakeClient();
+  try {
+    bind(project, {
+      version: 1,
+      spaceId: "space-invalid-recall",
+      implicitRecall: { mode: "surprise" }
+    });
+    addSpace(client, "space-invalid-recall");
+
+    const doctor = await cli(["doctor", "--cwd", project, "--json"], {
+      cwd: project,
+      client
+    });
+    assert.equal(doctor.code, 1);
+    const checks = (JSON.parse(doctor.stdout) as {
+      checks: Array<{ id: string; status: string; message: string }>;
+    }).checks;
+    const recall = checks.find((item) => item.id === "implicit-recall");
+    assert.equal(recall?.status, "error");
+    assert.match(recall?.message ?? "", /effective mode is off/u);
+
+    const status = await cli(["status", "--cwd", project, "--json"], {
+      cwd: project,
+      client
+    });
+    assert.equal(status.code, 1);
+    const report = JSON.parse(status.stdout) as {
+      space: { id: string };
+      implicitRecall: { effectiveMode: string; source: string; error: string };
+    };
+    assert.equal(report.space.id, "space-invalid-recall");
+    assert.deepEqual({
+      effectiveMode: report.implicitRecall.effectiveMode,
+      source: report.implicitRecall.source
+    }, { effectiveMode: "off", source: "invalid" });
+    assert.doesNotMatch(status.stdout, /token|authorization|api[_-]?key/iu);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 function evalReport(status: "pass" | "fail"): CrossSessionEvalReport {
   return {
     checks: [{ id: "matrix.codex.codex", label: "Codex → Codex", status }],
@@ -1299,6 +1343,26 @@ function qualityEvalReport(status: "pass" | "fail"): MemoryQualityReport {
   };
 }
 
+function p7EvalReport(status: "pass" | "fail"): P7ImplicitRecallReport {
+  return {
+    version: 1,
+    fixtureVersion: 1,
+    metrics: {
+      bareIdentifierHitRate: 1,
+      exactKeyHitRate: 1,
+      implicitRecallPrecisionAt1: 1,
+      negativeAbstentionRate: 1,
+      coreReinjectionRate: 0,
+      metadataLeakageRate: 0,
+      optOutComplianceRate: 1,
+      budgetComplianceRate: 1,
+      crossProviderMatrix: { passed: 4, total: 4 }
+    },
+    scenarios: [],
+    hardCorrectness: status
+  };
+}
+
 test("eval CLI uses the injected canonical runner and maps overall status to exit code", async () => {
   const { directory, project } = temporaryProject("eval");
   try {
@@ -1323,6 +1387,42 @@ test("eval CLI uses the injected canonical runner and maps overall status to exi
     });
     assert.equal(failure.code, 1);
     assert.match(failure.stdout, /"overall": "fail"/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("implicit recall eval CLI is daemon-independent and supports human/JSON output", async () => {
+  const { directory, project } = temporaryProject("p7-eval");
+  try {
+    let calls = 0;
+    const human = await cli(["eval", "implicit-recall"], {
+      cwd: project,
+      dependencies: {
+        p7ImplicitRecallEvalRunner: async () => {
+          calls += 1;
+          return p7EvalReport("pass");
+        },
+        clientFactory: () => {
+          throw new Error("P7 eval must not construct a daemon client");
+        }
+      }
+    });
+    assert.equal(human.code, 0, human.stderr);
+    assert.equal(calls, 1);
+    assert.match(human.stdout, /P7 implicit prompt-time recall eval/u);
+    assert.match(human.stdout, /Cross-provider matrix\s+4\/4/u);
+    assert.match(human.stdout, /Hard correctness\s+PASS/u);
+
+    const json = await cli(["eval", "implicit-recall", "--json"], {
+      cwd: project,
+      dependencies: { p7ImplicitRecallEvalRunner: async () => p7EvalReport("fail") }
+    });
+    assert.equal(json.code, 1);
+    assert.equal(
+      (JSON.parse(json.stdout) as { hardCorrectness: string }).hardCorrectness,
+      "fail"
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

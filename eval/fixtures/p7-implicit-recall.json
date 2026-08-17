@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "memoryCatalog": {
+    "CROSS_AGENT_TEST_20260817": {
+      "content": "CROSS_AGENT_TEST_20260817 = lavender-731",
+      "tier": "indexed",
+      "status": "active",
+      "space": "primary"
+    },
+    "upload.variant.types": {
+      "content": "上传模块使用 variant 区分新版样式，variant 的类型包括 a、b、c。",
+      "tier": "indexed",
+      "status": "active",
+      "space": "primary"
+    },
+    "CORE_ONLY_20260817": {
+      "content": "Core-only bootstrap fact",
+      "tier": "core",
+      "status": "active",
+      "space": "primary"
+    },
+    "INACTIVE_20260817": {
+      "content": "Inactive Indexed distractor",
+      "tier": "indexed",
+      "status": "archived",
+      "space": "primary"
+    },
+    "OTHER_SPACE_20260817": {
+      "content": "Other Space Indexed distractor",
+      "tier": "indexed",
+      "status": "active",
+      "space": "other"
+    },
+    "project.react.version": {
+      "content": "This project uses React 18.",
+      "tier": "indexed",
+      "status": "active",
+      "space": "primary"
+    }
+  },
+  "scenarios": [
+    {
+      "scenarioId": "bare-codex-codex",
+      "sourceProvider": "codex",
+      "targetProvider": "codex",
+      "mode": "exact",
+      "prompt": "CROSS_AGENT_TEST_20260817",
+      "classification": "exact-key",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedFirstKey": "CROSS_AGENT_TEST_20260817",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "bare-codex-claude",
+      "sourceProvider": "codex",
+      "targetProvider": "claude-code",
+      "mode": "exact",
+      "prompt": "CROSS_AGENT_TEST_20260817",
+      "classification": "exact-key",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedFirstKey": "CROSS_AGENT_TEST_20260817",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "bare-claude-codex",
+      "sourceProvider": "claude-code",
+      "targetProvider": "codex",
+      "mode": "exact",
+      "prompt": "CROSS_AGENT_TEST_20260817",
+      "classification": "exact-key",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedFirstKey": "CROSS_AGENT_TEST_20260817",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "bare-claude-claude",
+      "sourceProvider": "claude-code",
+      "targetProvider": "claude-code",
+      "mode": "exact",
+      "prompt": "CROSS_AGENT_TEST_20260817",
+      "classification": "exact-key",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedFirstKey": "CROSS_AGENT_TEST_20260817",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "explicit-key-question",
+      "sourceProvider": "codex",
+      "targetProvider": "claude-code",
+      "mode": "exact",
+      "prompt": "CROSS_AGENT_TEST_20260817 的值是什么？",
+      "classification": "exact-key",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedFirstKey": "CROSS_AGENT_TEST_20260817",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "natural-lexical-query",
+      "sourceProvider": "claude-code",
+      "targetProvider": "codex",
+      "mode": "lexical",
+      "prompt": "上传模块的 variant 有什么类型？",
+      "classification": "lexical-positive",
+      "relevantMemoryKeys": ["upload.variant.types"],
+      "bootstrapExcludedKeys": ["upload.variant.types"],
+      "expectedInjectedKeys": ["upload.variant.types"],
+      "expectedFirstKey": "upload.variant.types",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "negative-lexical-query",
+      "sourceProvider": "codex",
+      "targetProvider": "codex",
+      "mode": "lexical",
+      "prompt": "How is the deployment pipeline configured?",
+      "classification": "negative",
+      "relevantMemoryKeys": [],
+      "bootstrapExcludedKeys": [],
+      "expectedInjectedKeys": [],
+      "expectedAbstention": true,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "explicit-opt-out",
+      "sourceProvider": "codex",
+      "targetProvider": "claude-code",
+      "mode": "lexical",
+      "prompt": "不要使用之前的记忆回答。CROSS_AGENT_TEST_20260817",
+      "classification": "opt-out",
+      "relevantMemoryKeys": ["CROSS_AGENT_TEST_20260817"],
+      "bootstrapExcludedKeys": ["CROSS_AGENT_TEST_20260817"],
+      "expectedInjectedKeys": [],
+      "expectedAbstention": true,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "core-only-distractor",
+      "sourceProvider": "claude-code",
+      "targetProvider": "codex",
+      "mode": "exact",
+      "prompt": "CORE_ONLY_20260817",
+      "classification": "negative",
+      "relevantMemoryKeys": [],
+      "bootstrapExcludedKeys": [],
+      "expectedInjectedKeys": [],
+      "expectedAbstention": true,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "inactive-indexed-distractor",
+      "sourceProvider": "codex",
+      "targetProvider": "claude-code",
+      "mode": "exact",
+      "prompt": "INACTIVE_20260817",
+      "classification": "negative",
+      "relevantMemoryKeys": [],
+      "bootstrapExcludedKeys": ["INACTIVE_20260817"],
+      "expectedInjectedKeys": [],
+      "expectedAbstention": true,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "other-space-distractor",
+      "sourceProvider": "claude-code",
+      "targetProvider": "codex",
+      "mode": "exact",
+      "prompt": "OTHER_SPACE_20260817",
+      "classification": "negative",
+      "relevantMemoryKeys": [],
+      "bootstrapExcludedKeys": ["OTHER_SPACE_20260817"],
+      "expectedInjectedKeys": [],
+      "expectedAbstention": true,
+      "explicitToolAllowed": false
+    },
+    {
+      "scenarioId": "stale-repository-conflict-descriptor",
+      "sourceProvider": "codex",
+      "targetProvider": "claude-code",
+      "mode": "lexical",
+      "prompt": "What React version does this project use?",
+      "classification": "stale-conflict",
+      "relevantMemoryKeys": ["project.react.version"],
+      "bootstrapExcludedKeys": ["project.react.version"],
+      "expectedInjectedKeys": ["project.react.version"],
+      "expectedFirstKey": "project.react.version",
+      "expectedAbstention": false,
+      "explicitToolAllowed": false
+    }
+  ]
+}

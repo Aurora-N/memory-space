@@ -23,6 +23,7 @@ import { createInspectorRequestHandler } from "./http/inspector.ts";
 import { createInspectorStaticHandler } from "./http/inspector-static.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
 import { LifecycleHandler } from "./integration/lifecycle-handler.ts";
+import { ImplicitRecallService } from "./integration/implicit-recall.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
 import { createMemoryMcpServerForGateway } from "./mcp/server.ts";
 import { MemoryMcpGateway } from "./mcp/tools.ts";
@@ -95,7 +96,8 @@ export function createMemorySpaceDaemon(
     memorySpace,
     spaceResolver,
     sessionResolver: new ProviderSessionResolver(memorySpace),
-    checkpointPolicy
+    checkpointPolicy,
+    implicitRecall: new ImplicitRecallService(memorySpace)
   });
   const runtime: MCPRuntimeContext = {
     cwd: options.mcpRuntime?.cwd ?? process.env.MEMORY_SPACE_CWD ?? process.cwd(),

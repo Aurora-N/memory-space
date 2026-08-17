@@ -7,8 +7,18 @@ export interface ClaudeCodeHookOutput {
   continue: true;
   systemMessage?: string;
   hookSpecificOutput?: {
-    hookEventName: "SessionStart";
+    hookEventName: "SessionStart" | "UserPromptSubmit";
     additionalContext: string;
+  };
+}
+
+export function claudeCodePromptContextOutput(content: string): ClaudeCodeHookOutput {
+  return {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: content
+    }
   };
 }
 

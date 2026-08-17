@@ -303,6 +303,44 @@ test("Claude hook client forwards native payload and fails open safely", async (
   assert.doesNotMatch(child.stdout, /ECONNREFUSED|private-host/u);
 });
 
+test("Claude hook client accepts event-correct prompt context and rejects mismatches", async () => {
+  const promptOutput: ClaudeCodeHookOutput = {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: "bounded Indexed context"
+    }
+  };
+  const accepted = await invokeClaudeCodeLifecycleHook(nativePayload("UserPromptSubmit", {
+    prompt: "CROSS_AGENT_TEST_20260817"
+  }), {
+    fetch: async () => new Response(JSON.stringify({ status: "ok", output: promptOutput }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })
+  });
+  assert.deepEqual(accepted, promptOutput);
+
+  const mismatch = await invokeClaudeCodeLifecycleHook(nativePayload("UserPromptSubmit", {
+    prompt: "CROSS_AGENT_TEST_20260817"
+  }), {
+    fetch: async () => new Response(JSON.stringify({
+      status: "ok",
+      output: {
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: "SessionStart",
+          additionalContext: "wrong event"
+        }
+      }
+    }), { status: 200, headers: { "content-type": "application/json" } })
+  });
+  assert.deepEqual(mismatch, {
+    continue: true,
+    systemMessage: "Memory Space warning [MEMORY_SERVICE_UNAVAILABLE]: Memory service unavailable"
+  });
+});
+
 test("Claude lifecycle failures remain non-blocking and provider-safe", async () => {
   const memorySpace = createDefaultMemorySpace();
   try {

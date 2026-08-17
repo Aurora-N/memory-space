@@ -18,6 +18,7 @@ export { RuleBasedExtractor, NoopExtractor } from "./adapters/rule-based-extract
 export { ClaudeAdapter } from "./adapters/providers/claude-code/adapter.ts";
 export {
   claudeCodeUnavailableOutput,
+  claudeCodePromptContextOutput,
   claudeCodeWarningOutput,
   renderClaudeCodeBootstrap
 } from "./adapters/providers/claude-code/bootstrap-renderer.ts";
@@ -38,6 +39,7 @@ export type {
 export { CodexAdapter } from "./adapters/providers/codex/adapter.ts";
 export {
   codexUnavailableOutput,
+  codexPromptContextOutput,
   codexWarningOutput,
   renderCodexBootstrap
 } from "./adapters/providers/codex/bootstrap-renderer.ts";
@@ -61,6 +63,12 @@ export type { MemoryStore, MemoryFilters, MemoryHistoryRecord } from "./ports/st
 export type { TranscriptReader, TranscriptReadOptions, TranscriptChunk } from "./ports/transcript-reader.ts";
 export { SpaceResolver } from "./binding/space-resolver.ts";
 export type { SpaceBinding, SpaceResolutionInput } from "./binding/space-resolver.ts";
+export { resolveImplicitRecallConfiguration } from "./binding/project-config.ts";
+export type {
+  ImplicitRecallConfiguration,
+  ImplicitRecallConfigSource,
+  ImplicitRecallMode
+} from "./binding/project-config.ts";
 export { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
 export type { ProviderSessionResolutionInput } from "./integration/provider-session-resolver.ts";
 export { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
@@ -72,6 +80,26 @@ export type {
   LifecycleResult,
   LifecycleWarning
 } from "./integration/lifecycle-handler.ts";
+export {
+  exactPromptControl,
+  extractExactKeyCandidates,
+  implicitRecallDefaults,
+  ImplicitRecallService,
+  renderImplicitRecallContext
+} from "./integration/implicit-recall.ts";
+export type {
+  ImplicitRecallDebugItem,
+  ImplicitRecallInput,
+  ImplicitRecallOptions,
+  ImplicitRecallReason,
+  ImplicitRecallResult,
+  ImplicitRecallServicePort
+} from "./integration/implicit-recall.ts";
+export {
+  promptMemoryDirective,
+  promptMemoryDisabledContext
+} from "./integration/prompt-memory-directive.ts";
+export type { PromptMemoryDirective } from "./integration/prompt-memory-directive.ts";
 export {
   ProviderSessionNotFoundError,
   SpaceBindingConflictError,

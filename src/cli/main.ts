@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
+import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
 import type {
   StageB2ExtractionComparisonReport
@@ -23,6 +24,7 @@ import {
   runQualityCoreHandoffComparison,
   runQualityExtractionComparison,
   runQualityEval,
+  runP7ImplicitRecallEvalCommand,
   runStatus,
   runUnbind
 } from "./commands.ts";
@@ -68,6 +70,7 @@ export interface CliDependencies {
   qualityComparisonRunner?: () => Promise<StageB1ComparisonReport>;
   qualityExtractionComparisonRunner?: () => Promise<StageB2ExtractionComparisonReport>;
   qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
+  p7ImplicitRecallEvalRunner?: () => Promise<P7ImplicitRecallReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
   openBrowser?: (url: string) => Promise<void>;
   installationRoot?: string;
@@ -84,6 +87,7 @@ Usage:
   memory-space doctor [path] [--endpoint <url>] [--json]
   memory-space status [path] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
+  memory-space eval implicit-recall [--json]
   memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
 Development invocation:
@@ -167,6 +171,11 @@ async function defaultQualityCoreHandoffComparisonRunner(): Promise<StageB3CoreH
   return module.runStageB3CoreHandoffComparison();
 }
 
+async function defaultP7ImplicitRecallEvalRunner(): Promise<P7ImplicitRecallReport> {
+  const module = await import("../../eval/p7-implicit-recall.ts");
+  return module.runP7ImplicitRecallEval();
+}
+
 export async function runCli(
   argv: string[],
   dependencies: CliDependencies = {}
@@ -185,10 +194,10 @@ export async function runCli(
     const command = argv[0];
     if (command === "eval") {
       const target = argv[1];
-      if (target !== "cross-session" && target !== "quality") {
-        throw new CliError("USAGE_ERROR", "eval requires the cross-session or quality target.", {
+      if (target !== "cross-session" && target !== "quality" && target !== "implicit-recall") {
+        throw new CliError("USAGE_ERROR", "eval requires the cross-session, quality, or implicit-recall target.", {
           exitCode: 2,
-          remediation: "Run: memory-space eval cross-session or memory-space eval quality"
+          remediation: "Run: memory-space eval <cross-session|quality|implicit-recall>"
         });
       }
       const options = parseOptions(
@@ -198,6 +207,13 @@ export async function runCli(
           ? ["json", "compare-stage-a", "compare-stage-a-extraction", "compare-stage-b2-core-handoff"]
           : ["json"]
       );
+      if (target === "implicit-recall") {
+        return await runP7ImplicitRecallEvalCommand(
+          options,
+          write,
+          dependencies.p7ImplicitRecallEvalRunner ?? defaultP7ImplicitRecallEvalRunner
+        );
+      }
       const comparisonModes = [
         options.compareStageA,
         options.compareStageAExtraction,
@@ -310,8 +326,7 @@ export async function runCli(
     }
     if (command === "doctor") return await runDoctor(options, context);
     if (command === "status") {
-      await runStatus(options, context);
-      return 0;
+      return await runStatus(options, context);
     }
     throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, { exitCode: 2 });
   } catch (error) {

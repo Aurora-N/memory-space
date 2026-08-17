@@ -1,7 +1,7 @@
 # memory-space v1 Roadmap
 
 **Status:** Active post-Provider-Integration roadmap  
-**Current phase:** P6 Memory Quality v1 — COMPLETE / REVIEW PASS / FROZEN
+**Current phase:** P7 Implicit Prompt-Time Recall — IMPLEMENTED / VALIDATED / AWAITING REVIEW
 **Frozen foundations:** `PRODUCT_SPEC.md`, `DOMAIN_MODEL.md`, Provider Integration P0/P1/P2 contracts  
 **Related:** `PROVIDER_INTEGRATION_PLAN.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `PRODUCTIZATION_SPEC.md`, `MEMORY_QUALITY_V1_SPEC.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`
 
@@ -49,7 +49,7 @@ P6 — Memory Quality v1                         COMPLETE / REVIEW PASS / FROZEN
      Stage B3 Core/Handoff Pollution            COMPLETE / REVIEW PASS / FROZEN
      Stage B4 Semantic Retrieval/Dedup          DEFERRED TO V2
 
-P7 — Optional MCP-first Provider Validation    OPTIONAL
+P7 — Implicit Prompt-Time Indexed Recall       IMPLEMENTED / AWAITING REVIEW
 ```
 
 P3's real Claude model-driven MCP check remains externally blocked under the existing scoped waiver. P6 must not add Claude-specific aliases or otherwise weaken the exact shared MCP contract.
@@ -220,21 +220,27 @@ If B1 demonstrates that remaining retrieval failures have effectively no lexical
 
 ---
 
-# 5. P7 — Optional MCP-first Provider Validation
+# 5. P7 — Implicit Prompt-Time Indexed Recall
 
-Cursor or another MCP-capable agent may be added after the quality work when it proves a genuinely new compatibility property.
+**Normative spec:** [`P7_IMPLICIT_RECALL_SPEC.md`](./P7_IMPLICIT_RECALL_SPEC.md)
 
-Minimum useful proof:
+P7 closes the model-behavior gap where durable Indexed Memory existed but a
+provider did not independently decide to call an MCP recall tool. Trusted
+`UserPromptSubmit` middleware now performs bounded exact-key recall by default,
+with project-selectable `off` and `lexical` modes.
+
+The implementation preserves the disclosure model:
 
 ```text
-shared MCP discovery
-project Space binding
-bootstrap/context/search
-remember/promote/checkpoint
-capability differences documented honestly
+Core -> bootstrap
+Indexed -> implicit prompt-time recall or explicit MCP recall
+current repository/runtime/user evidence -> authoritative on conflict
 ```
 
-Do not build polling or fake lifecycle emulation solely to claim provider parity.
+Codex and Claude Code passed both the isolated native capability spike and the
+real production bridge smoke. Deterministic fixture/eval evidence is recorded
+in [`quality/P7_IMPLICIT_RECALL_RESULT.md`](./quality/P7_IMPLICIT_RECALL_RESULT.md).
+Independent code review remains before P7 can be marked complete/frozen.
 
 ---
 

@@ -7,8 +7,18 @@ export interface CodexHookOutput {
   continue: true;
   systemMessage?: string;
   hookSpecificOutput?: {
-    hookEventName: "SessionStart";
+    hookEventName: "SessionStart" | "UserPromptSubmit";
     additionalContext: string;
+  };
+}
+
+export function codexPromptContextOutput(content: string): CodexHookOutput {
+  return {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: content
+    }
   };
 }
 

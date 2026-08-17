@@ -107,7 +107,7 @@ The configured native mapping is:
 | Codex hook | Memory Space behavior |
 |---|---|
 | `SessionStart` | bind/reuse Session, bootstrap, inject additional context |
-| `UserPromptSubmit` | append the full user message |
+| `UserPromptSubmit` | append the full user message, then optionally inject bounded active Indexed Memory according to the trusted project `implicitRecall.mode` |
 | `Stop` | append `last_assistant_message` when present and non-empty |
 | `PreCompact` | checkpoint only uncommitted events |
 | `SessionEnd` | checkpoint only uncommitted events |
@@ -139,6 +139,13 @@ connected.
 `SessionStart` injects an opaque internal Session handle plus Core Memory and
 the latest Handoff. Durable MCP tools use that handle. Project binding remains
 inside the trusted runtime rather than the tool schema.
+
+`UserPromptSubmit` supports prompt-time Indexed recall without simulating an MCP
+tool call. The default project mode is `exact`; use `lexical` for full-prompt
+lexical recall or `off` to disable automatic Indexed disclosure. Core Memory is
+never searched or re-injected by this path. If the binding is missing, malformed,
+or no longer matches the Session's frozen Space, the prompt is still recorded
+and continues without recalled content.
 
 ## 5. Manual smoke test
 

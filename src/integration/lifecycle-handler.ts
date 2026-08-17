@@ -14,6 +14,14 @@ import type { SpaceBinding, SpaceResolutionInput } from "../binding/space-resolv
 import type { CheckpointCoordinator, CheckpointPolicyResult } from "./checkpoint-policy.ts";
 import { SpaceBindingConflictError } from "./errors.ts";
 import type { ProviderSessionResolutionInput } from "./provider-session-resolver.ts";
+import type {
+  ImplicitRecallResult,
+  ImplicitRecallServicePort
+} from "./implicit-recall.ts";
+import {
+  promptMemoryDirective,
+  promptMemoryDisabledContext
+} from "./prompt-memory-directive.ts";
 
 interface LifecycleMemorySpace {
   getSession(id: string): Promise<Session>;
@@ -40,7 +48,14 @@ export interface LifecycleContext {
 
 export type LifecycleResult =
   | { status: "ok"; type: "session_start"; session: Session; bootstrap: BootstrapResult }
-  | { status: "ok"; type: "user_prompt" | "assistant_turn"; session: Session; event: SessionEvent }
+  | {
+    status: "ok";
+    type: "user_prompt";
+    session: Session;
+    event: SessionEvent;
+    recall?: ImplicitRecallResult;
+  }
+  | { status: "ok"; type: "assistant_turn"; session: Session; event: SessionEvent }
   | { status: "ok"; type: "pre_compact" | "session_end"; session: Session; checkpoint: CheckpointPolicyResult };
 
 export interface LifecycleWarning {
@@ -62,6 +77,7 @@ export class LifecycleHandler {
   readonly spaceResolver: LifecycleSpaceResolver;
   readonly sessionResolver: LifecycleSessionResolver;
   readonly checkpointPolicy: CheckpointCoordinator;
+  readonly implicitRecall?: ImplicitRecallServicePort;
   readonly onWarning?: (diagnostic: LifecycleDiagnostic) => void;
 
   constructor(options: {
@@ -69,12 +85,14 @@ export class LifecycleHandler {
     spaceResolver: LifecycleSpaceResolver;
     sessionResolver: LifecycleSessionResolver;
     checkpointPolicy: CheckpointCoordinator;
+    implicitRecall?: ImplicitRecallServicePort;
     onWarning?: (diagnostic: LifecycleDiagnostic) => void;
   }) {
     this.memorySpace = options.memorySpace;
     this.spaceResolver = options.spaceResolver;
     this.sessionResolver = options.sessionResolver;
     this.checkpointPolicy = options.checkpointPolicy;
+    this.implicitRecall = options.implicitRecall;
     this.onWarning = options.onWarning;
   }
 
@@ -94,6 +112,10 @@ export class LifecycleHandler {
         },
         createdAt: event.occurredAt
       });
+      if (event.type === "user_prompt") {
+        const recall = await this.#recallPrompt(event, session, context);
+        return { status: "ok", type: event.type, session, event: persisted, recall };
+      }
       return { status: "ok", type: event.type, session, event: persisted };
     }
     const checkpoint = await this.checkpointPolicy.checkpointIfNeeded({
@@ -187,5 +209,93 @@ export class LifecycleHandler {
       throw new ValidationError("transcriptRef.externalSessionId does not match Session.externalSessionId");
     }
     return session;
+  }
+
+  async #recallPrompt(
+    event: Extract<ProviderLifecycleEvent, { type: "user_prompt" }>,
+    session: Session,
+    context: LifecycleContext
+  ): Promise<ImplicitRecallResult | undefined> {
+    if (!this.implicitRecall) return undefined;
+    const directive = promptMemoryDirective(event.content);
+    const unavailable = (
+      configuredMode?: ImplicitRecallResult["configuredMode"]
+    ): ImplicitRecallResult => ({
+      query: event.content,
+      configuredMode,
+      effectiveMode: "off",
+      bypassed: directive === "disable_for_prompt",
+      context: directive === "disable_for_prompt" ? promptMemoryDisabledContext : undefined,
+      debugItems: [],
+      truncated: false
+    });
+    let binding: SpaceBinding;
+    try {
+      binding = await this.spaceResolver.resolve({ cwd: event.cwd ?? context.cwd });
+    } catch (error) {
+      this.#reportRecallDiagnostic(event, session.id, error);
+      return unavailable();
+    }
+    if (binding.spaceId !== session.spaceId) {
+      this.#reportRecallDiagnostic(
+        event,
+        session.id,
+        new SpaceBindingConflictError(
+          event.provider,
+          event.externalSessionId ?? session.id,
+          binding.spaceId,
+          session.spaceId
+        )
+      );
+      return unavailable(binding.implicitRecall?.configuredMode);
+    }
+    const configuration = binding.implicitRecall;
+    if (!configuration || configuration.source === "invalid") {
+      this.#reportRecallDiagnostic(
+        event,
+        session.id,
+        new ValidationError(configuration?.error ?? "Implicit recall configuration unavailable")
+      );
+      return unavailable(configuration?.configuredMode);
+    }
+    if (directive === "disable_for_prompt") {
+      return unavailable(configuration.configuredMode);
+    }
+    if (configuration.effectiveMode === "off") {
+      return unavailable(configuration.configuredMode);
+    }
+    try {
+      return await this.implicitRecall.recall({
+        sessionId: session.id,
+        prompt: event.content,
+        mode: configuration.effectiveMode,
+        configuredMode: configuration.configuredMode
+      });
+    } catch (error) {
+      this.#reportRecallDiagnostic(event, session.id, error);
+      return unavailable(configuration.configuredMode);
+    }
+  }
+
+  #reportRecallDiagnostic(
+    event: ProviderLifecycleEvent,
+    sessionId: string,
+    error: unknown
+  ): void {
+    const warning: LifecycleWarning = {
+      status: "warning",
+      nonBlocking: true,
+      type: event.type,
+      sessionId,
+      error: {
+        code: "IMPLICIT_RECALL_UNAVAILABLE",
+        message: "Implicit Memory recall unavailable"
+      }
+    };
+    try {
+      this.onWarning?.({ event, error, warning });
+    } catch {
+      // Recall diagnostics are best effort and cannot block the provider prompt.
+    }
   }
 }

@@ -168,6 +168,46 @@ test("Codex hook client forwards only native payload and preserves daemon output
   }]);
 });
 
+test("Codex hook client accepts event-correct prompt context and rejects mismatches", async () => {
+  const promptOutput: CodexHookOutput = {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext: "bounded Indexed context"
+    }
+  };
+  const accepted = await invokeCodexLifecycleHook(nativePayload("UserPromptSubmit", {
+    turn_id: "turn-p7",
+    prompt: "CROSS_AGENT_TEST_20260817"
+  }), {
+    fetch: async () => new Response(JSON.stringify({ status: "ok", output: promptOutput }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })
+  });
+  assert.deepEqual(accepted, promptOutput);
+
+  const mismatch = await invokeCodexLifecycleHook(nativePayload("UserPromptSubmit", {
+    turn_id: "turn-p7",
+    prompt: "CROSS_AGENT_TEST_20260817"
+  }), {
+    fetch: async () => new Response(JSON.stringify({
+      status: "ok",
+      output: {
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: "SessionStart",
+          additionalContext: "wrong event"
+        }
+      }
+    }), { status: 200, headers: { "content-type": "application/json" } })
+  });
+  assert.deepEqual(mismatch, {
+    continue: true,
+    systemMessage: "Memory Space warning [MEMORY_SERVICE_UNAVAILABLE]: Memory service unavailable"
+  });
+});
+
 test("Codex hook client fails open without leaking transport details", async () => {
   const output = await invokeCodexLifecycleHook(nativePayload("PreCompact"), {
     fetch: async () => { throw new Error("connect ECONNREFUSED secret-internal-host"); }

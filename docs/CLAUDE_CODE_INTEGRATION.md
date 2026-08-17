@@ -112,7 +112,7 @@ The native mapping follows the current official lifecycle contract:
 | Claude Code hook | Memory Space behavior |
 |---|---|
 | `SessionStart` | bind/reuse Session, bootstrap, inject `additionalContext` |
-| `UserPromptSubmit` | append the original full user prompt |
+| `UserPromptSubmit` | append the original full user prompt, then optionally inject bounded active Indexed Memory according to the trusted project `implicitRecall.mode` |
 | `Stop` | append the reliable `last_assistant_message` when non-empty |
 | `PreCompact` | checkpoint only uncommitted events |
 | `SessionEnd` | checkpoint only uncommitted events |
@@ -155,6 +155,12 @@ memory_checkpoint
 There are no Claude-specific MCP tools. `SessionStart` injects an opaque
 internal Session handle plus Core and latest Handoff context. Use that handle
 for durable writes and explicit recall.
+
+`UserPromptSubmit` can also deliver prompt-time Indexed recall through native
+`additionalContext`; it does not add a Claude-only MCP alias or tool. Project
+mode defaults to `exact`, while `lexical` enables full-prompt lexical recall and
+`off` disables automatic Indexed disclosure. Core is excluded. Binding/config
+or recall failures remain fail-open for the Claude prompt.
 
 ## 4. Automated and real validation
 

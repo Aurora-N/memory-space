@@ -7,6 +7,7 @@ import type {
 import type { ProviderLifecycleEvent } from "../../../provider/types.ts";
 import { CodexAdapter } from "./adapter.ts";
 import {
+  codexPromptContextOutput,
   codexWarningOutput,
   type CodexHookOutput
 } from "./bootstrap-renderer.ts";
@@ -98,6 +99,14 @@ function successfulResponse(
       type: result.type,
       sessionId: result.session.id,
       checkpointStatus: result.checkpoint.status
+    };
+  }
+  if (result.type === "user_prompt" && result.recall?.context) {
+    return {
+      status: "ok",
+      type: result.type,
+      sessionId: result.session.id,
+      output: codexPromptContextOutput(result.recall.context)
     };
   }
   return { status: "ok", type: result.type, sessionId: result.session.id };

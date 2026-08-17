@@ -2,6 +2,10 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, parse, resolve } from "node:path";
 import { ValidationError } from "../domain/errors.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
+import {
+  resolveImplicitRecallConfiguration,
+  type ImplicitRecallConfiguration
+} from "./project-config.ts";
 
 export interface SpaceResolutionInput {
   cwd?: string;
@@ -12,6 +16,7 @@ export interface SpaceBinding {
   spaceId: string;
   source: "explicit" | "config";
   configPath?: string;
+  implicitRecall?: ImplicitRecallConfiguration;
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -47,7 +52,12 @@ export class SpaceResolver {
         if (config.version !== 1 || typeof config.spaceId !== "string" || config.spaceId.trim() === "") {
           throw new SpaceBindingInvalidError(configPath);
         }
-        return { spaceId: config.spaceId.trim(), source: "config", configPath };
+        return {
+          spaceId: config.spaceId.trim(),
+          source: "config",
+          configPath,
+          implicitRecall: resolveImplicitRecallConfiguration(config)
+        };
       } catch (error) {
         if (error instanceof SpaceBindingInvalidError) throw error;
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {

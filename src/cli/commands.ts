@@ -17,7 +17,9 @@ import {
 } from "../../eval/quality/core-handoff-comparison.ts";
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
+import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { Space } from "../domain/types.ts";
+import type { ImplicitRecallConfiguration } from "../binding/project-config.ts";
 import { configureClaudeCodeProject } from "./claude-code-config.ts";
 import { configureCodexProject } from "./codex-config.ts";
 import { CliError } from "./errors.ts";
@@ -115,6 +117,7 @@ export interface StatusReport {
   daemon: "ok";
   space: { id: string; name: string };
   binding: { source: "explicit" | "config"; configPath?: string };
+  implicitRecall: ImplicitRecallConfiguration;
   latestCheckpoint?: { id: string };
   latestHandoff?: {
     id: string;
@@ -164,6 +167,7 @@ export async function runInit(
     context.write("Memory Space already initialized");
     context.write(`Space:   ${space.name} (${space.id})`);
     context.write(`Binding: ${localBinding.configPath ?? localBinding.source}`);
+    context.write(`Implicit Recall: ${localBinding.implicitRecall?.effectiveMode ?? "off"}`);
     providerNextSteps(context.write);
     return;
   }
@@ -176,6 +180,7 @@ export async function runInit(
     context.write("Memory Space already initialized (inherited binding)");
     context.write(`Space:   ${space.name} (${space.id})`);
     context.write(`Binding: ${inheritedBinding.configPath ?? inheritedBinding.source}`);
+    context.write(`Implicit Recall: ${inheritedBinding.implicitRecall?.effectiveMode ?? "off"}`);
     providerNextSteps(context.write);
     return;
   }
@@ -209,6 +214,7 @@ export async function runInit(
   context.write("Memory Space initialized");
   context.write(`Space:   ${space.name} (${space.id})`);
   context.write(`Binding: ${configPath}`);
+  context.write("Implicit Recall: exact");
   providerNextSteps(context.write);
 }
 
@@ -375,6 +381,27 @@ export async function runDoctor(
     checks.push(check("space", "error", "Bound Space could not be verified."));
   }
 
+  if (binding?.implicitRecall?.source === "invalid") {
+    checks.push(check(
+      "implicit-recall",
+      "error",
+      `${binding.implicitRecall.error}; effective mode is off.`,
+      `Repair implicitRecall.mode in ${binding.configPath ?? ".memory-space/config.json"}.`
+    ));
+  } else if (binding?.implicitRecall) {
+    checks.push(check(
+      "implicit-recall",
+      "ok",
+      `Effective mode: ${binding.implicitRecall.effectiveMode} (${binding.implicitRecall.source}).`
+    ));
+  } else {
+    checks.push(check(
+      "implicit-recall",
+      "error",
+      "No matching project binding can authorize implicit recall; effective mode is off."
+    ));
+  }
+
   try {
     const tools = await context.client.listMcpTools();
     if (JSON.stringify(tools) === JSON.stringify([...MEMORY_MCP_TOOLS])) {
@@ -431,7 +458,7 @@ export async function runDoctor(
 export async function runStatus(
   options: { cwd?: string; json?: boolean },
   context: CommandContext
-): Promise<void> {
+): Promise<number> {
   const cwd = resolve(options.cwd ?? context.cwd);
   const binding = await resolveOptionalBinding(cwd);
   if (!binding) {
@@ -446,6 +473,11 @@ export async function runStatus(
     daemon: "ok",
     space: { id: space.id, name: space.name },
     binding: { source: binding.source, configPath: binding.configPath },
+    implicitRecall: binding.implicitRecall ?? {
+      effectiveMode: "off",
+      source: "invalid",
+      error: "No project disclosure configuration is available"
+    },
     latestCheckpoint: handoff ? { id: handoff.checkpointId } : undefined,
     latestHandoff: handoff ? {
       id: handoff.id,
@@ -457,12 +489,15 @@ export async function runStatus(
   };
   if (options.json) {
     context.write(JSON.stringify(report, null, 2));
-    return;
+    return report.implicitRecall.source === "invalid" ? 1 : 0;
   }
   context.write("Memory Space status");
   context.write(`Daemon:           OK (${context.client.endpoint})`);
   context.write(`Space:            ${space.name} (${space.id})`);
   context.write(`Binding source:   ${binding.configPath ?? binding.source}`);
+  context.write(`Implicit Recall:  ${report.implicitRecall.source === "invalid"
+    ? `ERROR (${report.implicitRecall.error}; effective mode off)`
+    : `${report.implicitRecall.effectiveMode} (${report.implicitRecall.source})`}`);
   context.write(`Latest checkpoint:${report.latestCheckpoint ? ` ${report.latestCheckpoint.id}` : " none"}`);
   context.write(`Latest Handoff:   ${report.latestHandoff ? report.latestHandoff.id : "none"}`);
   if (report.latestHandoff) {
@@ -470,6 +505,7 @@ export async function runStatus(
     context.write(`Handoff created:  ${report.latestHandoff.createdAt}`);
     context.write(`Next steps:       ${report.latestHandoff.nextSteps.join("; ") || "none"}`);
   }
+  return report.implicitRecall.source === "invalid" ? 1 : 0;
 }
 
 export async function runEval(
@@ -491,6 +527,31 @@ export async function runEval(
     write(`Overall                            ${report.overall.toUpperCase()}`);
   }
   return report.overall === "pass" ? 0 : 1;
+}
+
+export async function runP7ImplicitRecallEvalCommand(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<P7ImplicitRecallReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    write("P7 implicit prompt-time recall eval");
+    write("");
+    write(`Bare-Identifier Hit Rate          ${report.metrics.bareIdentifierHitRate.toFixed(6)}`);
+    write(`Exact-Key Hit Rate                ${report.metrics.exactKeyHitRate.toFixed(6)}`);
+    write(`Implicit Recall Precision@1       ${report.metrics.implicitRecallPrecisionAt1.toFixed(6)}`);
+    write(`Negative Abstention Rate          ${report.metrics.negativeAbstentionRate.toFixed(6)}`);
+    write(`Core Re-injection Rate            ${report.metrics.coreReinjectionRate.toFixed(6)}`);
+    write(`Metadata Leakage Rate             ${report.metrics.metadataLeakageRate.toFixed(6)}`);
+    write(`Opt-out Compliance Rate           ${report.metrics.optOutComplianceRate.toFixed(6)}`);
+    write(`Budget Compliance Rate            ${report.metrics.budgetComplianceRate.toFixed(6)}`);
+    write(`Cross-provider matrix             ${report.metrics.crossProviderMatrix.passed}/${report.metrics.crossProviderMatrix.total}`);
+    write(`Hard correctness                  ${report.hardCorrectness.toUpperCase()}`);
+  }
+  return report.hardCorrectness === "pass" ? 0 : 1;
 }
 
 export async function runQualityEval(

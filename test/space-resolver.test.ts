@@ -72,3 +72,46 @@ test("SpaceResolver reports a stable unbound result and never infers Git identit
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("SpaceResolver keeps binding validity separate from implicit recall validity", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-space-recall-config-"));
+  try {
+    const path = join(root, ".memory-space", "config.json");
+    mkdirSync(join(root, ".memory-space"));
+    const resolver = new SpaceResolver();
+
+    writeFileSync(path, JSON.stringify({ version: 1, spaceId: "space-default" }));
+    assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRecall, {
+      effectiveMode: "exact",
+      source: "default"
+    });
+
+    for (const mode of ["off", "exact", "lexical"] as const) {
+      writeFileSync(path, JSON.stringify({
+        version: 1,
+        spaceId: "space-explicit",
+        implicitRecall: { mode }
+      }));
+      assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRecall, {
+        configuredMode: mode,
+        effectiveMode: mode,
+        source: "explicit"
+      });
+    }
+
+    for (const implicitRecall of [{ mode: "unknown" }, [], { mode: 123 }]) {
+      writeFileSync(path, JSON.stringify({
+        version: 1,
+        spaceId: "space-still-valid",
+        implicitRecall
+      }));
+      const binding = await resolver.resolve({ cwd: root });
+      assert.equal(binding.spaceId, "space-still-valid");
+      assert.equal(binding.implicitRecall?.effectiveMode, "off");
+      assert.equal(binding.implicitRecall?.source, "invalid");
+      assert.match(binding.implicitRecall?.error ?? "", /implicitRecall/u);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

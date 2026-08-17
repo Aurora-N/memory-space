@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -151,6 +151,12 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
     const space = await post(`${baseUrl}/spaces`, {
       id: "daemon-space", name: "Daemon Space"
     }) as { id: string };
+    mkdirSync(join(directory, ".memory-space"));
+    writeFileSync(join(directory, ".memory-space", "config.json"), JSON.stringify({
+      version: 1,
+      spaceId: space.id,
+      implicitRecall: { mode: "exact" }
+    }));
     const session = await post(`${baseUrl}/spaces/${space.id}/sessions`, {
       provider: "daemon-test", agentId: "shared-agent"
     }) as { id: string };
@@ -268,6 +274,33 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
     }));
     assert.equal(bootstrap.space.id, space.id);
 
+    const recallMemory = await shared.remember({
+      spaceId: space.id,
+      sourceSessionId: session.id,
+      family: "knowledge",
+      type: "fact",
+      key: "CROSS_AGENT_TEST_20260817",
+      content: "CROSS_AGENT_TEST_20260817 = lavender-731"
+    });
+    const codexPrompt = await post(`${baseUrl}/providers/codex/lifecycle`, {
+      ...nativeStart,
+      hook_event_name: "UserPromptSubmit",
+      turn_id: "turn-p7-codex",
+      prompt: "CROSS_AGENT_TEST_20260817"
+    }) as {
+      status: string;
+      type: string;
+      output: { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    };
+    assert.equal(codexPrompt.status, "ok");
+    assert.equal(codexPrompt.type, "user_prompt");
+    assert.equal(codexPrompt.output.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+    assert.match(codexPrompt.output.hookSpecificOutput.additionalContext, /lavender-731/u);
+    assert.doesNotMatch(
+      codexPrompt.output.hookSpecificOutput.additionalContext,
+      new RegExp(recallMemory.id, "u")
+    );
+
     const rejectedOrigin = await fetch(`${baseUrl}/providers/codex/lifecycle`, {
       method: "POST",
       headers: {
@@ -325,6 +358,27 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
       "claude-code"
     );
     assert.notEqual(claudeLifecycle.sessionId, lifecycle.sessionId);
+    const claudePrompt = await post(
+      `${baseUrl}/providers/claude-code/lifecycle`,
+      {
+        ...nativeClaudeStart,
+        hook_event_name: "UserPromptSubmit",
+        prompt_id: "prompt-p7-claude",
+        prompt: "CROSS_AGENT_TEST_20260817"
+      }
+    ) as {
+      status: string;
+      type: string;
+      output: { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    };
+    assert.equal(claudePrompt.status, "ok");
+    assert.equal(claudePrompt.type, "user_prompt");
+    assert.equal(claudePrompt.output.hookSpecificOutput.hookEventName, "UserPromptSubmit");
+    assert.match(claudePrompt.output.hookSpecificOutput.additionalContext, /lavender-731/u);
+    assert.doesNotMatch(
+      claudePrompt.output.hookSpecificOutput.additionalContext,
+      new RegExp(recallMemory.id, "u")
+    );
     const rejectedClaudeOrigin = await fetch(
       `${baseUrl}/providers/claude-code/lifecycle`,
       {

@@ -7,6 +7,7 @@ import type {
 import type { ProviderLifecycleEvent } from "../../../provider/types.ts";
 import { ClaudeAdapter } from "./adapter.ts";
 import {
+  claudeCodePromptContextOutput,
   claudeCodeWarningOutput,
   type ClaudeCodeHookOutput
 } from "./bootstrap-renderer.ts";
@@ -115,6 +116,14 @@ function successfulResponse(
       type: result.type,
       sessionId: result.session.id,
       checkpointStatus: result.checkpoint.status
+    };
+  }
+  if (result.type === "user_prompt" && result.recall?.context) {
+    return {
+      status: "ok",
+      type: result.type,
+      sessionId: result.session.id,
+      output: claudeCodePromptContextOutput(result.recall.context)
     };
   }
   return { status: "ok", type: result.type, sessionId: result.session.id };

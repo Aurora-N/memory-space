@@ -54,7 +54,7 @@ Post-integration work is intentionally tracked outside this plan:
 ```text
 P5 — Productization
 P6 — Memory Quality v1
-P7 — Optional MCP-first Provider Validation
+P7 — Implicit Prompt-Time Indexed Recall
 ```
 
 See `V1_ROADMAP.md` for that sequence. Do not continue adding providers by default merely because P4 has finished.
@@ -945,14 +945,15 @@ P5 — Productization
 P6 — Memory Quality v1
      deterministic benchmark / long-horizon metrics / measured improvements
 
-P7 — Optional MCP-first Provider Validation
-     Cursor or another provider only if it proves additional compatibility value
+P7 — Implicit Prompt-Time Indexed Recall
+     provider-neutral UserPromptSubmit recall for active Indexed Memory
 ```
 
 Normative next-phase specs:
 
 - [`PRODUCTIZATION_SPEC.md`](./PRODUCTIZATION_SPEC.md)
 - [`MEMORY_QUALITY_V1_SPEC.md`](./MEMORY_QUALITY_V1_SPEC.md)
+- [`P7_IMPLICIT_RECALL_SPEC.md`](./P7_IMPLICIT_RECALL_SPEC.md)
 
 Cursor is no longer the default P5. Do not implement polling/wrapper lifecycle emulation merely to claim provider parity.
 

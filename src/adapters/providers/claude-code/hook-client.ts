@@ -18,7 +18,16 @@ function timeout(value: number | undefined): number {
     : defaultTimeoutMs;
 }
 
-function hookOutput(value: unknown): ClaudeCodeHookOutput | undefined {
+function nativeHookEventName(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const value = (payload as Record<string, unknown>).hook_event_name;
+  return typeof value === "string" ? value : undefined;
+}
+
+function hookOutput(
+  value: unknown,
+  expectedEventName: string | undefined
+): ClaudeCodeHookOutput | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const input = value as Record<string, unknown>;
@@ -31,10 +40,12 @@ function hookOutput(value: unknown): ClaudeCodeHookOutput | undefined {
       return undefined;
     }
     const fields = specific as Record<string, unknown>;
-    if (fields.hookEventName !== "SessionStart"
+    if ((fields.hookEventName !== "SessionStart"
+      && fields.hookEventName !== "UserPromptSubmit")
+      || fields.hookEventName !== expectedEventName
       || typeof fields.additionalContext !== "string") return undefined;
     result.hookSpecificOutput = {
-      hookEventName: "SessionStart",
+      hookEventName: fields.hookEventName,
       additionalContext: fields.additionalContext
     };
   }
@@ -69,7 +80,7 @@ export async function invokeClaudeCodeLifecycleHook(
     if (result.status !== "ok" && result.status !== "warning") {
       return claudeCodeUnavailableOutput();
     }
-    const output = hookOutput(result.output);
+    const output = hookOutput(result.output, nativeHookEventName(payload));
     if (result.output !== undefined && !output) return claudeCodeUnavailableOutput();
     return output;
   } catch {

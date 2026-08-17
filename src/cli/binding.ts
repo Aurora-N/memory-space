@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { SpaceResolver, type SpaceBinding } from "../binding/space-resolver.ts";
+import { resolveImplicitRecallConfiguration } from "../binding/project-config.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
 import { CliError } from "./errors.ts";
 
@@ -38,7 +39,12 @@ export async function readLocalProjectBinding(
     || config.spaceId.trim() === "") {
     throw invalidBinding();
   }
-  return { spaceId: config.spaceId.trim(), source: "config", configPath };
+  return {
+    spaceId: config.spaceId.trim(),
+    source: "config",
+    configPath,
+    implicitRecall: resolveImplicitRecallConfiguration(config)
+  };
 }
 
 export async function resolveOptionalBinding(cwd: string): Promise<SpaceBinding | undefined> {
@@ -65,7 +71,11 @@ export async function writeBindingAtomically(
     await mkdir(bindingDirectory, { recursive: true });
     await writeFile(
       temporaryPath,
-      `${JSON.stringify({ version: 1, spaceId }, null, 2)}\n`,
+      `${JSON.stringify({
+        version: 1,
+        spaceId,
+        implicitRecall: { mode: "exact" }
+      }, null, 2)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 }
     );
     linking = true;

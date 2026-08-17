@@ -13,6 +13,23 @@ JSON fixtures under `fixtures/` drive automated scenarios for the frozen MVP and
 
 Run them together with unit/integration tests using `pnpm test` or the complete quality gate with `pnpm run check`.
 
+## P7 implicit prompt-time recall
+
+The frozen P7 fixture exercises active-Indexed-only prompt injection, bare and
+explicit stable keys, lexical recall, abstention, opt-out, Space/status/tier
+isolation, stale-history disclosure, metadata non-disclosure, and all four
+Codex/Claude source-to-target pairs:
+
+```bash
+pnpm memory-space eval implicit-recall
+pnpm memory-space eval implicit-recall --json
+```
+
+The runner uses isolated temporary SQLite stores and provider-native event
+normalization/rendering, but does not require a daemon or authenticated CLI.
+Real native/production bridge evidence is recorded in
+[`../docs/quality/P7_PROVIDER_CAPABILITY_SPIKE.md`](../docs/quality/P7_PROVIDER_CAPABILITY_SPIKE.md).
+
 The P4 cross-session proof is implemented once in `eval/support/cross-session-runner.ts`. The `node:test` wrapper and P5 CLI both call that canonical runner:
 
 ```bash

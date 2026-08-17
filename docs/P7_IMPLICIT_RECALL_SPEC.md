@@ -1,6 +1,6 @@
 # P7 — Implicit Prompt-Time Recall Spec
 
-**Status:** IMPLEMENTATION AUTHORIZED ONLY AFTER P7.0 CAPABILITY SPIKE PASS  
+**Status:** P7.0A + P7.0B PASS; IMPLEMENTED / VALIDATED / AWAITING CODE REVIEW; NOT FROZEN
 **Phase:** P7  
 **Depends on:** P4 cross-session/provider durability, P5 productization, P6 Stage B1 retrieval precision & abstention, P6 Stage B3 Core/Handoff policy, Provider Integration v1  
 **Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PRODUCTIZATION_SPEC.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, `DOMAIN_MODEL.md`, `PRODUCT_SPEC.md`
@@ -81,13 +81,23 @@ This is not a simulated MCP tool call. Lifecycle code calls the provider-neutral
 
 ---
 
-# 3. P7.0 — Provider capability spike (blocking prerequisite)
+# 3. P7.0 — Provider capability gates
 
-No production P7 implementation work should be considered review-ready until P7.0 passes for both supported providers.
+P7 has two distinct provider gates so native capability evidence does not depend on production code that has not been implemented yet.
 
-Official documentation is necessary but not sufficient. The repository's own hook client, renderer, hook configuration, daemon response parsing, and the real installed CLI must prove the native contract end to end.
+```text
+P7.0A
+  -> isolated real-CLI native capability spike
+  -> must PASS before provider production implementation starts
 
-## 3.1 Claude Code capability spike
+P7.0B
+  -> real CLI + Memory Space hook client/runtime bridge
+  -> must PASS before P7 completion
+```
+
+Official documentation is necessary but not sufficient. Both gates require the real installed CLI.
+
+## 3.1 P7.0A — Claude Code native capability spike
 
 Required evidence:
 
@@ -101,9 +111,11 @@ real Claude Code CLI
   -> prompt continues normally
 ```
 
-A plain unit test of the adapter does not satisfy P7.0.
+A plain unit test of the adapter does not satisfy P7.0A.
 
-## 3.2 Codex capability spike
+The spike MUST use an isolated temporary hook/config and a fixed marker. It MUST NOT require the production Memory Space hook client, renderer, or daemon response parser.
+
+## 3.2 P7.0A — Codex native capability spike
 
 Required evidence:
 
@@ -117,9 +129,13 @@ real Codex CLI
   -> prompt continues normally
 ```
 
-The current repository must be treated as **not yet capable** until this spike passes because the existing Codex hook client currently validates only `SessionStart` hook-specific output.
+The spike MUST use an isolated temporary hook/config and a fixed marker. It MUST NOT require the production Memory Space hook client, renderer, or daemon response parser.
 
-P7.0 must therefore prove both:
+Before the recorded P7.0A spike passed, the repository was treated as **not yet capable** because the existing Codex hook client validated only `SessionStart` hook-specific output.
+
+## 3.3 P7.0B — Memory Space bridge spike
+
+After the typed provider hook clients and prompt-context renderers exist, P7.0B must prove for each provider:
 
 ```text
 provider native contract supports UserPromptSubmit additionalContext
@@ -127,7 +143,9 @@ AND
 memory-space hook client/runtime accepts and forwards that contract correctly
 ```
 
-## 3.3 Forbidden fallback
+P7.0B uses the real installed CLI, production hook configuration, loopback daemon lifecycle endpoint, event-correct response parsing, and production renderer. A unit or adapter-only test does not satisfy P7.0B.
+
+## 3.4 Forbidden fallback
 
 If a provider does not support the required prompt-context contract in the real installed CLI/runtime:
 
@@ -140,14 +158,14 @@ DO NOT claim implicit recall support for that provider
 
 Record the provider as unsupported/blocked and stop the corresponding implementation path.
 
-The 4×4 provider eval matrix in section 19 is not considered executable until both provider spikes pass.
+The 4×4 provider eval matrix in section 19 is not considered executable until P7.0A passes for both providers. P7 cannot be complete until P7.0B also passes for both providers.
 
-## 3.4 P7.0 artifact
+## 3.5 P7.0 artifacts
 
 Record a small result document such as:
 
 ```text
-quality/P7_PROVIDER_CAPABILITY_SPIKE.md
+docs/quality/P7_PROVIDER_CAPABILITY_SPIKE.md
 ```
 
 containing:
@@ -159,7 +177,8 @@ hook config used
 input payload observed
 output payload emitted
 model-visible marker observed
-overall PASS / BLOCKED
+P7.0A overall PASS / BLOCKED
+P7.0B overall PASS / BLOCKED / NOT RUN
 ```
 
 ---
@@ -399,6 +418,50 @@ Machine-readable doctor/status output must expose at least:
   effectiveMode: "off" | "exact" | "lexical";
   source: "explicit" | "default" | "invalid";
 }
+```
+
+## 5.7 Session authority and configuration resolution
+
+An existing Provider Session's persisted `session.spaceId` remains authoritative. Prompt-time configuration lookup MUST NOT migrate or reinterpret that Session merely because the provider reports a different current working directory.
+
+For every `UserPromptSubmit`:
+
+```text
+resolve existing Session
+resolve nearest project binding from the event/current cwd
+
+if binding.spaceId == session.spaceId
+  -> use that binding's current effective implicitRecall.mode
+
+if binding is missing, malformed, or points to another Space
+  -> keep the Session and persist the user event
+  -> effective implicit recall mode = off for this prompt
+  -> disclose no Indexed Memory
+  -> record a best-effort diagnostic
+  -> continue the provider prompt
+```
+
+Consequences:
+
+```text
+editing exact/lexical -> off takes effect on the next prompt
+resume/re-entry cannot migrate a Session through cwd drift
+nested binding resolution keeps nearest-ancestor-wins semantics
+a binding for another Space cannot authorize disclosure from session.spaceId
+```
+
+`explicitSpaceId` remains a trusted Session/Space selection mechanism, but it is not a substitute for the project disclosure configuration. If no current project binding matching `session.spaceId` exists, the effective P7 mode is `off`. This preserves a usable shutdown path and avoids an implicit daemon-global disclosure policy.
+
+Required regression coverage:
+
+```text
+same-Session resume with matching binding
+same-Session cwd drift to unrelated binding -> off, Session unchanged
+nested inherited matching binding -> configured mode
+nested different binding -> off, Session unchanged
+binding mode changed to off during Session -> next prompt off
+explicitSpaceId without matching project binding -> off
+malformed recall config -> binding Space remains usable, recall off
 ```
 
 ---
@@ -683,6 +746,14 @@ CROSS_AGENT_TEST_20260817 = lavender-731
 
 Multiple selected Memories may use repeated `<memory>` blocks.
 
+For an exact-key match where the complete trimmed user prompt is itself the matched stable key, the renderer MUST prepend a fixed trusted control sentence outside the untrusted Memory content:
+
+```text
+The complete user prompt matched a durable Memory key. Answer using the recalled content. Do not call Memory tools unless the recalled information is incomplete.
+```
+
+This sentence is a renderer-owned control instruction, not recalled Memory metadata. It MUST NOT interpolate the key, Memory id, score, reason, tier, type, or any other per-Memory value. The recalled content remains inside the untrusted wrapper and remains subordinate to current user, repository, and runtime evidence.
+
 ## 11.2 Trust rule
 
 Recalled Indexed Memory is historical project data, never authority.
@@ -808,9 +879,13 @@ No tokenizer or model call is required for P7 budgeting.
 Required normal flow:
 
 ```text
-resolve Session / Space binding
+resolve existing Session; preserve session.spaceId authority
         ↓
 append user SessionEvent
+        ↓
+resolve nearest project binding from current cwd
+        ↓
+require binding.spaceId == session.spaceId
         ↓
 resolve project implicitRecall configuration
         ↓
@@ -850,7 +925,7 @@ change Memory status/version/history
 
 # 15. Provider output contracts
 
-After P7.0 has passed, both provider integrations should support a provider-neutral `renderPromptContext(...)` equivalent and emit native `UserPromptSubmit` output.
+After the corresponding provider's P7.0A has passed, its production integration should support a provider-neutral `renderPromptContext(...)` equivalent and emit native `UserPromptSubmit` output. P7.0B then verifies that bridge with the real CLI.
 
 ## 15.1 Codex
 
@@ -1053,7 +1128,7 @@ Pipeline correctness is deterministic and is the authoritative P7 gate.
 
 For all four provider pairs:
 
-| Source | Target | Required after P7.0 |
+| Source | Target | Required after both P7.0A spikes pass |
 |---|---|---|
 | Codex | Codex | yes |
 | Claude Code | Claude Code | yes |
@@ -1225,7 +1300,8 @@ recall mutates no Memory history/tier/status/version
 For Codex and Claude Code:
 
 ```text
-P7.0 real CLI capability evidence exists
+P7.0A native real-CLI capability evidence exists
+P7.0B production bridge real-CLI evidence exists before completion
 non-empty recall -> UserPromptSubmit additionalContext
 empty recall -> no Memory additionalContext
 successful recall -> not systemMessage
@@ -1263,7 +1339,7 @@ Core Re-injection Rate                    = 0.0
 Metadata Leakage Rate                     = 0.0
 Opt-out Pipeline Compliance Rate          = 1.0
 Budget Compliance Rate                    = 1.0
-Cross-provider deterministic matrix       = 4/4 after P7.0
+Cross-provider deterministic matrix       = 4/4 after P7.0A
 Hard Space/status/trust assertions        = PASS
 ```
 
@@ -1325,7 +1401,7 @@ P6 B4 semantic retrieval remains separate future work.
 # 24. Implementation sequence
 
 ```text
-P7.0   BLOCKING provider capability spike
+P7.0A  BLOCKING isolated native provider capability spike
        - real Claude UserPromptSubmit additionalContext
        - real Codex UserPromptSubmit additionalContext
        - record CLI versions + evidence
@@ -1339,15 +1415,16 @@ P7.6   Implement exact-only ImplicitRecallService over active Indexed
 P7.7   Add optional lexical mode using frozen P6 retrieval
 P7.8   Implement content-only escaped renderer + exact UTF-16 budget contract
 P7.9   Wire lifecycle fail-open behavior
-P7.10  Update Codex typed hook-client/output contract after P7.0
-P7.11  Update Claude Code typed prompt-context output after P7.0
+P7.10  Update Codex typed hook-client/output contract after P7.0A
+P7.11  Update Claude Code typed prompt-context output after P7.0A
 P7.12  Extend init/doctor/status for implicitRecall.mode
 P7.13  Run deterministic 4×4 injection eval
-P7.14  Run real-agent bare-id / lexical / stale-conflict / opt-out smokes
-P7.15  Record quality result + code review
+P7.14  P7.0B real CLI + Memory Space bridge spike for both providers
+P7.15  Run real-agent bare-id / lexical / stale-conflict / opt-out smokes
+P7.16  Record quality result + code review
 ```
 
-No 4×4 completion claim is allowed before P7.0 passes for both providers.
+No production provider path may start before its P7.0A native spike passes. No 4×4 completion claim is allowed before P7.0A passes for both providers, and P7 cannot be complete before P7.0B passes for both providers.
 
 ---
 
@@ -1364,8 +1441,11 @@ Reject the implementation if any is true:
 [ ] invalid recall config can cause Indexed disclosure
 [ ] project has no way to set implicit recall off
 [ ] doctor/status hides the effective recall mode
+[ ] cwd drift or another Space's binding can authorize disclosure for an existing Session
+[ ] explicitSpaceId without a matching project binding silently enables Indexed disclosure
 [ ] implicit recall searches Core
 [ ] production injected context leaks key/id/score/reason/tier/type metadata
+[ ] a complete-prompt exact-key match lacks the fixed trusted answer-from-recall control
 [ ] maxRenderedChars is measured before escaping/wrapping
 [ ] rendered String.length may exceed the budget
 [ ] downstream network/model/embedding calls occur after daemon entry
@@ -1389,7 +1469,8 @@ Reject the implementation if any is true:
 P7 is COMPLETE only when:
 
 ```text
-P7.0 real provider capability spike PASS for Codex and Claude Code
+P7.0A isolated native provider capability spike PASS for Codex and Claude Code
+P7.0B real CLI + Memory Space bridge spike PASS for Codex and Claude Code
 project-level off/exact/lexical config implemented
 default exact implemented
 invalid config -> disclosure off + diagnostic error
@@ -1400,6 +1481,9 @@ active Indexed-only eligibility enforced
 Core never re-injected
 lexical mode consumes frozen P6 retrieval without changing it
 explicit prompt-level opt-out works
+Session Space remains authoritative across resume/cwd drift
+project binding must match session.spaceId before Indexed disclosure
+exact bare-key match receives the fixed trusted answer-from-recall control
 production context contains content only
 metadata leakage is zero
 repository/runtime/user evidence precedence instruction is present

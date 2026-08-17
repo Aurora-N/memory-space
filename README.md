@@ -25,7 +25,7 @@ flowchart LR
   end
 
   subgraph Integration["Provider-neutral Integration"]
-    Lifecycle["Lifecycle Hooks<br/>bootstrap · capture · checkpoint"]
+    Lifecycle["Lifecycle Hooks<br/>bootstrap · prompt recall · capture · checkpoint"]
     MCP["MCP Command Plane<br/>exactly six tools"]
   end
 
@@ -45,10 +45,10 @@ flowchart LR
   Lifecycle --> Handler --> MemorySpace
   MCP --> MemorySpace
   MemorySpace -->|"checkpoint transaction"| SQLite
-  SQLite -->|"bootstrap + explicit recall"| MemorySpace
+  SQLite -->|"bootstrap + implicit/explicit recall"| MemorySpace
 ```
 
-> **能力说明 / Capability note:** “Provider-neutral” 指共享的 contract 与 runtime，不表示所有 Agent 都能零配置接入。Codex 已完成真实 lifecycle + MCP 验证；Claude Code 的真实 lifecycle 已通过，但模型主动调用 MCP 仍取决于网关是否保留标准工具名；其他 Agent 需要单独实现 adapter。
+> **能力说明 / Capability note:** “Provider-neutral” 指共享的 contract 与 runtime，不表示所有 Agent 都能零配置接入。Codex 与 Claude Code 都已通过真实 prompt-time recall bridge；Claude Code 模型主动调用 MCP 仍取决于网关是否保留标准工具名；其他 Agent 需要单独实现 adapter。
 
 ---
 
@@ -66,7 +66,7 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 
 - 对话只是证据，Memory 才是经过策略筛选的持久状态；
 - `Core` Memory 自动进入默认上下文，但容量和类型受到控制；
-- `Indexed` Memory 默认不注入，需要搜索或显式召回；
+- `Indexed` Memory 不进入 bootstrap；默认可在 prompt 提交时按稳定 key 自动召回，也可显式搜索；
 - `Handoff Snapshot` 保存下一位 Agent 真正需要接手的工作状态；
 - 所有 Memory 都归属于一个 `Space`，不会跨项目泄漏。
 
@@ -77,7 +77,7 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 | 跨 Session 持久化 | 新 Session 可以恢复同一 Space 的 Core Memory 和最新 Handoff。 |
 | 跨进程恢复 | SQLite 关闭并重新打开后，Space、Session、Memory、Checkpoint 和 Handoff 仍然存在。 |
 | 跨 Provider 交接 | Codex 与 Claude Code 共享同一个 MemorySpace、生命周期 contract 和同一组六个 MCP 工具；Lifecycle/Handoff 已验证，Claude 模型主动调用 MCP 仍受当前网关兼容性影响。 |
-| 渐进式披露 | 重要的 Core Memory 默认可见，细节保留为 Indexed Memory，按需搜索。 |
+| 渐进式披露 | Core 默认可见；Indexed 不进入 bootstrap，可按项目配置进行有界 prompt-time 召回或显式搜索。 |
 | 可控记忆写入 | 显式记忆默认进入 Indexed；提升到 Core 需要经过策略与容量检查。 |
 | 确定性 Checkpoint | Memory 更新、Handoff 创建和事件边界推进在一个事务中提交，并支持幂等重试。 |
 | 来源与变更历史 | Memory 保留来源 Session/Event、版本、状态变化和提升/降级（promotion/demotion）历史。 |
@@ -86,14 +86,14 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 
 ### 它如何工作
 
-集成有两条通道：Lifecycle hook 负责自动启动上下文、捕获对话证据和触发 checkpoint；MCP 负责 Agent 主动发起的搜索、记忆、提升和 checkpoint 命令。两条通道最终都进入同一个本地 memory-space daemon 与 `MemorySpace` 实例。
+集成有两条通道：Lifecycle hook 负责自动启动上下文、prompt-time Indexed 召回、捕获对话证据和触发 checkpoint；MCP 负责 Agent 主动发起的搜索、记忆、提升和 checkpoint 命令。两条通道最终都进入同一个本地 memory-space daemon 与 `MemorySpace` 实例。
 
 1. 项目通过 `.memory-space/config.json` 绑定到一个 `Space`。
 2. Agent 启动 Session 时，Lifecycle hook 解析或复用内部 Session，并注入 Core Memory 与最新 Handoff。
 3. 完整用户 prompt 和可靠的最终回复文本被记录为轻量对话事件；完整 transcript 文件不会被默认读取或复制进数据库。
-4. Agent 可通过 MCP 显式搜索、记忆或提升 Memory。
+4. 每次用户 prompt 先被持久化，再按项目 `implicitRecall.mode` 从同一 Space 的 active Indexed Memory 中执行有界召回；Agent 仍可通过 MCP 显式搜索、记忆或提升 Memory。
 5. `PreCompact`、`SessionEnd` 或显式 checkpoint 将新事件提取为候选项；领域与准入策略再决定创建、更新、忽略及 Core/Indexed tier，最后在事务中更新 Memory 与 HandoffSnapshot。
-6. 同一 Provider 的 resume 复用原内部 Session；另一个 Provider 会创建自己的 Session，但只要绑定同一 Space，就能通过 Core Memory 和最新 HandoffSnapshot 接手工作。Indexed 细节仍需显式召回。
+6. 同一 Provider 的 resume 复用原内部 Session；另一个 Provider 会创建自己的 Session，但只要绑定同一 Space，就能通过 Core/Handoff 接手工作，并通过 prompt-time 或显式召回读取 Indexed 细节。
 
 ### 核心模型
 
@@ -104,7 +104,7 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 | `SessionEvent` | 追加式证据，例如用户消息、Agent 回复或结构化 Memory 事件。 |
 | `Memory` | 经过领域与准入策略验证的持久项目知识或工作状态，带类型、状态、版本和来源追踪（provenance）。 |
 | `Core` | 有界的默认上下文，适合稳定决策、约束、目标和需跨 Session 延续的工作状态。 |
-| `Indexed` | 可搜索但不默认注入的细节；显式 remember 默认创建为 Indexed。 |
+| `Indexed` | 不进入 bootstrap 的可搜索细节；可按 prompt 相关性有界注入，显式 remember 默认创建于此。 |
 | `Checkpoint` | 将未提交事件原子地转换为 Memory 更新和 Handoff 的边界。 |
 | `HandoffSnapshot` | 每次 checkpoint 生成的不可变交接快照，包含下一位 Agent 需要的目标、已完成事项、活跃任务、决策、阻塞、问题和下一步。它不是新的 Memory tier，也不会覆盖 Core。 |
 
@@ -154,6 +154,18 @@ pnpm memory-space unbind /absolute/path/to/project
 
 `unbind --space-id <expected-id>` 可在删除前校验 Space ID。若当前目录只继承祖先配置，`unbind` 不会创建或删除任何文件；损坏的本地配置会原样保留并报告错误。
 
+`init` 会把自动召回边界明确写入项目绑定，默认是稳定 key 精确召回：
+
+```json
+{
+  "version": 1,
+  "spaceId": "space_...",
+  "implicitRecall": { "mode": "exact" }
+}
+```
+
+将 `mode` 改为 `lexical` 可再启用完整 prompt 的确定性词面召回；改为 `off` 可关闭自动 Indexed 披露。旧绑定缺少该字段时仍兼容并按 `exact` 工作。配置损坏、当前目录绑定与 Session Space 不一致，或召回服务故障时，本次召回会关闭，但 prompt 仍会正常继续。
+
 如果只需要绑定、不希望启动 Inspector，仍可在已运行的 daemon 上使用 `init`。它只创建或确认 Space，并原子写入项目绑定，不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
 
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
@@ -174,7 +186,7 @@ pnpm memory-space inspect /absolute/path/to/project
 
 开发界面时可保持 daemon 运行，另开终端执行 `pnpm inspector:dev`，再访问 <http://127.0.0.1:5173/inspector/>。
 
-最短的跨 Session 验证路径：在已绑定项目中启动 Provider，确认 bootstrap 注入 Memory Space Session handle；让 Agent 通过 MCP 记住一个项目决策并执行 checkpoint；随后启动一个新 Session，确认它能从同一 Space 的 Core/Handoff 或显式搜索中恢复该信息。完整自动化验证命令见下文。
+最短的隐式跨 Agent 验证路径：先用任一 Agent 执行 `memory_remember` 写入 key 为 `CROSS_AGENT_TEST_20260817`、content 为 `CROSS_AGENT_TEST_20260817 = lavender-731` 的 Indexed Memory；打开另一个 Provider 的新 Session，只输入 `CROSS_AGENT_TEST_20260817`。在默认 `exact` 模式下，它应直接回答 `lavender-731`，无需用户要求调用 `memory_search`。完整自动化验证命令见下文。
 
 ### MCP 工具
 
@@ -195,8 +207,8 @@ pnpm memory-space inspect /absolute/path/to/project
 
 | Provider | 当前状态 |
 | --- | --- |
-| Codex | Lifecycle、共享 MCP、自动化验证和真实 Codex smoke 已通过并冻结。 |
-| Claude Code | Lifecycle、bootstrap、自动化验证和真实 hook smoke 已通过；当前兼容网关会改写 MCP 双下划线工具名，因此真实模型驱动 MCP 仍是外部阻塞项。 |
+| Codex | Lifecycle、共享 MCP、自动化验证、真实 Codex smoke 与 P7 prompt-time recall bridge 已通过。 |
+| Claude Code | Lifecycle、bootstrap、自动化验证和 P7 prompt-time recall bridge 已通过；当前兼容网关会改写 MCP 双下划线工具名，因此真实模型驱动 MCP 仍是外部阻塞项。 |
 | 其他 Agent | 可以复用 provider-neutral lifecycle contract 与六工具 MCP；仍需实现并验证对应 adapter。 |
 
 项目不会为某个 Provider 增加专属 MCP alias 或第七个工具来绕过兼容问题。
@@ -227,6 +239,7 @@ pnpm memory-space inspect /absolute/path/to/project
 - P5 Productization：Complete / Review Pass。
 - P6 Memory Quality v1：Complete / Review Pass / Frozen。
 - P6 B4 Semantic Retrieval / Dedup：经过评估后主动延期到 v2，而不是遗漏功能。详见 [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md)。
+- P7 Implicit Prompt-Time Recall：实现与自动化/真实 Provider 验证已完成，等待独立 code review，尚未 Frozen。
 
 v1 已知仍存在无词面重叠的语义表达不一致（semantic wording mismatch）和无稳定 key 的重复记忆（unkeyed duplicate）；当前证据不足以证明 embedding/vector infrastructure 的收益值得引入其存储、迁移、隐私、离线和模型版本复杂度。后续由真实自用（dogfooding）数据决定是否在 v2 重启。
 
@@ -248,6 +261,10 @@ pnpm memory-space eval quality --json
 
 # B3 Core/Handoff before/after gate
 pnpm memory-space eval quality --compare-stage-b2-core-handoff
+
+# P7 prompt-time Indexed recall（含 Codex/Claude 4×4）
+pnpm memory-space eval implicit-recall
+pnpm memory-space eval implicit-recall --json
 ```
 
 真实 Provider smoke 需要本机已安装并完成认证的对应 CLI：
@@ -258,6 +275,10 @@ pnpm run smoke:codex:p2
 
 pnpm run smoke:claude:p3 -- --preflight
 pnpm run smoke:claude:p3 -- --hooks-only
+
+# P7 原生 capability 与真实 production bridge
+pnpm run smoke:p7:capability
+pnpm run smoke:p7
 ```
 
 ### 已知限制
@@ -281,6 +302,8 @@ pnpm run smoke:claude:p3 -- --hooks-only
 - [v1 Roadmap](docs/V1_ROADMAP.md)
 - [P6 Memory Quality v1](docs/MEMORY_QUALITY_V1_SPEC.md)
 - [P6 B3 结果](docs/quality/P6_STAGE_B3_RESULT.md)
+- [P7 Implicit Recall 规格](docs/P7_IMPLICIT_RECALL_SPEC.md)
+- [P7 验证结果](docs/quality/P7_IMPLICIT_RECALL_RESULT.md)
 - [ADR 0004：Semantic Memory 延期到 v2](docs/adr/0004-semantic-recall-options-after-b1.md)
 
 ---
@@ -299,7 +322,7 @@ memory-space separates conversation evidence from durable project memory:
 
 - conversation events are evidence; validated `Memory` is durable state;
 - bounded `Core` Memory becomes default context;
-- `Indexed` Memory stays searchable without automatic injection;
+- `Indexed` Memory stays out of bootstrap and can be recalled automatically by stable key at prompt time or searched explicitly;
 - a `HandoffSnapshot` carries only the working state the next agent needs;
 - every Memory belongs to one isolated `Space`.
 
@@ -310,7 +333,7 @@ memory-space separates conversation evidence from durable project memory:
 | Cross-session persistence | A new Session restores Core Memory and the latest Handoff from the same Space. |
 | Process recovery | Space, Session, Memory, Checkpoint, and Handoff survive a SQLite close/reopen. |
 | Cross-provider handoff | Codex and Claude Code share one MemorySpace, lifecycle contract, and six-tool MCP surface. Lifecycle/Handoff is verified; direct Claude model-driven MCP remains gateway-dependent. |
-| Progressive disclosure | Core Memory is visible by default; Indexed detail is recalled explicitly. |
+| Progressive disclosure | Core is visible by default; Indexed stays out of bootstrap and supports bounded project-configured prompt-time or explicit recall. |
 | Governed writes | Explicit Memory starts Indexed; Core promotion is policy- and capacity-checked. |
 | Deterministic checkpoints | Memory updates, Handoff creation, and event-boundary advancement commit transactionally and retry safely. |
 | Provenance and history | Memory retains source Session/Event information, versions, status changes, and tier-transition history. |
@@ -319,14 +342,14 @@ memory-space separates conversation evidence from durable project memory:
 
 ### How it works
 
-The integration has two channels. Lifecycle hooks automatically bootstrap context, capture conversation evidence, and trigger checkpoints. MCP carries agent-initiated search, remember, promote, and checkpoint commands. Both channels enter the same local memory-space daemon and `MemorySpace` instance.
+The integration has two channels. Lifecycle hooks bootstrap context, perform prompt-time Indexed recall, capture conversation evidence, and trigger checkpoints. MCP carries agent-initiated search, remember, promote, and checkpoint commands. Both channels enter the same local memory-space daemon and `MemorySpace` instance.
 
 1. A project binds to a `Space` through `.memory-space/config.json`.
 2. On Session start, a lifecycle hook resolves or reuses the internal Session and injects Core Memory plus the latest Handoff.
 3. Full user prompts and reliable final-response text are captured as lightweight conversation events; transcript files are not read or copied by default.
-4. The agent can explicitly search, remember, or promote Memory through MCP.
+4. Each user prompt is persisted first, then project `implicitRecall.mode` may perform bounded recall from active Indexed Memory in the same Space. MCP remains available for explicit search, remember, and promote operations.
 5. `PreCompact`, `SessionEnd`, or an explicit checkpoint extracts candidates. Domain and admission policy then decide create/update/ignore behavior and the Core/Indexed tier before Memory and HandoffSnapshot are updated transactionally.
-6. A resume from the same provider reuses its internal Session. Another provider creates its own Session, but if it binds to the same Space it can continue through Core Memory and the latest HandoffSnapshot. Indexed detail remains explicit recall.
+6. A same-provider resume reuses its internal Session. Another provider creates its own Session, but the same Space lets it continue through Core/Handoff and retrieve Indexed detail implicitly or explicitly.
 
 ### Memory model
 
@@ -337,7 +360,7 @@ The integration has two channels. Lifecycle hooks automatically bootstrap contex
 | `SessionEvent` | Append-oriented evidence such as a prompt, response, or structured Memory event. |
 | `Memory` | Durable knowledge or working state validated by domain/admission policy, with type, status, version, and provenance. |
 | `Core` | Type- and capacity-bounded default context for stable decisions, constraints, goals, and continuation state. |
-| `Indexed` | Searchable detail that is not injected by default. Explicit remember starts here. |
+| `Indexed` | Searchable detail excluded from bootstrap; bounded prompt-relevant injection is configurable. Explicit remember starts here. |
 | `Checkpoint` | Atomic boundary that turns uncommitted events into Memory changes and a Handoff. |
 | `HandoffSnapshot` | Immutable checkpoint output containing goal, completed work, active tasks, decisions, blockers, questions, and next steps. It is not a Memory tier and does not overwrite Core. |
 
@@ -384,6 +407,21 @@ pnpm memory-space unbind /absolute/path/to/project
 
 `unbind --space-id <expected-id>` guards the removal with an expected Space ID. An inherited ancestor binding is never removed, and malformed local configuration is preserved with a visible error.
 
+`init` writes an explicit project disclosure policy and defaults it to exact stable-key recall:
+
+```json
+{
+  "version": 1,
+  "spaceId": "space_...",
+  "implicitRecall": { "mode": "exact" }
+}
+```
+
+Set the mode to `lexical` to add deterministic full-prompt lexical recall, or
+to `off` to disable automatic Indexed disclosure. Older bindings without the
+field remain valid and default to `exact`. Invalid/mismatched binding policy or
+a recall-service failure disables recall for that prompt without blocking it.
+
 If you only need a binding and already have a daemon running, `init` remains available. It creates or confirms the Space and atomically writes the project binding without editing global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
 
 #### Open the local Memory Inspector
@@ -401,7 +439,7 @@ Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search
 
 For frontend development, keep the daemon running, execute `pnpm inspector:dev` in another terminal, and open <http://127.0.0.1:5173/inspector/>.
 
-For a minimal cross-session exercise, start the configured provider in the bound project and confirm bootstrap injected a Memory Space Session handle. Ask the agent to remember one project decision through MCP and checkpoint it. Start a new Session, then confirm the decision returns through Core/Handoff or explicit search. The automated validation commands are below.
+For a minimal cross-agent implicit-recall exercise, use either provider to create an Indexed Memory with key `CROSS_AGENT_TEST_20260817` and content `CROSS_AGENT_TEST_20260817 = lavender-731`. Start a new Session in the other provider and submit only `CROSS_AGENT_TEST_20260817`. Default `exact` mode should return `lavender-731` without asking the model to call `memory_search`.
 
 ### MCP tools
 
@@ -422,8 +460,8 @@ Tool callers cannot supply trusted Space, tier, actor, or checkpoint-boundary co
 
 | Provider | Current status |
 | --- | --- |
-| Codex | Lifecycle, shared MCP, automated validation, and real Codex smoke have passed; P2 is frozen. |
-| Claude Code | Lifecycle/bootstrap, automated validation, and real hook smoke pass. Real model-driven MCP remains blocked by the active compatibility gateway rewriting double-underscore MCP tool names. |
+| Codex | Lifecycle, shared MCP, automated validation, real Codex smoke, and the P7 prompt-time recall bridge pass. |
+| Claude Code | Lifecycle/bootstrap, automated validation, and the P7 prompt-time recall bridge pass. Real model-driven MCP remains blocked by the active compatibility gateway rewriting double-underscore MCP tool names. |
 | Other agents | May reuse the provider-neutral lifecycle contract and six-tool MCP plane, but require their own implemented and validated adapter. |
 
 The project does not add provider-specific MCP aliases or a seventh tool to work around client compatibility issues.
@@ -454,6 +492,7 @@ SQLite is the zero-configuration v1 implementation. The application depends on a
 - P5 Productization: Complete / Review Pass.
 - P6 Memory Quality v1: Complete / Review Pass / Frozen.
 - P6 B4 Semantic Retrieval / Dedup: deliberately deferred to v2. See [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md).
+- P7 Implicit Prompt-Time Recall: implemented and validated with deterministic and real-provider evidence; awaiting independent code review, not frozen.
 
 Known v1 limitations include semantic wording mismatches with no lexical overlap and unkeyed duplicates. Current evidence does not show that embedding/vector infrastructure is worth its storage, migration, privacy, offline, and model-version complexity. Real dogfooding data should drive any v2 reopening.
 
@@ -466,6 +505,8 @@ pnpm memory-space eval cross-session
 pnpm memory-space eval quality
 pnpm memory-space eval quality --json
 pnpm memory-space eval quality --compare-stage-b2-core-handoff
+pnpm memory-space eval implicit-recall
+pnpm memory-space eval implicit-recall --json
 ```
 
 Real-provider runners additionally require an installed and authenticated provider CLI:
@@ -476,6 +517,8 @@ pnpm run smoke:codex:p2
 
 pnpm run smoke:claude:p3 -- --preflight
 pnpm run smoke:claude:p3 -- --hooks-only
+pnpm run smoke:p7:capability
+pnpm run smoke:p7
 ```
 
 ### Known limitations
@@ -499,4 +542,6 @@ pnpm run smoke:claude:p3 -- --hooks-only
 - [v1 roadmap](docs/V1_ROADMAP.md)
 - [P6 Memory Quality v1](docs/MEMORY_QUALITY_V1_SPEC.md)
 - [P6 B3 result](docs/quality/P6_STAGE_B3_RESULT.md)
+- [P7 implicit recall spec](docs/P7_IMPLICIT_RECALL_SPEC.md)
+- [P7 validation result](docs/quality/P7_IMPLICIT_RECALL_RESULT.md)
 - [ADR 0004: defer semantic memory to v2](docs/adr/0004-semantic-recall-options-after-b1.md)
