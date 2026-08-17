@@ -17,6 +17,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.13.1
+      - name: Update Corepack
+        run: npm install --global corepack@latest
       - name: Enable Corepack
         run: corepack enable
       - name: Install dependencies
