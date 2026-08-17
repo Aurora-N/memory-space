@@ -153,8 +153,8 @@ pnpm memory-space status --cwd /absolute/path/to/project
 
 | 工具 | 用途 |
 | --- | --- |
-| `memory_bootstrap` | 获取 Session 的 Core Memory、最新 Handoff 和内部 Session handle。 |
-| `memory_context` | 构建受 Space、状态、类型和 tier 过滤的结构化上下文。 |
+| `memory_bootstrap` | 加载当前 Session 或项目绑定的 Core Memory 与最新 Handoff；已知 Session 时同时返回内部 handle。 |
+| `memory_context` | 根据 query 从当前 Space 的 active Core/Indexed Memory 构建结构化上下文。 |
 | `memory_search` | 在当前 Space 中显式召回 Core 或 Indexed Memory。 |
 | `memory_remember` | 创建显式持久 Memory；默认是 Indexed。 |
 | `memory_promote` | 在策略、所有权和容量检查后将 Memory 提升到 Core。 |
@@ -353,8 +353,8 @@ Every provider shares exactly six tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `memory_bootstrap` | Return Core Memory, latest Handoff, and the internal Session handle. |
-| `memory_context` | Build structured context with Space/status/type/tier filters. |
+| `memory_bootstrap` | Load Core Memory and the latest Handoff for the current Session or project binding; return the internal handle when a Session is known. |
+| `memory_context` | Build query-relevant structured context from active Core/Indexed Memory in the current Space. |
 | `memory_search` | Explicitly recall Core or Indexed Memory from the current Space. |
 | `memory_remember` | Create explicit durable Memory, defaulting to Indexed. |
 | `memory_promote` | Promote Memory to Core after ownership, policy, and capacity checks. |
@@ -377,7 +377,7 @@ The project does not add provider-specific MCP aliases or a seventh tool to work
 - The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, and `localhost`; LAN/remote deployment is unsupported.
 - All daemon routes except `GET /health` validate localhost Host/Origin, and JSON mutations require the correct media type.
 - A `Space` is logical project isolation inside one daemon, not a multi-user authentication boundary. Use v1 only on a trusted local machine.
-- One daemon owns one `MemorySpace`/SQLite database owner; do not run multiple owners against the same database.
+- One daemon provides the single `MemorySpace`/SQLite owner; do not run multiple owners against the same database.
 - Lifecycle failures are fail-open for the coding agent; explicit MCP Memory commands remain fail-visible.
 - Bootstrap labels recalled Memory as untrusted project data, never as higher-priority instructions.
 - `CachePort` is best-effort derived state. Cache failure cannot invalidate correct Store data.
