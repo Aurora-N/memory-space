@@ -22,6 +22,7 @@ import { detectProviderConfigs } from "../src/cli/provider-config.ts";
 import {
   LocalMemorySpaceClient,
   MEMORY_MCP_TOOLS,
+  type InspectorBinding,
   type LocalMemorySpaceClientPort
 } from "../src/cli/local-client.ts";
 import type { HandoffSnapshot, Space } from "../src/domain/types.ts";
@@ -39,6 +40,9 @@ class FakeClient implements LocalMemorySpaceClientPort {
   mcpError?: Error;
   tools: string[] = [...MEMORY_MCP_TOOLS];
   handoff?: HandoffSnapshot;
+  inspectorCwd?: string;
+  inspectorBinding?: InspectorBinding;
+  inspectorError?: Error;
 
   async health(): Promise<void> {
     this.healthCalls += 1;
@@ -75,6 +79,26 @@ class FakeClient implements LocalMemorySpaceClientPort {
     this.readCalls += 1;
     if (this.mcpError) throw this.mcpError;
     return this.tools;
+  }
+
+  async getDaemonIdentity(): Promise<{ cwd: string }> {
+    return { cwd: this.inspectorCwd ?? process.cwd() };
+  }
+
+  async getInspectorBinding(): Promise<InspectorBinding> {
+    if (this.inspectorError) throw this.inspectorError;
+    if (this.inspectorBinding) return this.inspectorBinding;
+    const space = [...this.spaces.values()][0];
+    if (!space || !this.inspectorCwd) throw new Error("fake Inspector binding not configured");
+    return {
+      space,
+      binding: { spaceId: space.id, source: "config" },
+      cwd: this.inspectorCwd
+    };
+  }
+
+  async checkInspector(): Promise<void> {
+    if (this.inspectorError) throw this.inspectorError;
   }
 }
 
@@ -259,6 +283,146 @@ test("nested init preserves inherited binding unless a different Space is explic
     assert.match(conflict.stderr, /BINDING_CONFLICT/u);
     assert.equal(readFileSync(nestedConfigPath, "utf8"), nestedConfigBefore);
     assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unbind removes only the exact local binding and preserves ancestor and Memory data", async () => {
+  const { directory, project } = temporaryProject("unbind-nested");
+  const nested = join(project, "apps", "web");
+  const client = new FakeClient();
+  try {
+    mkdirSync(nested, { recursive: true });
+    const rootPath = bind(project, { version: 1, spaceId: "space-a" });
+    const rootBefore = readFileSync(rootPath, "utf8");
+    const nestedPath = bind(nested, { version: 1, spaceId: "space-b" });
+    addSpace(client, "space-a");
+    addSpace(client, "space-b");
+
+    const result = await cli(["unbind", nested, "--space-id", "space-b"], {
+      cwd: project,
+      client,
+      dependencies: {
+        clientFactory: () => {
+          throw new Error("unbind must not contact or open the daemon");
+        }
+      }
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(existsSync(nestedPath), false);
+    assert.equal(readFileSync(rootPath, "utf8"), rootBefore);
+    assert.match(result.stdout, /Memory data and the Space were preserved/u);
+    assert.match(result.stdout, /inherits Space space-a/u);
+    assert.equal((await new SpaceResolver().resolve({ cwd: nested })).spaceId, "space-a");
+    assert.equal(client.spaces.size, 2);
+
+    const repeated = await cli(["unbind", nested], { cwd: project, client });
+    assert.equal(repeated.code, 0, repeated.stderr);
+    assert.match(repeated.stdout, /No local binding to remove/u);
+    assert.equal(readFileSync(rootPath, "utf8"), rootBefore);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("unbind preserves mismatched and malformed local bindings", async () => {
+  const { directory, project } = temporaryProject("unbind-guard");
+  try {
+    const path = bind(project, { version: 1, spaceId: "space-actual" });
+    const before = readFileSync(path, "utf8");
+    const mismatch = await cli([
+      "unbind", "--cwd", project, "--space-id", "space-other"
+    ], { cwd: project });
+    assert.equal(mismatch.code, 1);
+    assert.match(mismatch.stderr, /BINDING_CONFLICT/u);
+    assert.equal(readFileSync(path, "utf8"), before);
+
+    writeFileSync(path, "{broken-json");
+    const malformed = await cli(["unbind", project], { cwd: project });
+    assert.equal(malformed.code, 1);
+    assert.match(malformed.stderr, /BINDING_INVALID/u);
+    assert.equal(readFileSync(path, "utf8"), "{broken-json");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("inspect validates an existing binding and opens the running daemon UI", async () => {
+  const { directory, project } = temporaryProject("inspect-open");
+  const client = new FakeClient();
+  const browserUrls: string[] = [];
+  try {
+    bind(project, { version: 1, spaceId: "inspect-space" });
+    addSpace(client, "inspect-space", "Inspector Space");
+    client.inspectorCwd = project;
+    const result = await cli(["inspect", project], {
+      cwd: directory,
+      client,
+      dependencies: {
+        openBrowser: async (url) => { browserUrls.push(url); }
+      }
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(browserUrls, ["http://127.0.0.1:4310/inspector/"]);
+    assert.equal(client.createCalls, 0);
+    assert.match(result.stdout, /Memory Space Inspector ready/u);
+    assert.match(result.stdout, /press Ctrl\+C in the pnpm start terminal/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("inspect never starts or initializes when daemon or binding is unavailable", async () => {
+  const offlineFixture = temporaryProject("inspect-offline");
+  const unboundFixture = temporaryProject("inspect-unbound");
+  const client = new FakeClient();
+  try {
+    client.healthError = new CliError("DAEMON_UNAVAILABLE", "offline");
+    client.inspectorCwd = offlineFixture.project;
+    const offline = await cli(["inspect", offlineFixture.project, "--no-open"], {
+      cwd: offlineFixture.project,
+      client,
+      dependencies: { openBrowser: async () => undefined }
+    });
+    assert.equal(offline.code, 1);
+    assert.match(offline.stderr, /DAEMON_UNAVAILABLE/u);
+    assert.equal(client.createCalls, 0);
+    assert.equal(existsSync(join(offlineFixture.project, ".memory-space", "config.json")), false);
+
+    client.healthError = undefined;
+    client.inspectorCwd = unboundFixture.project;
+    const unbound = await cli(["inspect", unboundFixture.project, "--no-open"], {
+      cwd: unboundFixture.project,
+      client,
+      dependencies: { openBrowser: async () => undefined }
+    });
+    assert.equal(unbound.code, 1);
+    assert.match(unbound.stderr, /BINDING_NOT_FOUND/u);
+    assert.equal(client.createCalls, 0);
+    assert.equal(existsSync(join(unboundFixture.project, ".memory-space", "config.json")), false);
+  } finally {
+    rmSync(offlineFixture.directory, { recursive: true, force: true });
+    rmSync(unboundFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("inspect rejects a daemon attached to another project before any mutation", async () => {
+  const { directory, project } = temporaryProject("inspect-preflight");
+  const other = join(directory, "other");
+  const client = new FakeClient();
+  try {
+    mkdirSync(other);
+    client.inspectorCwd = other;
+    const result = await cli(["inspect", project, "--no-open"], {
+      cwd: project,
+      client,
+      dependencies: { openBrowser: async () => undefined }
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /different project/u);
+    assert.equal(client.createCalls, 0);
+    assert.equal(existsSync(join(project, ".memory-space", "config.json")), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

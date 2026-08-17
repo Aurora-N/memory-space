@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
@@ -15,11 +16,13 @@ import {
   runDoctor,
   runEval,
   runInit,
+  runInspect,
   runQualityComparison,
   runQualityCoreHandoffComparison,
   runQualityExtractionComparison,
   runQualityEval,
-  runStatus
+  runStatus,
+  runUnbind
 } from "./commands.ts";
 import { asCliError, CliError } from "./errors.ts";
 import {
@@ -27,10 +30,12 @@ import {
   LocalMemorySpaceClient,
   type LocalMemorySpaceClientPort
 } from "./local-client.ts";
+import { openLocalBrowser } from "./open-browser.ts";
 
 type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
 type BooleanOption =
   | "json"
+  | "no-open"
   | "compare-stage-a"
   | "compare-stage-a-extraction"
   | "compare-stage-b2-core-handoff";
@@ -41,6 +46,7 @@ interface ParsedOptions {
   spaceId?: string;
   endpoint?: string;
   json?: boolean;
+  noOpen?: boolean;
   compareStageA?: boolean;
   compareStageAExtraction?: boolean;
   compareStageB2CoreHandoff?: boolean;
@@ -59,14 +65,17 @@ export interface CliDependencies {
   qualityExtractionComparisonRunner?: () => Promise<StageB2ExtractionComparisonReport>;
   qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
+  openBrowser?: (url: string) => Promise<void>;
 }
 
 const usage = `memory-space local product CLI
 
 Usage:
-  memory-space init [--cwd <path>] [--name <name>] [--space-id <id>] [--endpoint <url>]
-  memory-space doctor [--cwd <path>] [--endpoint <url>] [--json]
-  memory-space status [--cwd <path>] [--endpoint <url>] [--json]
+  memory-space inspect [path] [--endpoint <url>] [--no-open]
+  memory-space init [path] [--name <name>] [--space-id <id>] [--endpoint <url>]
+  memory-space unbind [path] [--space-id <expected-id>]
+  memory-space doctor [path] [--endpoint <url>] [--json]
+  memory-space status [path] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
   memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
@@ -76,12 +85,17 @@ Development invocation:
 function parseOptions(
   args: string[],
   allowedValues: readonly ValueOption[],
-  allowedBooleans: readonly BooleanOption[]
+  allowedBooleans: readonly BooleanOption[],
+  allowPositionalCwd = false
 ): ParsedOptions {
   const result: ParsedOptions = {};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (!argument.startsWith("--")) {
+      if (allowPositionalCwd && result.cwd === undefined) {
+        result.cwd = argument;
+        continue;
+      }
       throw new CliError("USAGE_ERROR", `Unexpected argument: ${argument}`, {
         exitCode: 2,
         remediation: "Run memory-space --help."
@@ -92,6 +106,7 @@ function parseOptions(
       if (name === "compare-stage-a") result.compareStageA = true;
       else if (name === "compare-stage-a-extraction") result.compareStageAExtraction = true;
       else if (name === "compare-stage-b2-core-handoff") result.compareStageB2CoreHandoff = true;
+      else if (name === "no-open") result.noOpen = true;
       else result.json = true;
       continue;
     }
@@ -107,7 +122,12 @@ function parseOptions(
     }
     index += 1;
     if (name === "space-id") result.spaceId = value;
-    else if (name === "cwd") result.cwd = value;
+    else if (name === "cwd") {
+      if (result.cwd !== undefined) {
+        throw new CliError("USAGE_ERROR", "Specify the project path only once.", { exitCode: 2 });
+      }
+      result.cwd = value;
+    }
     else if (name === "name") result.name = value;
     else result.endpoint = value;
   }
@@ -211,13 +231,32 @@ export async function runCli(
         );
     }
 
+    if (command === "unbind") {
+      const options = parseOptions(
+        argv.slice(1), ["cwd", "space-id"], [], true
+      );
+      await runUnbind(options, { cwd, write });
+      return 0;
+    }
+
+    const localCommands = new Set(["init", "inspect", "doctor", "status"]);
+    if (!localCommands.has(command)) {
+      throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, {
+        exitCode: 2,
+        remediation: "Run memory-space --help."
+      });
+    }
+
     const allowedValues: ValueOption[] = command === "init"
       ? ["cwd", "name", "space-id", "endpoint"]
       : ["cwd", "endpoint"];
     const options = parseOptions(
       argv.slice(1),
       allowedValues,
-      command === "doctor" || command === "status" ? ["json"] : []
+      command === "doctor" || command === "status"
+        ? ["json"]
+        : command === "inspect" ? ["no-open"] : [],
+      true
     );
     const endpoint = options.endpoint
       ?? environment.MEMORY_SPACE_URL
@@ -230,15 +269,28 @@ export async function runCli(
       await runInit(options, context);
       return 0;
     }
+    if (command === "inspect") {
+      const target = resolve(options.cwd ?? cwd);
+      await client.health();
+      const identity = await client.getDaemonIdentity();
+      if (resolve(identity.cwd) !== target) {
+        throw new CliError(
+          "DAEMON_REQUEST_FAILED",
+          "The running daemon is attached to a different project.",
+          {
+            remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project."
+          }
+        );
+      }
+      await runInspect(options, context, dependencies.openBrowser ?? openLocalBrowser);
+      return 0;
+    }
     if (command === "doctor") return await runDoctor(options, context);
     if (command === "status") {
       await runStatus(options, context);
       return 0;
     }
-    throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, {
-      exitCode: 2,
-      remediation: "Run memory-space --help."
-    });
+    throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, { exitCode: 2 });
   } catch (error) {
     const value = asCliError(error);
     writeError(`${value.code}: ${value.message}`);

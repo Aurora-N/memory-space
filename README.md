@@ -118,41 +118,49 @@ cd memory-space
 corepack enable
 pnpm install
 pnpm run check
-pnpm start
+pnpm inspector:build
 ```
 
-默认配置不要求 `.env` 文件。daemon 运行在 `http://127.0.0.1:4310`，数据写入启动命令当前目录下的 `./data/memory-space.db`；如需自定义，请参考 `.env.example` 并显式导出对应环境变量。
-
-确认 daemon 已就绪：
+`pnpm start` 保持原有的前台 daemon 语义。在第一个终端中指定目标项目并启动；需要关闭时按 `Ctrl+C`：
 
 ```bash
-curl --fail --silent http://127.0.0.1:4310/health
-# {"status":"ok"}
+MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
 ```
 
-在另一个终端中，把目标项目绑定到一个 Space：
+默认 daemon 只监听 `http://127.0.0.1:4310`，数据仍写入启动目录下的 `./data/memory-space.db`。如需自定义，继续使用 `.env.example` 中已有的环境变量。
+
+在第二个终端中初始化绑定，然后打开 Inspector：
 
 ```bash
-pnpm memory-space init \
-  --cwd /absolute/path/to/project \
-  --name "My project"
+pnpm memory-space init /absolute/path/to/project --name "My project"
+pnpm memory-space inspect /absolute/path/to/project
 
-pnpm memory-space doctor --cwd /absolute/path/to/project
-pnpm memory-space status --cwd /absolute/path/to/project
+# 检查当前项目
+pnpm memory-space doctor /absolute/path/to/project
+pnpm memory-space status /absolute/path/to/project
+
+# 只解绑该目录；不会删除 Space 或 Memory，也不会移除祖先绑定
+pnpm memory-space unbind /absolute/path/to/project
 ```
 
-`init` 只创建或确认 Space，并原子写入项目绑定；它不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
+`inspect` 是纯检查/打开命令：它不会启动 daemon、创建 Space 或写入绑定；daemon 未运行、运行目录不匹配或项目尚未绑定时会给出错误。使用 `--no-open` 可只完成检查并打印 URL。
+
+`unbind --space-id <expected-id>` 可在删除前校验 Space ID。若当前目录只继承祖先配置，`unbind` 不会创建或删除任何文件；损坏的本地配置会原样保留并报告错误。
+
+如果只需要绑定、不希望启动 Inspector，仍可在已运行的 daemon 上使用 `init`。它只创建或确认 Space，并原子写入项目绑定，不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
 
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
 - [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
 
 #### 打开本地 Memory Inspector
 
-Inspector 是 daemon 同源托管的只读可视化界面。先构建一次前端，然后让 daemon 使用目标项目的可信绑定：
+Inspector 是 daemon 同源托管的只读可视化界面。完整启动顺序为：
 
 ```bash
 pnpm inspector:build
 MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+# 在另一个终端，确保 init 已完成后：
+pnpm memory-space inspect /absolute/path/to/project
 ```
 
 打开 <http://127.0.0.1:4310/inspector/>。你可以查看 Overview、搜索和筛选 Memories、打开 provenance/history 详情、核对真实 bootstrap context、查看最新 Handoff，并在 Validation 中比较 Stored 与 Disclosed 状态。界面没有创建、编辑、删除、提升或状态变更操作，不会污染用于验证的 Memory。
@@ -336,38 +344,43 @@ cd memory-space
 corepack enable
 pnpm install
 pnpm run check
-pnpm start
+pnpm inspector:build
 ```
 
-The defaults require no `.env` file. The daemon listens at `http://127.0.0.1:4310` and stores data in `./data/memory-space.db` relative to the directory where `pnpm start` runs. To customize it, use `.env.example` as a reference and explicitly export the variables.
-
-Confirm that the daemon is ready:
+`pnpm start` retains its original foreground-daemon behavior. Start it for the target project in the first terminal; press `Ctrl+C` there to stop it:
 
 ```bash
-curl --fail --silent http://127.0.0.1:4310/health
-# {"status":"ok"}
+MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
 ```
 
-In another terminal, bind and inspect the target project:
+The daemon still listens only on `http://127.0.0.1:4310` by default and stores data in `./data/memory-space.db` relative to its launch directory. Existing `.env.example` variables remain the customization mechanism.
 
 ```bash
-pnpm memory-space init \
-  --cwd /absolute/path/to/project \
-  --name "My project"
+pnpm memory-space init /absolute/path/to/project --name "My project"
+pnpm memory-space inspect /absolute/path/to/project
 
-pnpm memory-space doctor --cwd /absolute/path/to/project
-pnpm memory-space status --cwd /absolute/path/to/project
+pnpm memory-space doctor /absolute/path/to/project
+pnpm memory-space status /absolute/path/to/project
+
+# Removes only this directory's exact binding; preserves Space and Memory
+pnpm memory-space unbind /absolute/path/to/project
 ```
 
-`init` creates or confirms the Space and atomically writes the project binding. It does not edit global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
+`inspect` only validates and opens: it never starts the daemon, creates a Space, or writes a binding. It fails visibly when the daemon is unavailable, attached to another project, or the project is unbound. Use `--no-open` to validate and print the URL without opening a browser.
+
+`unbind --space-id <expected-id>` guards the removal with an expected Space ID. An inherited ancestor binding is never removed, and malformed local configuration is preserved with a visible error.
+
+If you only need a binding and already have a daemon running, `init` remains available. It creates or confirms the Space and atomically writes the project binding without editing global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
 
 #### Open the local Memory Inspector
 
-The daemon serves the read-only Inspector on the same local origin. Build the frontend once and start the daemon with the target project's trusted binding:
+The daemon serves the read-only Inspector on the same local origin. The complete sequence is:
 
 ```bash
 pnpm inspector:build
 MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+# In another terminal, after init has completed:
+pnpm memory-space inspect /absolute/path/to/project
 ```
 
 Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search and filters, provenance/history detail, the exact production bootstrap context, the latest Handoff, and Stored-versus-Disclosed validation. It has no create, edit, delete, promote, or status-change controls.

@@ -21,6 +21,19 @@ export interface LocalMemorySpaceClientPort {
   getSpace(spaceId: string): Promise<Space>;
   getLatestHandoff(spaceId: string): Promise<HandoffSnapshot | undefined>;
   listMcpTools(): Promise<string[]>;
+  getDaemonIdentity(): Promise<DaemonIdentity>;
+  getInspectorBinding(): Promise<InspectorBinding>;
+  checkInspector(): Promise<void>;
+}
+
+export interface DaemonIdentity {
+  cwd: string;
+}
+
+export interface InspectorBinding {
+  space: Space;
+  binding: { spaceId: string; source: "explicit" | "config"; configPath?: string };
+  cwd: string;
 }
 
 export function validateDaemonEndpoint(value: string): URL {
@@ -127,6 +140,40 @@ export class LocalMemorySpaceClient implements LocalMemorySpaceClientPort {
       });
     } finally {
       await client.close().catch(() => undefined);
+    }
+  }
+
+  async getDaemonIdentity(): Promise<DaemonIdentity> {
+    const value = await this.#request<Partial<DaemonIdentity>>("daemon/identity");
+    if (typeof value.cwd !== "string") {
+      throw new CliError("DAEMON_REQUEST_FAILED", "Daemon identity response is invalid.", {
+        remediation: "Restart the Memory Space daemon with the current CLI version."
+      });
+    }
+    return value as DaemonIdentity;
+  }
+
+  getInspectorBinding(): Promise<InspectorBinding> {
+    return this.#request<InspectorBinding>("inspector/api/binding");
+  }
+
+  async checkInspector(): Promise<void> {
+    let response: Response;
+    try {
+      response = await this.#fetch(new URL("inspector/", this.#origin), {
+        redirect: "error",
+        signal: AbortSignal.timeout(this.#timeoutMs)
+      });
+    } catch (error) {
+      throw new CliError("INSPECTOR_UNAVAILABLE", "Memory Inspector is unavailable.", {
+        remediation: "Build the Inspector assets and restart the daemon.",
+        cause: error
+      });
+    }
+    if (!response.ok) {
+      throw new CliError("INSPECTOR_UNAVAILABLE", "Memory Inspector assets are unavailable.", {
+        remediation: "From the source repository, run: pnpm inspector:build"
+      });
     }
   }
 

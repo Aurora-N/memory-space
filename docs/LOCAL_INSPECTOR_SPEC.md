@@ -93,14 +93,30 @@ or alter retrieval ranking.
 
 ## Run
 
-Production-style, same-origin use:
+Source-workspace use keeps the original foreground `pnpm start` lifecycle:
 
 ```bash
 pnpm inspector:build
-MEMORY_SPACE_CWD=/absolute/path/to/bound/project pnpm start
+MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
 ```
 
-Then open <http://127.0.0.1:4310/inspector/>.
+In another terminal, create the binding once and open the Inspector:
+
+```bash
+pnpm memory-space init /absolute/path/to/project
+pnpm memory-space inspect /absolute/path/to/project
+pnpm memory-space inspect /absolute/path/to/project --no-open
+pnpm memory-space unbind /absolute/path/to/project --space-id <expected-id>
+```
+
+`inspect` never starts or stops a daemon, creates a Space, or writes a binding.
+It validates daemon health, the foreground daemon's project, the effective
+binding, and Inspector assets before opening the browser. Stop the daemon with
+`Ctrl+C` in the `pnpm start` terminal.
+
+`unbind` removes only `<project>/.memory-space/config.json`; it never deletes a
+Space or Memory and never removes an inherited ancestor binding. Malformed
+bindings are preserved with an actionable error.
 
 Frontend development uses the same daemon with Vite's local proxy:
 

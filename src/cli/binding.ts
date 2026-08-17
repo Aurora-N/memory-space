@@ -90,3 +90,47 @@ export async function writeBindingAtomically(
   }
   return configPath;
 }
+
+export interface RemoveLocalBindingResult {
+  removed: boolean;
+  local?: SpaceBinding;
+  inherited?: SpaceBinding;
+}
+
+/**
+ * Removes only the exact binding owned by cwd. Ancestor bindings and Space data
+ * are deliberately outside this operation's scope.
+ */
+export async function removeLocalProjectBinding(
+  cwd: string,
+  expectedSpaceId?: string
+): Promise<RemoveLocalBindingResult> {
+  const resolvedCwd = resolve(cwd);
+  const local = await readLocalProjectBinding(resolvedCwd);
+  if (!local) {
+    return {
+      removed: false,
+      inherited: await resolveOptionalBinding(resolvedCwd)
+    };
+  }
+  if (expectedSpaceId !== undefined && local.spaceId !== expectedSpaceId) {
+    throw new CliError(
+      "BINDING_CONFLICT",
+      `Local project binding points to Space ${local.spaceId}; it was not removed.`,
+      { remediation: `Retry with --space-id ${local.spaceId} after reviewing the binding.` }
+    );
+  }
+  try {
+    await unlink(local.configPath as string);
+  } catch (error) {
+    throw new CliError("BINDING_REMOVE_FAILED", "Local project binding could not be removed.", {
+      remediation: `Check filesystem permissions for ${local.configPath}.`,
+      cause: error
+    });
+  }
+  return {
+    removed: true,
+    local,
+    inherited: await resolveOptionalBinding(resolvedCwd)
+  };
+}

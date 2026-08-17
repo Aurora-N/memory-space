@@ -153,6 +153,12 @@ export function createMemorySpaceDaemon(
       await mcpNodeHandler(request, response);
       return;
     }
+    if (request.method === "GET" && url.pathname === "/daemon/identity") {
+      sendJson(response, 200, {
+        cwd: runtime.cwd
+      });
+      return;
+    }
     if (request.method === "POST" && url.pathname === "/providers/codex/lifecycle") {
       sendJson(response, 200, await codexIntegration.handleNative(await readJsonBody(request)));
       return;

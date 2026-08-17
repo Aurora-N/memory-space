@@ -21,6 +21,7 @@ import type { Space } from "../domain/types.ts";
 import { CliError } from "./errors.ts";
 import {
   readLocalProjectBinding,
+  removeLocalProjectBinding,
   resolveOptionalBinding,
   writeBindingAtomically
 } from "./binding.ts";
@@ -42,6 +43,11 @@ export interface InitOptions {
   cwd?: string;
   name?: string;
   spaceId?: string;
+}
+
+export interface InspectOptions {
+  cwd?: string;
+  noOpen?: boolean;
 }
 
 export interface DoctorCheck {
@@ -150,6 +156,78 @@ export async function runInit(
   context.write(`Space:   ${space.name} (${space.id})`);
   context.write(`Binding: ${configPath}`);
   providerNextSteps(context.write);
+}
+
+export async function runInspect(
+  options: InspectOptions,
+  context: CommandContext,
+  openBrowser: (url: string) => Promise<void>
+): Promise<void> {
+  const cwd = resolve(options.cwd ?? context.cwd);
+  const binding = await resolveOptionalBinding(cwd);
+  if (!binding) {
+    throw new CliError("BINDING_NOT_FOUND", "Inspector target has no effective binding.", {
+      remediation: "Run memory-space init for this project before opening the Inspector."
+    });
+  }
+  const runtime = await context.client.getInspectorBinding();
+  if (resolve(runtime.cwd) !== cwd || runtime.space.id !== binding.spaceId) {
+    throw new CliError(
+      "DAEMON_REQUEST_FAILED",
+      "The running daemon is attached to a different project or Space.",
+      {
+        remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project."
+      }
+    );
+  }
+  await context.client.checkInspector();
+  const url = `${context.client.endpoint}/inspector/`;
+  if (!options.noOpen) await openBrowser(url);
+  context.write("");
+  context.write("Memory Space Inspector ready");
+  context.write(`Project:  ${cwd}`);
+  context.write(`Space:    ${runtime.space.name} (${runtime.space.id})`);
+  context.write(`Inspector: ${url}`);
+  if (options.noOpen) context.write("Browser:  not opened (--no-open)");
+  context.write("Close:    press Ctrl+C in the pnpm start terminal");
+  context.write("Unbind:   memory-space unbind");
+}
+
+export async function runUnbind(
+  options: { cwd?: string; spaceId?: string },
+  context: Pick<CommandContext, "cwd" | "write">
+): Promise<void> {
+  const cwd = resolve(options.cwd ?? context.cwd);
+  try {
+    if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
+  } catch (error) {
+    throw new CliError("VALIDATION_ERROR", "Unbind target must be an existing directory.", {
+      cause: error
+    });
+  }
+  const expectedSpaceId = required(options.spaceId, "--space-id");
+  const result = await removeLocalProjectBinding(cwd, expectedSpaceId);
+  if (result.removed) {
+    context.write("Local Memory Space binding removed");
+    context.write(`Project: ${cwd}`);
+    context.write(`Space:   ${result.local?.spaceId}`);
+    context.write("Memory data and the Space were preserved.");
+    if (result.inherited) {
+      context.write(
+        `Effective binding now inherits Space ${result.inherited.spaceId} from ${result.inherited.configPath}.`
+      );
+    } else {
+      context.write("Project is now unbound.");
+    }
+    return;
+  }
+  if (result.inherited) {
+    context.write("No local binding to remove; ancestor binding was preserved.");
+    context.write(`Effective Space: ${result.inherited.spaceId}`);
+    context.write(`Binding:         ${result.inherited.configPath}`);
+  } else {
+    context.write("Project is already unbound; no Memory data was changed.");
+  }
 }
 
 function providerNextSteps(write: (line: string) => void): void {

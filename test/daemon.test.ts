@@ -102,6 +102,16 @@ test("daemon composes HTTP, lifecycle, and MCP around one MemorySpace owner", as
     });
     assert.equal(healthFromHostileOrigin.status, 200);
 
+    const identity = await fetch(`${baseUrl}/daemon/identity`);
+    assert.equal(identity.status, 200);
+    assert.deepEqual(await identity.json(), {
+      cwd: directory
+    });
+    const rejectedIdentityOrigin = await fetch(`${baseUrl}/daemon/identity`, {
+      headers: { origin: "https://attacker.example" }
+    });
+    assert.equal(rejectedIdentityOrigin.status, 403);
+
     const rejectedMcpOrigin = await fetch(`${baseUrl}/mcp`, {
       method: "POST",
       headers: {
