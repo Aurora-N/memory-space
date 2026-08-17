@@ -133,6 +133,11 @@ MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
 
 ```bash
 pnpm memory-space init /absolute/path/to/project --name "My project"
+pnpm memory-space configure codex /absolute/path/to/project --dry-run
+pnpm memory-space configure codex /absolute/path/to/project
+# 或配置 Claude Code；建议先预览，再写入项目级配置
+pnpm memory-space configure claude-code /absolute/path/to/project --dry-run
+pnpm memory-space configure claude-code /absolute/path/to/project
 pnpm memory-space inspect /absolute/path/to/project
 
 # 检查当前项目
@@ -144,6 +149,8 @@ pnpm memory-space unbind /absolute/path/to/project
 ```
 
 `inspect` 是纯检查/打开命令：它不会启动 daemon、创建 Space 或写入绑定；daemon 未运行、运行目录不匹配或项目尚未绑定时会给出错误。使用 `--no-open` 可只完成检查并打印 URL。
+
+`configure codex` 与 `configure claude-code` 是对称的显式、项目级配置命令，均支持 `--dry-run`、幂等合并和 loopback-only `--endpoint`。Codex 命令写入 `.codex/hooks.json` 与 `.codex/config.toml`；Claude Code 命令写入 `.claude/settings.json` 与 `.mcp.json`。已有 Memory Space 冲突配置、覆盖当前项目的其他活动 scope、损坏文件或非普通文件会导致整次预检失败。命令不会修改用户目录中的 `~/.codex`、`~/.claude/settings.json` 或 `~/.claude.json`，也不会输出现有 token、header 或 env。配置后重新启动对应 Agent，并分别用 `/hooks` 与 `/mcp` 确认连接。
 
 `unbind --space-id <expected-id>` 可在删除前校验 Space ID。若当前目录只继承祖先配置，`unbind` 不会创建或删除任何文件；损坏的本地配置会原样保留并报告错误。
 
@@ -357,6 +364,11 @@ The daemon still listens only on `http://127.0.0.1:4310` by default and stores d
 
 ```bash
 pnpm memory-space init /absolute/path/to/project --name "My project"
+pnpm memory-space configure codex /absolute/path/to/project --dry-run
+pnpm memory-space configure codex /absolute/path/to/project
+# Or configure Claude Code; preview before writing project-scoped files
+pnpm memory-space configure claude-code /absolute/path/to/project --dry-run
+pnpm memory-space configure claude-code /absolute/path/to/project
 pnpm memory-space inspect /absolute/path/to/project
 
 pnpm memory-space doctor /absolute/path/to/project
@@ -367,6 +379,8 @@ pnpm memory-space unbind /absolute/path/to/project
 ```
 
 `inspect` only validates and opens: it never starts the daemon, creates a Space, or writes a binding. It fails visibly when the daemon is unavailable, attached to another project, or the project is unbound. Use `--no-open` to validate and print the URL without opening a browser.
+
+`configure codex` and `configure claude-code` are symmetric, explicit project-scoped commands. Both support `--dry-run`, idempotent merging, and a loopback-only `--endpoint`. Codex writes `.codex/hooks.json` and `.codex/config.toml`; Claude Code writes `.claude/settings.json` and `.mcp.json`. Conflicting Memory Space configuration, another active scope covering the project, malformed files, or non-regular files fail the whole preflight. Neither command edits user-level `~/.codex`, `~/.claude/settings.json`, or `~/.claude.json`, nor prints existing tokens, headers, or environment values. Restart the configured agent afterward, then verify `/hooks` and `/mcp`.
 
 `unbind --space-id <expected-id>` guards the removal with an expected Space ID. An inherited ancestor binding is never removed, and malformed local configuration is preserved with a visible error.
 

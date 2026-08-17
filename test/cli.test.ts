@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -345,6 +346,516 @@ test("unbind preserves mismatched and malformed local bindings", async () => {
     assert.equal(readFileSync(path, "utf8"), "{broken-json");
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex creates project hooks and MCP configuration and is idempotent", async () => {
+  const { directory, project } = temporaryProject("configure-codex-create");
+  const installationRoot = join(directory, "memory-space installation");
+  try {
+    const dryRun = await cli(["configure", "codex", project, "--dry-run"], {
+      cwd: directory,
+      dependencies: { installationRoot }
+    });
+    assert.equal(dryRun.code, 0, dryRun.stderr);
+    assert.match(dryRun.stdout, /would be created/u);
+    assert.match(dryRun.stdout, /No files were changed/u);
+    assert.equal(existsSync(join(project, ".codex")), false);
+
+    const configured = await cli(["configure", "codex", project], {
+      cwd: directory,
+      dependencies: { installationRoot }
+    });
+    assert.equal(configured.code, 0, configured.stderr);
+    const hooksPath = join(project, ".codex", "hooks.json");
+    const mcpPath = join(project, ".codex", "config.toml");
+    const hooksBefore = readFileSync(hooksPath, "utf8");
+    const mcpBefore = readFileSync(mcpPath, "utf8");
+    const hooks = JSON.parse(hooksBefore) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    assert.deepEqual(Object.keys(hooks.hooks), [
+      "SessionStart", "UserPromptSubmit", "Stop", "PreCompact", "SessionEnd"
+    ]);
+    assert.equal(
+      hooks.hooks.SessionStart?.[0]?.hooks[0]?.command,
+      `pnpm --dir '${installationRoot}' --silent codex:hook`
+    );
+    assert.equal(mcpBefore, [
+      "[mcp_servers.memory_space]",
+      'url = "http://127.0.0.1:4310/mcp"',
+      ""
+    ].join("\n"));
+    assert.equal(
+      (await detectProviderConfigs(project, join(directory, "home")))
+        .find((value) => value.provider === "codex")?.state,
+      "detected"
+    );
+
+    const repeated = await cli(["configure", "codex", project], {
+      cwd: directory,
+      dependencies: { installationRoot }
+    });
+    assert.equal(repeated.code, 0, repeated.stderr);
+    assert.match(repeated.stdout, /was unchanged/u);
+    assert.equal(readFileSync(hooksPath, "utf8"), hooksBefore);
+    assert.equal(readFileSync(mcpPath, "utf8"), mcpBefore);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex preserves unrelated hooks, TOML, and secret values without disclosure", async () => {
+  const { directory, project } = temporaryProject("configure-codex-merge");
+  const codexDirectory = join(project, ".codex");
+  const secret = "never-print-provider-token";
+  try {
+    mkdirSync(codexDirectory);
+    writeFileSync(join(codexDirectory, "hooks.json"), JSON.stringify({
+      description: "existing",
+      token: secret,
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }]
+      }
+    }, null, 2));
+    writeFileSync(join(codexDirectory, "config.toml"), [
+      "# memory_space is configured below by the project command",
+      "[mcp_servers.other]",
+      'url = "http://127.0.0.1:9999/mcp"',
+      `authorization_token = "${secret}"`,
+      ""
+    ].join("\n"));
+
+    const result = await cli(["configure", "codex", project], {
+      cwd: directory,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(secret, "u"));
+    const hooks = JSON.parse(readFileSync(join(codexDirectory, "hooks.json"), "utf8")) as {
+      description: string;
+      token: string;
+      hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    assert.equal(hooks.description, "existing");
+    assert.equal(hooks.token, secret);
+    assert.equal(hooks.hooks.UserPromptSubmit[0]?.hooks[0]?.command, "pnpm lint");
+    assert.equal(hooks.hooks.UserPromptSubmit.length, 2);
+    const toml = readFileSync(join(codexDirectory, "config.toml"), "utf8");
+    assert.match(toml, /\[mcp_servers\.other\]/u);
+    assert.match(toml, new RegExp(secret, "u"));
+    assert.match(toml, /\[mcp_servers\.memory_space\]/u);
+
+    const repeated = await cli(["configure", "codex", project], {
+      cwd: directory,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(repeated.code, 0, repeated.stderr);
+    assert.match(repeated.stdout, /was unchanged/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex rejects hook or MCP conflicts before changing either file", async () => {
+  const hookFixture = temporaryProject("configure-codex-hook-conflict");
+  const mcpFixture = temporaryProject("configure-codex-mcp-conflict");
+  try {
+    const hookDirectory = join(hookFixture.project, ".codex");
+    mkdirSync(hookDirectory);
+    const conflictingHooks = JSON.stringify({
+      hooks: {
+        SessionStart: [{
+          hooks: [{ type: "command", command: "pnpm --dir /other codex:hook" }]
+        }]
+      }
+    });
+    writeFileSync(join(hookDirectory, "hooks.json"), conflictingHooks);
+    const hookConflict = await cli(["configure", "codex", hookFixture.project], {
+      cwd: hookFixture.project,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(hookConflict.code, 1);
+    assert.match(hookConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.equal(readFileSync(join(hookDirectory, "hooks.json"), "utf8"), conflictingHooks);
+    assert.equal(existsSync(join(hookDirectory, "config.toml")), false);
+
+    const mcpDirectory = join(mcpFixture.project, ".codex");
+    mkdirSync(mcpDirectory);
+    const secret = "Bearer conflict-secret";
+    const conflictingMcp = [
+      "[mcp_servers.memory_space]",
+      'url = "http://127.0.0.1:9999/mcp"',
+      `authorization_token = "${secret}"`,
+      ""
+    ].join("\n");
+    writeFileSync(join(mcpDirectory, "config.toml"), conflictingMcp);
+    const mcpConflict = await cli(["configure", "codex", mcpFixture.project], {
+      cwd: mcpFixture.project,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(mcpConflict.code, 1);
+    assert.match(mcpConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.doesNotMatch(mcpConflict.stderr, /conflict-secret/u);
+    assert.equal(readFileSync(join(mcpDirectory, "config.toml"), "utf8"), conflictingMcp);
+    assert.equal(existsSync(join(mcpDirectory, "hooks.json")), false);
+  } finally {
+    rmSync(hookFixture.directory, { recursive: true, force: true });
+    rmSync(mcpFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex preserves malformed project hooks and rejects unsupported providers", async () => {
+  const { directory, project } = temporaryProject("configure-codex-invalid");
+  const codexDirectory = join(project, ".codex");
+  try {
+    mkdirSync(codexDirectory);
+    writeFileSync(join(codexDirectory, "hooks.json"), "{malformed");
+    const invalid = await cli(["configure", "codex", project], { cwd: project });
+    assert.equal(invalid.code, 1);
+    assert.match(invalid.stderr, /PROVIDER_CONFIG_INVALID/u);
+    assert.equal(readFileSync(join(codexDirectory, "hooks.json"), "utf8"), "{malformed");
+    assert.equal(existsSync(join(codexDirectory, "config.toml")), false);
+
+    const unsupported = await cli(["configure", "other-agent", project], { cwd: project });
+    assert.equal(unsupported.code, 2);
+    assert.match(unsupported.stderr, /requires the codex or claude-code provider/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure claude-code creates project hooks and MCP configuration and is idempotent", async () => {
+  const { directory, project } = temporaryProject("configure-claude-create");
+  const installationRoot = join(directory, "memory-space installation");
+  const home = join(directory, "home");
+  try {
+    const dryRun = await cli(["configure", "claude-code", project, "--dry-run"], {
+      cwd: directory,
+      home,
+      dependencies: { installationRoot }
+    });
+    assert.equal(dryRun.code, 0, dryRun.stderr);
+    assert.match(dryRun.stdout, /would be created/u);
+    assert.match(dryRun.stdout, /No files were changed/u);
+    assert.equal(existsSync(join(project, ".claude")), false);
+    assert.equal(existsSync(join(project, ".mcp.json")), false);
+
+    const configured = await cli(["configure", "claude-code", project], {
+      cwd: directory,
+      home,
+      dependencies: { installationRoot }
+    });
+    assert.equal(configured.code, 0, configured.stderr);
+    const hooksPath = join(project, ".claude", "settings.json");
+    const mcpPath = join(project, ".mcp.json");
+    const hooksBefore = readFileSync(hooksPath, "utf8");
+    const mcpBefore = readFileSync(mcpPath, "utf8");
+    const hooks = JSON.parse(hooksBefore) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string; timeout: number }> }>>;
+    };
+    assert.deepEqual(Object.keys(hooks.hooks), [
+      "SessionStart", "UserPromptSubmit", "Stop", "PreCompact", "SessionEnd"
+    ]);
+    assert.equal(
+      hooks.hooks.SessionStart?.[0]?.hooks[0]?.command,
+      `pnpm --dir '${installationRoot}' --silent claude-code:hook`
+    );
+    assert.equal(hooks.hooks.SessionEnd?.[0]?.hooks[0]?.timeout, 8);
+    assert.deepEqual(JSON.parse(mcpBefore), {
+      mcpServers: {
+        memory_space: { type: "http", url: "http://127.0.0.1:4310/mcp" }
+      }
+    });
+    assert.equal(await claudeConfigState(project, home), "detected");
+
+    const repeated = await cli(["configure", "claude-code", project], {
+      cwd: directory,
+      home,
+      dependencies: { installationRoot }
+    });
+    assert.equal(repeated.code, 0, repeated.stderr);
+    assert.match(repeated.stdout, /was unchanged/u);
+    assert.equal(readFileSync(hooksPath, "utf8"), hooksBefore);
+    assert.equal(readFileSync(mcpPath, "utf8"), mcpBefore);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure claude-code preserves unrelated JSON and secrets without disclosure", async () => {
+  const { directory, project } = temporaryProject("configure-claude-merge");
+  const claudeDirectory = join(project, ".claude");
+  const secret = "never-print-claude-token";
+  try {
+    mkdirSync(claudeDirectory);
+    writeFileSync(join(claudeDirectory, "settings.json"), JSON.stringify({
+      permissions: { allow: ["Read"] },
+      env: { PROVIDER_TOKEN: secret },
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }]
+      }
+    }, null, 2));
+    writeFileSync(join(project, ".mcp.json"), JSON.stringify({
+      note: secret,
+      mcpServers: {
+        other: { type: "http", url: "http://127.0.0.1:9999/mcp", headers: { token: secret } }
+      }
+    }, null, 2));
+
+    const result = await cli(["configure", "claude-code", project], {
+      cwd: directory,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(secret, "u"));
+    const settings = JSON.parse(readFileSync(join(claudeDirectory, "settings.json"), "utf8")) as {
+      env: { PROVIDER_TOKEN: string };
+      hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    assert.equal(settings.env.PROVIDER_TOKEN, secret);
+    assert.equal(settings.hooks.UserPromptSubmit[0]?.hooks[0]?.command, "pnpm lint");
+    assert.equal(settings.hooks.UserPromptSubmit.length, 2);
+    const mcp = JSON.parse(readFileSync(join(project, ".mcp.json"), "utf8")) as {
+      note: string;
+      mcpServers: Record<string, unknown>;
+    };
+    assert.equal(mcp.note, secret);
+    assert.ok(mcp.mcpServers.other);
+    assert.deepEqual(mcp.mcpServers.memory_space, {
+      type: "http", url: "http://127.0.0.1:4310/mcp"
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure claude-code rejects hook or MCP conflicts before changing either file", async () => {
+  const hookFixture = temporaryProject("configure-claude-hook-conflict");
+  const mcpFixture = temporaryProject("configure-claude-mcp-conflict");
+  try {
+    const hookDirectory = join(hookFixture.project, ".claude");
+    mkdirSync(hookDirectory);
+    const conflictingHooks = JSON.stringify({
+      hooks: {
+        SessionStart: [{
+          hooks: [{ type: "command", command: "pnpm --dir /other claude-code:hook" }]
+        }]
+      }
+    });
+    writeFileSync(join(hookDirectory, "settings.json"), conflictingHooks);
+    const hookConflict = await cli(["configure", "claude-code", hookFixture.project], {
+      cwd: hookFixture.project,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(hookConflict.code, 1);
+    assert.match(hookConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.equal(readFileSync(join(hookDirectory, "settings.json"), "utf8"), conflictingHooks);
+    assert.equal(existsSync(join(hookFixture.project, ".mcp.json")), false);
+
+    const secret = "claude-conflict-secret";
+    const conflictingMcp = JSON.stringify({
+      mcpServers: {
+        memory_space: {
+          type: "http",
+          url: "http://127.0.0.1:9999/mcp",
+          headers: { authorization: secret }
+        }
+      }
+    });
+    writeFileSync(join(mcpFixture.project, ".mcp.json"), conflictingMcp);
+    const mcpConflict = await cli(["configure", "claude-code", mcpFixture.project], {
+      cwd: mcpFixture.project,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(mcpConflict.code, 1);
+    assert.match(mcpConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.doesNotMatch(mcpConflict.stderr, new RegExp(secret, "u"));
+    assert.equal(readFileSync(join(mcpFixture.project, ".mcp.json"), "utf8"), conflictingMcp);
+    assert.equal(existsSync(join(mcpFixture.project, ".claude")), false);
+  } finally {
+    rmSync(hookFixture.directory, { recursive: true, force: true });
+    rmSync(mcpFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("configure claude-code rejects duplicate active scopes but ignores unrelated projects", async () => {
+  const localFixture = temporaryProject("configure-claude-local-scope");
+  const globalFixture = temporaryProject("configure-claude-global-scope");
+  try {
+    mkdirSync(join(localFixture.project, ".claude"));
+    writeFileSync(
+      join(localFixture.project, ".claude", "settings.local.json"),
+      JSON.stringify(claudeHook("pnpm --dir /existing claude-code:hook"))
+    );
+    const localConflict = await cli(["configure", "claude-code", localFixture.project], {
+      cwd: localFixture.project
+    });
+    assert.equal(localConflict.code, 1);
+    assert.match(localConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.equal(existsSync(join(localFixture.project, ".claude", "settings.json")), false);
+    assert.equal(existsSync(join(localFixture.project, ".mcp.json")), false);
+
+    const home = join(globalFixture.directory, "home");
+    mkdirSync(home);
+    const unrelatedProject = join(globalFixture.directory, "unrelated");
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({
+      projects: { [unrelatedProject]: claudeMcp("unrelated-secret") }
+    }));
+    const unrelated = await cli(["configure", "claude-code", globalFixture.project], {
+      cwd: globalFixture.project,
+      home,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(unrelated.code, 0, unrelated.stderr);
+
+    rmSync(join(globalFixture.project, ".claude"), { recursive: true, force: true });
+    rmSync(join(globalFixture.project, ".mcp.json"));
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({
+      projects: { [globalFixture.project]: claudeMcp("current-project-secret") }
+    }));
+    const currentProject = await cli(["configure", "claude-code", globalFixture.project], {
+      cwd: globalFixture.project,
+      home
+    });
+    assert.equal(currentProject.code, 1);
+    assert.match(currentProject.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.doesNotMatch(currentProject.stderr, /current-project-secret/u);
+    assert.equal(existsSync(join(globalFixture.project, ".claude")), false);
+    assert.equal(existsSync(join(globalFixture.project, ".mcp.json")), false);
+
+    writeFileSync(join(home, ".claude.json"), JSON.stringify(claudeMcp("user-mcp-secret")));
+    const userMcp = await cli(["configure", "claude-code", globalFixture.project], {
+      cwd: globalFixture.project,
+      home
+    });
+    assert.equal(userMcp.code, 1);
+    assert.match(userMcp.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.doesNotMatch(userMcp.stderr, /user-mcp-secret/u);
+
+    writeFileSync(join(home, ".claude.json"), JSON.stringify({ projects: {} }));
+    mkdirSync(join(home, ".claude"));
+    writeFileSync(
+      join(home, ".claude", "settings.json"),
+      JSON.stringify(claudeHook("pnpm --dir /user claude-code:hook"))
+    );
+    const userHook = await cli(["configure", "claude-code", globalFixture.project], {
+      cwd: globalFixture.project,
+      home
+    });
+    assert.equal(userHook.code, 1);
+    assert.match(userHook.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.equal(existsSync(join(globalFixture.project, ".claude")), false);
+    assert.equal(existsSync(join(globalFixture.project, ".mcp.json")), false);
+  } finally {
+    rmSync(localFixture.directory, { recursive: true, force: true });
+    rmSync(globalFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("configure claude-code preserves malformed and symlinked files and rejects remote endpoints", async () => {
+  const malformedFixture = temporaryProject("configure-claude-malformed");
+  const symlinkFixture = temporaryProject("configure-claude-symlink");
+  const endpointFixture = temporaryProject("configure-claude-endpoint");
+  try {
+    mkdirSync(join(malformedFixture.project, ".claude"));
+    writeFileSync(join(malformedFixture.project, ".claude", "settings.json"), "{malformed");
+    const malformed = await cli(["configure", "claude-code", malformedFixture.project], {
+      cwd: malformedFixture.project
+    });
+    assert.equal(malformed.code, 1);
+    assert.match(malformed.stderr, /PROVIDER_CONFIG_INVALID/u);
+    assert.equal(
+      readFileSync(join(malformedFixture.project, ".claude", "settings.json"), "utf8"),
+      "{malformed"
+    );
+    assert.equal(existsSync(join(malformedFixture.project, ".mcp.json")), false);
+
+    const ownedMcp = join(symlinkFixture.directory, "owned-mcp.json");
+    writeFileSync(ownedMcp, JSON.stringify({ mcpServers: {} }));
+    symlinkSync(ownedMcp, join(symlinkFixture.project, ".mcp.json"));
+    const symlink = await cli(["configure", "claude-code", symlinkFixture.project], {
+      cwd: symlinkFixture.project
+    });
+    assert.equal(symlink.code, 1);
+    assert.match(symlink.stderr, /PROVIDER_CONFIG_INVALID/u);
+    assert.equal(readFileSync(ownedMcp, "utf8"), JSON.stringify({ mcpServers: {} }));
+    assert.equal(existsSync(join(symlinkFixture.project, ".claude")), false);
+
+    const endpoint = await cli([
+      "configure", "claude-code", endpointFixture.project,
+      "--endpoint", "https://memory.example.test"
+    ], { cwd: endpointFixture.project });
+    assert.equal(endpoint.code, 1);
+    assert.match(endpoint.stderr, /DAEMON_ENDPOINT_INVALID/u);
+    assert.equal(existsSync(join(endpointFixture.project, ".claude")), false);
+    assert.equal(existsSync(join(endpointFixture.project, ".mcp.json")), false);
+  } finally {
+    rmSync(malformedFixture.directory, { recursive: true, force: true });
+    rmSync(symlinkFixture.directory, { recursive: true, force: true });
+    rmSync(endpointFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex refuses to create a duplicate active user/project scope", async () => {
+  const { directory, project } = temporaryProject("configure-codex-user-scope");
+  const home = join(directory, "home");
+  const secret = "user-scope-config-secret";
+  try {
+    mkdirSync(join(home, ".codex"), { recursive: true });
+    writeFileSync(join(home, ".codex", "hooks.json"), JSON.stringify({
+      hooks: {
+        SessionStart: [{
+          hooks: [{
+            type: "command",
+            command: "pnpm --dir /existing memory-space codex:hook",
+            env: { TOKEN: secret }
+          }]
+        }]
+      }
+    }));
+    const result = await cli(["configure", "codex", project], {
+      cwd: project,
+      home,
+      dependencies: { installationRoot: "/safe/memory-space" }
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /PROVIDER_CONFIG_CONFLICT/u);
+    assert.match(result.stderr, /User-level Codex Memory Space configuration/u);
+    assert.doesNotMatch(result.stderr, new RegExp(secret, "u"));
+    assert.equal(existsSync(join(project, ".codex")), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("configure codex rejects non-loopback endpoints and symlink configuration files", async () => {
+  const endpointFixture = temporaryProject("configure-codex-endpoint");
+  const symlinkFixture = temporaryProject("configure-codex-symlink");
+  try {
+    const endpoint = await cli([
+      "configure", "codex", endpointFixture.project,
+      "--endpoint", "https://memory.example.test"
+    ], { cwd: endpointFixture.project });
+    assert.equal(endpoint.code, 1);
+    assert.match(endpoint.stderr, /DAEMON_ENDPOINT_INVALID/u);
+    assert.equal(existsSync(join(endpointFixture.project, ".codex")), false);
+
+    const codexDirectory = join(symlinkFixture.project, ".codex");
+    const ownedFile = join(symlinkFixture.directory, "owned-hooks.json");
+    mkdirSync(codexDirectory);
+    writeFileSync(ownedFile, JSON.stringify({ hooks: {} }));
+    symlinkSync(ownedFile, join(codexDirectory, "hooks.json"));
+    const symlink = await cli(["configure", "codex", symlinkFixture.project], {
+      cwd: symlinkFixture.project
+    });
+    assert.equal(symlink.code, 1);
+    assert.match(symlink.stderr, /PROVIDER_CONFIG_INVALID/u);
+    assert.equal(readFileSync(ownedFile, "utf8"), JSON.stringify({ hooks: {} }));
+    assert.equal(existsSync(join(codexDirectory, "config.toml")), false);
+  } finally {
+    rmSync(endpointFixture.directory, { recursive: true, force: true });
+    rmSync(symlinkFixture.directory, { recursive: true, force: true });
   }
 });
 

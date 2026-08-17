@@ -79,10 +79,28 @@ non-blocking `SPACE_BINDING_CONFLICT` warning.
 
 ## 3. Configure Codex hooks
 
-Copy [`examples/codex/hooks.json`](../examples/codex/hooks.json) to either the
-project's `.codex/hooks.json` or `~/.codex/hooks.json`. Replace
-`/absolute/path/to/memory-space` in every command with this checkout's absolute
-path.
+Prefer the explicit project-scoped configuration command:
+
+```bash
+pnpm memory-space configure codex /absolute/path/to/project --dry-run
+pnpm memory-space configure codex /absolute/path/to/project
+```
+
+It merges the five canonical lifecycle hooks and the `memory_space` MCP URL
+without modifying `~/.codex`. The operation is idempotent and preflights both
+target files before writing. Existing conflicting Memory Space definitions,
+an active user-level Memory Space scope, malformed JSON, unsupported TOML
+shapes, symlinks, and non-regular files are preserved and reported rather than
+overwritten. Output contains file paths and change states, never existing
+tokens, headers, or environment values. Use `--endpoint` when the daemon does
+not use the default loopback port.
+
+For manual configuration, copy
+[`examples/codex/hooks.json`](../examples/codex/hooks.json) to either the
+project's `.codex/hooks.json` or `~/.codex/hooks.json`. Do not combine the
+project-scoped command with an active user-level Memory Space configuration.
+Replace `/absolute/path/to/memory-space` in every command with this checkout's
+absolute path.
 
 The configured native mapping is:
 
@@ -112,9 +130,11 @@ event metadata; `TranscriptRef.cursor` is not repurposed to store `turn_id`.
 
 ## 4. Configure MCP
 
-Merge [`examples/codex/config.toml`](../examples/codex/config.toml) into the
-active Codex `config.toml`. In Codex, open `/mcp` and verify that
-`memory_space` is connected.
+The explicit `configure codex` command above also merges the project-level MCP
+entry. For manual configuration, merge
+[`examples/codex/config.toml`](../examples/codex/config.toml) into the active
+Codex `config.toml`. In Codex, open `/mcp` and verify that `memory_space` is
+connected.
 
 `SessionStart` injects an opaque internal Session handle plus Core Memory and
 the latest Handoff. Durable MCP tools use that handle. Project binding remains

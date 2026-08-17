@@ -14,6 +14,8 @@ import type {
 } from "../../eval/quality/core-handoff-comparison.ts";
 import {
   runDoctor,
+  runConfigureClaudeCode,
+  runConfigureCodex,
   runEval,
   runInit,
   runInspect,
@@ -36,6 +38,7 @@ type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
 type BooleanOption =
   | "json"
   | "no-open"
+  | "dry-run"
   | "compare-stage-a"
   | "compare-stage-a-extraction"
   | "compare-stage-b2-core-handoff";
@@ -47,6 +50,7 @@ interface ParsedOptions {
   endpoint?: string;
   json?: boolean;
   noOpen?: boolean;
+  dryRun?: boolean;
   compareStageA?: boolean;
   compareStageAExtraction?: boolean;
   compareStageB2CoreHandoff?: boolean;
@@ -66,12 +70,15 @@ export interface CliDependencies {
   qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
   openBrowser?: (url: string) => Promise<void>;
+  installationRoot?: string;
 }
 
 const usage = `memory-space local product CLI
 
 Usage:
   memory-space inspect [path] [--endpoint <url>] [--no-open]
+  memory-space configure codex [path] [--endpoint <url>] [--dry-run]
+  memory-space configure claude-code [path] [--endpoint <url>] [--dry-run]
   memory-space init [path] [--name <name>] [--space-id <id>] [--endpoint <url>]
   memory-space unbind [path] [--space-id <expected-id>]
   memory-space doctor [path] [--endpoint <url>] [--json]
@@ -107,6 +114,7 @@ function parseOptions(
       else if (name === "compare-stage-a-extraction") result.compareStageAExtraction = true;
       else if (name === "compare-stage-b2-core-handoff") result.compareStageB2CoreHandoff = true;
       else if (name === "no-open") result.noOpen = true;
+      else if (name === "dry-run") result.dryRun = true;
       else result.json = true;
       continue;
     }
@@ -236,6 +244,21 @@ export async function runCli(
         argv.slice(1), ["cwd", "space-id"], [], true
       );
       await runUnbind(options, { cwd, write });
+      return 0;
+    }
+
+    if (command === "configure") {
+      const provider = argv[1];
+      if (provider !== "codex" && provider !== "claude-code") {
+        throw new CliError("USAGE_ERROR", "configure requires the codex or claude-code provider.", {
+          exitCode: 2,
+          remediation: "Run: memory-space configure <codex|claude-code> [path] [--endpoint <url>] [--dry-run]"
+        });
+      }
+      const options = parseOptions(argv.slice(2), ["cwd", "endpoint"], ["dry-run"], true);
+      options.endpoint ??= environment.MEMORY_SPACE_URL;
+      const runner = provider === "codex" ? runConfigureCodex : runConfigureClaudeCode;
+      await runner(options, { cwd, home, write }, dependencies.installationRoot);
       return 0;
     }
 

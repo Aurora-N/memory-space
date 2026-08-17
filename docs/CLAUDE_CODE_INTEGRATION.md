@@ -78,7 +78,22 @@ trusted daemon `MEMORY_SPACE_SPACE_ID` override must match an existing binding.
 
 ## 2. Configure Claude hooks
 
-Merge [`examples/claude-code/settings.json`](../examples/claude-code/settings.json)
+The preferred project-scoped setup is the explicit CLI command. Preview the
+merge first, then apply it:
+
+```bash
+pnpm memory-space configure claude-code /absolute/path/to/project --dry-run
+pnpm memory-space configure claude-code /absolute/path/to/project
+```
+
+It structurally merges `.claude/settings.json`, preserves unrelated settings,
+and installs the five canonical lifecycle handlers with the documented
+eight-second timeout. Repeating the same command is idempotent. It refuses
+conflicting Memory Space hooks, malformed or non-regular configuration, or
+another active Memory Space hook scope before writing either provider file.
+It never edits user-level Claude configuration or prints existing secrets.
+
+For a manual setup, merge [`examples/claude-code/settings.json`](../examples/claude-code/settings.json)
 into the target project's `.claude/settings.json` or
 `.claude/settings.local.json`, or into the user-level
 `~/.claude/settings.json`. Replace `/absolute/path/to/memory-space` in every
@@ -113,7 +128,13 @@ an eight-second per-hook timeout, which Claude Code uses to raise that budget.
 
 ## 3. Configure the shared MCP server
 
-Copy [`examples/claude-code/mcp.json`](../examples/claude-code/mcp.json) to the
+The `configure claude-code` command also structurally merges the canonical
+`memory_space` HTTP server into the target project's `.mcp.json`. It refuses a
+conflicting entry and checks user-level and current-project entries in
+`~/.claude.json` without treating unrelated projects as active or disclosing
+their values. Only loopback daemon endpoints are accepted.
+
+For a manual setup, copy [`examples/claude-code/mcp.json`](../examples/claude-code/mcp.json) to the
 target project root as `.mcp.json`, or merge its `memory_space` entry into an
 existing file. Claude also supports project-local MCP configuration under the
 current project's entry in `~/.claude.json` and user-scoped MCP configuration

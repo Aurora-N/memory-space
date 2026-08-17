@@ -18,6 +18,8 @@ import {
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { Space } from "../domain/types.ts";
+import { configureClaudeCodeProject } from "./claude-code-config.ts";
+import { configureCodexProject } from "./codex-config.ts";
 import { CliError } from "./errors.ts";
 import {
   readLocalProjectBinding,
@@ -48,6 +50,58 @@ export interface InitOptions {
 export interface InspectOptions {
   cwd?: string;
   noOpen?: boolean;
+}
+
+export async function runConfigureCodex(
+  options: { cwd?: string; dryRun?: boolean; endpoint?: string },
+  context: Pick<CommandContext, "cwd" | "home" | "write">,
+  installationRoot?: string
+): Promise<void> {
+  const result = await configureCodexProject({
+    cwd: options.cwd ?? context.cwd,
+    dryRun: options.dryRun,
+    installationRoot,
+    home: context.home,
+    endpoint: options.endpoint
+  });
+  const verb = result.dryRun ? "would be" : "was";
+  context.write(result.dryRun ? "Codex configuration dry run" : "Codex configuration complete");
+  context.write(`Project: ${result.cwd}`);
+  context.write(`Hooks:   ${verb} ${result.hooks.change} (${result.hooks.path})`);
+  context.write(`MCP:     ${verb} ${result.mcp.change} (${result.mcp.path})`);
+  if (result.dryRun) {
+    context.write("No files were changed.");
+  } else {
+    context.write("Restart Codex, then verify /hooks and /mcp.");
+    context.write(`Doctor: memory-space doctor ${result.cwd}`);
+  }
+}
+
+export async function runConfigureClaudeCode(
+  options: { cwd?: string; dryRun?: boolean; endpoint?: string },
+  context: Pick<CommandContext, "cwd" | "home" | "write">,
+  installationRoot?: string
+): Promise<void> {
+  const result = await configureClaudeCodeProject({
+    cwd: options.cwd ?? context.cwd,
+    dryRun: options.dryRun,
+    installationRoot,
+    home: context.home,
+    endpoint: options.endpoint
+  });
+  const verb = result.dryRun ? "would be" : "was";
+  context.write(result.dryRun
+    ? "Claude Code configuration dry run"
+    : "Claude Code configuration complete");
+  context.write(`Project: ${result.cwd}`);
+  context.write(`Hooks:   ${verb} ${result.hooks.change} (${result.hooks.path})`);
+  context.write(`MCP:     ${verb} ${result.mcp.change} (${result.mcp.path})`);
+  if (result.dryRun) {
+    context.write("No files were changed.");
+  } else {
+    context.write("Restart Claude Code, then verify /hooks and /mcp.");
+    context.write(`Doctor: memory-space doctor ${result.cwd}`);
+  }
 }
 
 export interface DoctorCheck {
