@@ -1,241 +1,445 @@
 # memory-space
 
-A cross-session memory layer for AI agents.
+> 面向编码 Agent 的、与 Provider 无关的持久记忆层。
+>
+> A provider-neutral persistent memory layer for coding agents.
 
-The MVP implements a durable, provider-independent memory layer that proves **Cross-Session Handoff inside the same Space**.
+[中文](#readme-zh) · [English](#readme-en)
 
-## What works
+```text
+Codex ─┐
+Claude ├─ MCP + Lifecycle → MemorySpace → SQLite
+Other ─┘
+```
 
-- Space-scoped Sessions and append-oriented normalized events
-- explicit durable Memory, defaulting to Indexed
-- Core promotion/demotion and deterministic fixed-template bootstrap
-- retry-safe, transactional checkpoints with isolated candidate extraction
-- keyed update/dedup with provenance and mutation history
-- checkpoint-time Handoff Snapshots
-- Space-isolated, field-aware lexical search with explicit abstention and structured agent context
-- TypeScript application API plus a thin JSON HTTP adapter
-- provider-neutral MCP command plane with six policy-bounded tools
-- Codex and Claude Code lifecycle adapters sharing one provider-neutral integration core
-- parameterized same-provider, cross-provider, restart, isolation, and multi-hop durable-memory evaluation
-- local product CLI for init/doctor/status/eval
-- frozen deterministic 20-Session Memory Quality Stage A baseline
-- frozen Stage B1 deterministic retrieval policy and before/after comparison
-- frozen Stage B2 deterministic extraction policy and before/after comparison
-- frozen Stage B3 deterministic Core/Handoff admission and provenance-aware projection policy
+它让项目记忆跨越 Session、进程重启和 Provider，同时控制：哪些内容值得记住、哪些内容可被搜索、哪些内容进入默认上下文，以及哪些状态应交接给下一个 Agent。
 
-## Run locally
+It preserves durable project memory across sessions, process restarts, and providers, while controlling what gets remembered, what is searchable, what becomes default context, and what is handed off to the next agent.
 
-Requires Node.js 22.13 or newer.
+```mermaid
+flowchart LR
+  subgraph Agents["Coding Agents"]
+    Codex["Codex"]
+    Claude["Claude Code"]
+    Other["Other agents<br/>(adapter required)"]
+  end
+
+  subgraph Integration["Provider-neutral Integration"]
+    Lifecycle["Lifecycle Hooks<br/>bootstrap · capture · checkpoint"]
+    MCP["MCP Command Plane<br/>exactly six tools"]
+  end
+
+  subgraph Runtime["Local Memory Space Daemon"]
+    Handler["LifecycleHandler"]
+    MemorySpace["MemorySpace<br/>policy + orchestration<br/>Core / Indexed / Handoff projection"]
+  end
+
+  SQLite[("SQLite<br/>source of truth")]
+
+  Codex --> Lifecycle
+  Codex --> MCP
+  Claude --> Lifecycle
+  Claude --> MCP
+  Other -.-> Lifecycle
+  Other -.-> MCP
+  Lifecycle --> Handler --> MemorySpace
+  MCP --> MemorySpace
+  MemorySpace -->|"checkpoint transaction"| SQLite
+  SQLite -->|"bootstrap + explicit recall"| MemorySpace
+```
+
+> **能力说明 / Capability note:** “Provider-neutral” 指共享的 contract 与 runtime，不表示所有 Agent 都能零配置接入。Codex 已完成真实 lifecycle + MCP 验证；Claude Code 的真实 lifecycle 已通过，但模型主动调用 MCP 仍取决于网关是否保留标准工具名；其他 Agent 需要单独实现 adapter。
+
+---
+
+<a id="readme-zh"></a>
+
+## 中文
+
+> [切换到 English](#readme-en)
+
+### 它解决什么问题
+
+编码 Agent 通常只了解当前对话。换一个 Session、重启进程，或者从 Codex 切换到 Claude Code 后，重要的项目决策、约束、进行中的任务和阻塞信息很容易丢失。直接把完整历史对话塞回上下文，又会带来噪音、成本和安全边界不清的问题。
+
+memory-space 把“聊天记录”与“项目记忆”分开：
+
+- 对话只是证据，Memory 才是经过策略筛选的持久状态；
+- `Core` Memory 自动进入默认上下文，但容量和类型受到控制；
+- `Indexed` Memory 默认不注入，需要搜索或显式召回；
+- `Handoff Snapshot` 保存下一位 Agent 真正需要接手的工作状态；
+- 所有 Memory 都归属于一个 `Space`，不会跨项目泄漏。
+
+### 核心能力
+
+| 能力 | 它做什么 |
+| --- | --- |
+| 跨 Session 持久化 | 新 Session 可以恢复同一 Space 的 Core Memory 和最新 Handoff。 |
+| 跨进程恢复 | SQLite 关闭并重新打开后，Space、Session、Memory、Checkpoint 和 Handoff 仍然存在。 |
+| 跨 Provider 交接 | Codex 与 Claude Code 共享同一个 MemorySpace、生命周期 contract 和同一组六个 MCP 工具；Lifecycle/Handoff 已验证，Claude 模型主动调用 MCP 仍受当前网关兼容性影响。 |
+| 渐进式披露 | 重要的 Core Memory 默认可见，细节保留为 Indexed Memory，按需搜索。 |
+| 可控记忆写入 | 显式记忆默认进入 Indexed；提升到 Core 需要经过策略与容量检查。 |
+| 确定性 Checkpoint | Memory 更新、Handoff 创建和事件边界推进在一个事务中提交，并支持幂等重试。 |
+| 来源与变更历史 | Memory 保留来源 Session/Event、版本、状态变化和提升/降级（promotion/demotion）历史。 |
+| 本地优先 | v1 daemon 只监听 loopback，SQLite 是默认且唯一的持久权威数据源（Source of Truth）。 |
+
+### 它如何工作
+
+集成有两条通道：Lifecycle hook 负责自动启动上下文、捕获对话证据和触发 checkpoint；MCP 负责 Agent 主动发起的搜索、记忆、提升和 checkpoint 命令。两条通道最终都进入同一个本地 memory-space daemon 与 `MemorySpace` 实例。
+
+1. 项目通过 `.memory-space/config.json` 绑定到一个 `Space`。
+2. Agent 启动 Session 时，Lifecycle hook 解析或复用内部 Session，并注入 Core Memory 与最新 Handoff。
+3. 完整用户 prompt 和可靠的最终回复文本被记录为轻量对话事件；完整 transcript 文件不会被默认读取或复制进数据库。
+4. Agent 可通过 MCP 显式搜索、记忆或提升 Memory。
+5. `PreCompact`、`SessionEnd` 或显式 checkpoint 将新事件提取为候选项；领域与准入策略再决定创建、更新、忽略及 Core/Indexed tier，最后在事务中更新 Memory 与 HandoffSnapshot。
+6. 同一 Provider 的 resume 复用原内部 Session；另一个 Provider 会创建自己的 Session，但只要绑定同一 Space，就能通过 Core Memory 和最新 HandoffSnapshot 接手工作。Indexed 细节仍需显式召回。
+
+### 核心模型
+
+| 概念 | 含义 |
+| --- | --- |
+| `Space` | 项目记忆的隔离边界。一个 Memory 只能属于一个 Space。 |
+| `Session` | 某个 Provider 的一次对话身份；恢复后继续绑定原 Space。 |
+| `SessionEvent` | 追加式证据，例如用户消息、Agent 回复或结构化 Memory 事件。 |
+| `Memory` | 经过领域与准入策略验证的持久项目知识或工作状态，带类型、状态、版本和来源追踪（provenance）。 |
+| `Core` | 有界的默认上下文，适合稳定决策、约束、目标和需跨 Session 延续的工作状态。 |
+| `Indexed` | 可搜索但不默认注入的细节；显式 remember 默认创建为 Indexed。 |
+| `Checkpoint` | 将未提交事件原子地转换为 Memory 更新和 Handoff 的边界。 |
+| `HandoffSnapshot` | 每次 checkpoint 生成的不可变交接快照，包含下一位 Agent 需要的目标、已完成事项、活跃任务、决策、阻塞、问题和下一步。它不是新的 Memory tier，也不会覆盖 Core。 |
+
+### 快速开始
+
+要求：Git、Node.js `>= 22.13.0`、pnpm `11.x`。以下命令从仓库根目录运行：
 
 ```bash
+git clone https://github.com/Aurora-N/memory-space.git
+cd memory-space
 corepack enable
 pnpm install
 pnpm run check
-cp .env.example .env
 pnpm start
 ```
 
-The server defaults to `http://127.0.0.1:4310` and persists to `./data/memory-space.db`. The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, or `localhost`; remote/LAN deployment is unsupported. Environment values can be exported from `.env.example`; the server intentionally does not hide configuration loading inside the domain layer.
+默认配置不要求 `.env` 文件。daemon 运行在 `http://127.0.0.1:4310`，数据写入启动命令当前目录下的 `./data/memory-space.db`；如需自定义，请参考 `.env.example` 并显式导出对应环境变量。
 
-In another terminal, initialize and inspect the target project with the local product CLI:
+确认 daemon 已就绪：
 
 ```bash
-pnpm memory-space init --cwd /absolute/path/to/project --name "My project"
+curl --fail --silent http://127.0.0.1:4310/health
+# {"status":"ok"}
+```
+
+在另一个终端中，把目标项目绑定到一个 Space：
+
+```bash
+pnpm memory-space init \
+  --cwd /absolute/path/to/project \
+  --name "My project"
+
 pnpm memory-space doctor --cwd /absolute/path/to/project
 pnpm memory-space status --cwd /absolute/path/to/project
+```
+
+`init` 只创建或确认 Space，并原子写入项目绑定；它不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
+
+- [Codex 集成](docs/CODEX_INTEGRATION.md)
+- [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
+
+最短的跨 Session 验证路径：在已绑定项目中启动 Provider，确认 bootstrap 注入 Memory Space Session handle；让 Agent 通过 MCP 记住一个项目决策并执行 checkpoint；随后启动一个新 Session，确认它能从同一 Space 的 Core/Handoff 或显式搜索中恢复该信息。完整自动化验证命令见下文。
+
+### MCP 工具
+
+所有 Provider 共用且只公开以下六个工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `memory_bootstrap` | 获取 Session 的 Core Memory、最新 Handoff 和内部 Session handle。 |
+| `memory_context` | 构建受 Space、状态、类型和 tier 过滤的结构化上下文。 |
+| `memory_search` | 在当前 Space 中显式召回 Core 或 Indexed Memory。 |
+| `memory_remember` | 创建显式持久 Memory；默认是 Indexed。 |
+| `memory_promote` | 在策略、所有权和容量检查后将 Memory 提升到 Core。 |
+| `memory_checkpoint` | 将当前 Session 尚未提交的事件推进到下一个持久边界。 |
+
+工具参数不允许 Agent 自行指定可信的 `spaceId`、tier、actor 或 checkpoint 边界。项目绑定和 Session 身份由受信任的本地运行时解析。
+
+### Provider 支持
+
+| Provider | 当前状态 |
+| --- | --- |
+| Codex | Lifecycle、共享 MCP、自动化验证和真实 Codex smoke 已通过并冻结。 |
+| Claude Code | Lifecycle、bootstrap、自动化验证和真实 hook smoke 已通过；当前兼容网关会改写 MCP 双下划线工具名，因此真实模型驱动 MCP 仍是外部阻塞项。 |
+| 其他 Agent | 可以复用 provider-neutral lifecycle contract 与六工具 MCP；仍需实现并验证对应 adapter。 |
+
+项目不会为某个 Provider 增加专属 MCP alias 或第七个工具来绕过兼容问题。
+
+### 安全与一致性边界
+
+- v1 daemon 未提供远程认证，因此只允许 `127.0.0.1`、`::1` 和 `localhost`；不支持 LAN/公网部署。
+- 除 `GET /health` 外，daemon 路由都会验证 localhost Host/Origin；JSON mutation 要求正确的 `Content-Type`。
+- `Space` 是同一 daemon 内的逻辑项目隔离，不是多用户认证边界；因此 v1 daemon 只能在受信任的本机使用。
+- 一个 daemon 只创建一个 `MemorySpace`/SQLite owner；不要让多个进程同时拥有同一数据库文件。
+- Lifecycle 失败采用“失败不阻断”（fail-open），不应阻断 Agent；显式 MCP Memory 命令采用“失败可见”（fail-visible）。
+- Bootstrap 会把召回内容标记为不可信项目数据，不能让 Memory 提升为系统级指令。
+- `CachePort` 是尽力而为的派生状态（best-effort derived state）；缓存失败不能使 Store 中的正确数据失效。
+- Checkpoint 写操作、HandoffSnapshot 和事件边界在同一个 Store 事务中提交。
+
+### 存储与扩展边界
+
+当前 v1 使用 SQLite 作为零配置默认实现。应用层依赖异步端口，而不是直接依赖 SQLite：
+
+- `MemoryStore`：SQLite 是当前实现；PostgreSQL adapter 仅预留接口，尚未交付。
+- `CachePort`：默认是 no-op；Redis cache adapter 仅预留接口，且未来也不能成为 Source of Truth。
+- `MemoryExtractor`：当前是确定性的 rule-based extractor，可替换，但远程/LLM extractor 不属于 v1。
+
+### 项目状态
+
+- MVP 与领域模型：Frozen。
+- Provider Integration P0–P4：产品级自动化范围已完成；Claude 真实模型驱动 MCP 保留明确的外部兼容例外说明（waiver）。
+- P5 Productization：Complete / Review Pass。
+- P6 Memory Quality v1：Complete / Review Pass / Frozen。
+- P6 B4 Semantic Retrieval / Dedup：经过评估后主动延期到 v2，而不是遗漏功能。详见 [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md)。
+
+v1 已知仍存在无词面重叠的语义表达不一致（semantic wording mismatch）和无稳定 key 的重复记忆（unkeyed duplicate）；当前证据不足以证明 embedding/vector infrastructure 的收益值得引入其存储、迁移、隐私、离线和模型版本复杂度。后续由真实自用（dogfooding）数据决定是否在 v2 重启。
+
+### 如何验证
+
+```bash
+# lint + typecheck + 全量测试 + provider smoke self-tests
+pnpm run check
+
+# 为未来 monorepo 执行所有 workspace check
+pnpm run check:workspace
+
+# 跨 Session / Provider 产品证明
+pnpm memory-space eval cross-session
+
+# 20-Session Memory Quality 评估
+pnpm memory-space eval quality
+pnpm memory-space eval quality --json
+
+# B3 Core/Handoff before/after gate
+pnpm memory-space eval quality --compare-stage-b2-core-handoff
+```
+
+真实 Provider smoke 需要本机已安装并完成认证的对应 CLI：
+
+```bash
+pnpm run smoke:codex:p2 -- --preflight
+pnpm run smoke:codex:p2
+
+pnpm run smoke:claude:p3 -- --preflight
+pnpm run smoke:claude:p3 -- --hooks-only
+```
+
+### 已知限制
+
+- 未认证的远程/LAN daemon 不在 v1 支持范围内。
+- SQLite 采用单 active owner 假设；PostgreSQL adapter 尚未实现。
+- 当前 extractor 和 retrieval 是保守、确定性的规则/词面策略，不提供通用语义理解。
+- semantic retrieval、vector database 和 semantic consolidation 已延期到 v2。
+- Claude Code 在特定兼容网关下的真实 MCP tool call 仍受工具名改写问题阻塞。
+- 完整 transcript ingestion、provider event 通用幂等和多进程 SQLite ownership 尚未实现。
+
+### 文档入口
+
+- [产品规格](docs/PRODUCT_SPEC.md)
+- [领域模型](docs/DOMAIN_MODEL.md)
+- [HTTP / daemon API](docs/API.md)
+- [Provider Integration Guardrails](docs/PROVIDER_INTEGRATION_GUARDRAILS.md)
+- [Codex 集成](docs/CODEX_INTEGRATION.md)
+- [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
+- [v1 Roadmap](docs/V1_ROADMAP.md)
+- [P6 Memory Quality v1](docs/MEMORY_QUALITY_V1_SPEC.md)
+- [P6 B3 结果](docs/quality/P6_STAGE_B3_RESULT.md)
+- [ADR 0004：Semantic Memory 延期到 v2](docs/adr/0004-semantic-recall-options-after-b1.md)
+
+---
+
+<a id="readme-en"></a>
+
+## English
+
+> [切换到中文](#readme-zh)
+
+### What problem does it solve?
+
+Coding agents usually understand only the current conversation. Important decisions, constraints, active work, and blockers are easily lost when a session ends, a process restarts, or work moves from Codex to Claude Code. Re-injecting a full transcript is noisy, expensive, and difficult to govern.
+
+memory-space separates conversation evidence from durable project memory:
+
+- conversation events are evidence; validated `Memory` is durable state;
+- bounded `Core` Memory becomes default context;
+- `Indexed` Memory stays searchable without automatic injection;
+- a `HandoffSnapshot` carries only the working state the next agent needs;
+- every Memory belongs to one isolated `Space`.
+
+### Core capabilities
+
+| Capability | What it provides |
+| --- | --- |
+| Cross-session persistence | A new Session restores Core Memory and the latest Handoff from the same Space. |
+| Process recovery | Space, Session, Memory, Checkpoint, and Handoff survive a SQLite close/reopen. |
+| Cross-provider handoff | Codex and Claude Code share one MemorySpace, lifecycle contract, and six-tool MCP surface. Lifecycle/Handoff is verified; direct Claude model-driven MCP remains gateway-dependent. |
+| Progressive disclosure | Core Memory is visible by default; Indexed detail is recalled explicitly. |
+| Governed writes | Explicit Memory starts Indexed; Core promotion is policy- and capacity-checked. |
+| Deterministic checkpoints | Memory updates, Handoff creation, and event-boundary advancement commit transactionally and retry safely. |
+| Provenance and history | Memory retains source Session/Event information, versions, status changes, and tier-transition history. |
+| Local-first runtime | The v1 daemon is loopback-only and SQLite is the default and only durable source of truth. |
+
+### How it works
+
+The integration has two channels. Lifecycle hooks automatically bootstrap context, capture conversation evidence, and trigger checkpoints. MCP carries agent-initiated search, remember, promote, and checkpoint commands. Both channels enter the same local memory-space daemon and `MemorySpace` instance.
+
+1. A project binds to a `Space` through `.memory-space/config.json`.
+2. On Session start, a lifecycle hook resolves or reuses the internal Session and injects Core Memory plus the latest Handoff.
+3. Full user prompts and reliable final-response text are captured as lightweight conversation events; transcript files are not read or copied by default.
+4. The agent can explicitly search, remember, or promote Memory through MCP.
+5. `PreCompact`, `SessionEnd`, or an explicit checkpoint extracts candidates. Domain and admission policy then decide create/update/ignore behavior and the Core/Indexed tier before Memory and HandoffSnapshot are updated transactionally.
+6. A resume from the same provider reuses its internal Session. Another provider creates its own Session, but if it binds to the same Space it can continue through Core Memory and the latest HandoffSnapshot. Indexed detail remains explicit recall.
+
+### Memory model
+
+| Concept | Meaning |
+| --- | --- |
+| `Space` | Project-level logical isolation boundary. A Memory belongs to exactly one Space. |
+| `Session` | A durable provider conversation identity bound to one Space. |
+| `SessionEvent` | Append-oriented evidence such as a prompt, response, or structured Memory event. |
+| `Memory` | Durable knowledge or working state validated by domain/admission policy, with type, status, version, and provenance. |
+| `Core` | Type- and capacity-bounded default context for stable decisions, constraints, goals, and continuation state. |
+| `Indexed` | Searchable detail that is not injected by default. Explicit remember starts here. |
+| `Checkpoint` | Atomic boundary that turns uncommitted events into Memory changes and a Handoff. |
+| `HandoffSnapshot` | Immutable checkpoint output containing goal, completed work, active tasks, decisions, blockers, questions, and next steps. It is not a Memory tier and does not overwrite Core. |
+
+### Quick start
+
+Requirements: Git, Node.js `>= 22.13.0`, and pnpm `11.x`. Run these commands from the repository root:
+
+```bash
+git clone https://github.com/Aurora-N/memory-space.git
+cd memory-space
+corepack enable
+pnpm install
+pnpm run check
+pnpm start
+```
+
+The defaults require no `.env` file. The daemon listens at `http://127.0.0.1:4310` and stores data in `./data/memory-space.db` relative to the directory where `pnpm start` runs. To customize it, use `.env.example` as a reference and explicitly export the variables.
+
+Confirm that the daemon is ready:
+
+```bash
+curl --fail --silent http://127.0.0.1:4310/health
+# {"status":"ok"}
+```
+
+In another terminal, bind and inspect the target project:
+
+```bash
+pnpm memory-space init \
+  --cwd /absolute/path/to/project \
+  --name "My project"
+
+pnpm memory-space doctor --cwd /absolute/path/to/project
+pnpm memory-space status --cwd /absolute/path/to/project
+```
+
+`init` creates or confirms the Space and atomically writes the project binding. It does not edit global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
+
+For a minimal cross-session exercise, start the configured provider in the bound project and confirm bootstrap injected a Memory Space Session handle. Ask the agent to remember one project decision through MCP and checkpoint it. Start a new Session, then confirm the decision returns through Core/Handoff or explicit search. The automated validation commands are below.
+
+### MCP tools
+
+Every provider shares exactly six tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `memory_bootstrap` | Return Core Memory, latest Handoff, and the internal Session handle. |
+| `memory_context` | Build structured context with Space/status/type/tier filters. |
+| `memory_search` | Explicitly recall Core or Indexed Memory from the current Space. |
+| `memory_remember` | Create explicit durable Memory, defaulting to Indexed. |
+| `memory_promote` | Promote Memory to Core after ownership, policy, and capacity checks. |
+| `memory_checkpoint` | Advance uncommitted Session events to the next durable boundary. |
+
+Tool callers cannot supply trusted Space, tier, actor, or checkpoint-boundary controls. Those values come from the trusted local runtime and Session binding.
+
+### Provider support
+
+| Provider | Current status |
+| --- | --- |
+| Codex | Lifecycle, shared MCP, automated validation, and real Codex smoke have passed; P2 is frozen. |
+| Claude Code | Lifecycle/bootstrap, automated validation, and real hook smoke pass. Real model-driven MCP remains blocked by the active compatibility gateway rewriting double-underscore MCP tool names. |
+| Other agents | May reuse the provider-neutral lifecycle contract and six-tool MCP plane, but require their own implemented and validated adapter. |
+
+The project does not add provider-specific MCP aliases or a seventh tool to work around client compatibility issues.
+
+### Safety and consistency boundaries
+
+- The unauthenticated v1 daemon accepts only `127.0.0.1`, `::1`, and `localhost`; LAN/remote deployment is unsupported.
+- All daemon routes except `GET /health` validate localhost Host/Origin, and JSON mutations require the correct media type.
+- A `Space` is logical project isolation inside one daemon, not a multi-user authentication boundary. Use v1 only on a trusted local machine.
+- One daemon owns one `MemorySpace`/SQLite database owner; do not run multiple owners against the same database.
+- Lifecycle failures are fail-open for the coding agent; explicit MCP Memory commands remain fail-visible.
+- Bootstrap labels recalled Memory as untrusted project data, never as higher-priority instructions.
+- `CachePort` is best-effort derived state. Cache failure cannot invalidate correct Store data.
+- Checkpoint mutations, Handoff creation, and the event boundary commit in one Store transaction.
+
+### Storage and extension boundaries
+
+SQLite is the zero-configuration v1 implementation. The application depends on asynchronous ports rather than SQLite directly:
+
+- `MemoryStore`: SQLite is implemented; a PostgreSQL adapter interface is reserved but not shipped.
+- `CachePort`: no-op by default; a Redis cache adapter interface is reserved and must never become the source of truth.
+- `MemoryExtractor`: deterministic rule-based implementation in v1; remote/LLM extraction is outside v1 scope.
+
+### Project status
+
+- MVP and domain model: Frozen.
+- Provider Integration P0–P4: complete at the reviewed product/automation scope, with an explicit external compatibility waiver for real Claude model-driven MCP.
+- P5 Productization: Complete / Review Pass.
+- P6 Memory Quality v1: Complete / Review Pass / Frozen.
+- P6 B4 Semantic Retrieval / Dedup: deliberately deferred to v2. See [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md).
+
+Known v1 limitations include semantic wording mismatches with no lexical overlap and unkeyed duplicates. Current evidence does not show that embedding/vector infrastructure is worth its storage, migration, privacy, offline, and model-version complexity. Real dogfooding data should drive any v2 reopening.
+
+### Validation
+
+```bash
+pnpm run check
+pnpm run check:workspace
 pnpm memory-space eval cross-session
 pnpm memory-space eval quality
 pnpm memory-space eval quality --json
-pnpm memory-space eval quality --compare-stage-a
-pnpm memory-space eval quality --compare-stage-a --json
-pnpm memory-space eval quality --compare-stage-a-extraction
-pnpm memory-space eval quality --compare-stage-a-extraction --json
+pnpm memory-space eval quality --compare-stage-b2-core-handoff
 ```
 
-The package also exposes a `memory-space` bin for linked/installed use, with the same `init`, `doctor`, `status`, `eval cross-session`, and `eval quality` syntax. `init` creates or confirms the Space through the running daemon and then atomically writes the v1 project binding. It never edits global Codex or Claude configuration. Use `doctor --json` for stable check IDs and machine-readable diagnostics.
-
-This repository is also a pnpm workspace. The current MVP remains the root package; future deployable applications belong in `apps/*`, reusable packages in `packages/*`, and repository tooling in `tools/*`. Shared toolchain versions use the workspace catalog. Run `pnpm run check:workspace` to execute each workspace package's `check` script when present.
+Real-provider runners additionally require an installed and authenticated provider CLI:
 
 ```bash
-curl -s -X POST http://127.0.0.1:4310/spaces \
-  -H 'content-type: application/json' \
-  -d '{"name":"My project"}'
+pnpm run smoke:codex:p2 -- --preflight
+pnpm run smoke:codex:p2
+
+pnpm run smoke:claude:p3 -- --preflight
+pnpm run smoke:claude:p3 -- --hooks-only
 ```
 
-The REST flow remains available as a low-level debugging/reference path. See [`docs/API.md`](docs/API.md) for the full endpoint map and normalized checkpoint event examples.
+### Known limitations
 
-## Shared daemon and MCP command plane
+- Unauthenticated LAN/remote daemon deployment is outside v1 scope.
+- SQLite assumes one active owner; the PostgreSQL adapter is not implemented.
+- Extraction and retrieval are conservative deterministic rule/lexical policies, not general semantic understanding.
+- Semantic retrieval, vector infrastructure, and semantic consolidation are deferred to v2.
+- Real Claude Code MCP tool calls remain blocked under gateways that rewrite MCP tool names.
+- Full transcript ingestion, generic provider-event idempotency, and multi-process SQLite ownership are not implemented.
 
-`pnpm start` is the supported runtime. One daemon creates one `MemorySpace`/SQLite owner and serves both the existing HTTP API and the Streamable HTTP MCP endpoint:
+### Documentation
 
-```bash
-MEMORY_SPACE_DB=./data/memory-space.db \
-MEMORY_SPACE_CWD=/absolute/path/to/bound/project \
-pnpm start
-```
-
-```text
-HTTP API: http://127.0.0.1:4310/...
-MCP:      http://127.0.0.1:4310/mcp
-```
-
-Providers must connect to the daemon MCP URL instead of spawning a database-owning MCP child process. Every daemon route except `GET /health` validates localhost Host and Origin values before routing to reduce DNS-rebinding exposure. JSON body endpoints require `Content-Type: application/json` before any mutation.
-
-The provider-neutral `LifecycleHandler` is composed against the daemon's same `MemorySpace`; Codex, Claude Code, REST, checkpoint orchestration, and the MCP command plane therefore share the same in-process owner.
-
-For no-Session read tools, `MEMORY_SPACE_SPACE_ID` is the highest-priority trusted explicit Space override. Otherwise, `MEMORY_SPACE_CWD` is the trusted directory used for nearest-ancestor `.memory-space/config.json` resolution; it defaults to daemon cwd only when not configured. One daemon endpoint therefore has one trusted no-Session project context. A supplied Session ID is always authoritative and cannot be rebound by either setting. Neither `cwd` nor `spaceId` is accepted as a tool argument.
-
-Durable tools (`memory_remember`, `memory_promote`, and `memory_checkpoint`) always require a Session. The MCP surface is exactly `memory_bootstrap`, `memory_context`, `memory_search`, `memory_remember`, `memory_promote`, and `memory_checkpoint`. It intentionally exposes no raw CRUD or agent-controlled Space, tier, actor, or checkpoint-boundary fields.
-
-Strict schema failures happen before tool execution and use the MCP SDK/protocol validation error. Inputs that pass schema validation but fail domain or integration execution return the stable `MemoryMcpError` structured envelope. Both are fail-visible; raw SQLite/internal details are never the intended public tool result.
-
-An isolated stdio development mode remains available only with explicit opt-in:
-
-```bash
-MEMORY_SPACE_ALLOW_STANDALONE=1 \
-MEMORY_SPACE_DB=/path/to/isolated-development.db \
-pnpm mcp:standalone
-```
-
-Standalone mode owns its SQLite connection. Never point it at a database used by the daemon or another standalone process; it is not the supported provider runtime.
-
-## Provider integrations
-
-P2 supports Codex's native `SessionStart`, `UserPromptSubmit`, `Stop`, `PreCompact`, and `SessionEnd` hooks through the daemon's local lifecycle endpoint. The hook bridge captures conversation-lite evidence, injects bootstrap context, checkpoints supported boundaries, and fails open when the Memory service is unavailable. Codex connects to the same daemon over MCP for explicit Memory commands.
-
-Claude Code P3 implements the same provider-neutral lifecycle shape and uses the same six-tool MCP command plane. Real Claude hook lifecycle/bootstrap behavior has passed; real model-driven MCP execution is currently blocked by the active compatibility gateway rewriting Claude MCP tool names. That external limitation is recorded as a scoped progression waiver rather than a false PASS or a reason to add Claude-only alias tools.
-
-See [`docs/CODEX_INTEGRATION.md`](docs/CODEX_INTEGRATION.md) for Codex setup and real-provider evidence.
-
-See [`docs/CLAUDE_CODE_INTEGRATION.md`](docs/CLAUDE_CODE_INTEGRATION.md) for Claude Code hook/MCP setup, lifecycle semantics, and the current real-provider limitation.
-
-P4 is defined in [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md). It expands the product proof from one Codex→Claude path to same-provider, cross-provider, multi-hop, restart, Space-isolation, progressive-disclosure, and provenance validation. P4 implementation, automated eval, and code review PASS at the intended product/automated scope.
-
-## Memory Quality status
-
-P6 Stage A is a complete, reviewed, and frozen deterministic before-state for
-future quality work.
-
-Accepted reference:
-
-```text
-9490ebce94928132a2fb16aca247c8ae4888a7cf
-```
-
-Key Stage A observations:
-
-```text
-Extraction precision        0.800000
-Extraction recall           0.666667
-P@1 / R@1                  0.727273 / 0.681818
-P@3 / R@3                  0.303030 / 0.818182
-Negative-query FP rate      1.000000
-Negative-query abstention   0.000000
-Core pollution              0.111111
-Handoff completeness        1.000000
-Duplicate-memory rate       0.500000
-```
-
-**P6 Stage B1 — Retrieval Precision & Abstention** is REVIEW PASS / FROZEN. The
-frozen policy uses provider-neutral field-aware lexical
-evidence and explicit abstention. After CR-PHASE10 hardening removed the
-query-independent type prior, P@1/R@1 truthfully remain at the accepted baseline
-of 0.727273/0.681818; negative false positives fall from 1.0 to 0 and negative
-abstention rises from 0 to 1.0. The frozen Stage B2 policy raises extraction from
-4 TP / 1 FP / 2 FN to 6 TP / 0 FP / 0 FN while leaving the full B1/downstream
-metric set unchanged. It also freezes the accepted Stage A extraction contract
-and exposes a B2-specific comparison gate. B2 passed final review and is frozen.
-The Stage B3 Core/Handoff policy and its working-state provenance hardening passed
-final review and are frozen. P6 Memory Quality v1 is therefore COMPLETE / REVIEW
-PASS / FROZEN. Stage B4 semantic retrieval and dedup are deliberately deferred
-to v2 rather than treated as unfinished v1 scope.
-
-See [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md),
-[`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md),
-[`docs/quality/P6_STAGE_B2_RESULT.md`](docs/quality/P6_STAGE_B2_RESULT.md), and
-[`docs/quality/P6_STAGE_B3_RESULT.md`](docs/quality/P6_STAGE_B3_RESULT.md).
-
-## Next roadmap
-
-Provider breadth is no longer the default next step. The current post-integration v1 roadmap is:
-
-```text
-P5 Productization
-→ COMPLETE / REVIEW PASS
-
-P6 Memory Quality v1
-→ COMPLETE / REVIEW PASS / FROZEN
-→ Stage A deterministic baseline COMPLETE / REVIEW PASS / FROZEN
-→ Stage B1 Retrieval Precision & Abstention COMPLETE / REVIEW PASS / FROZEN
-→ Stage B2 Extraction Quality COMPLETE / REVIEW PASS / FROZEN
-→ Stage B3 Core/Handoff Policy COMPLETE / REVIEW PASS / FROZEN
-→ Stage B4 Semantic Retrieval / Dedup DEFERRED TO V2
-
-P7 Optional MCP-first provider validation
-→ only if it proves additional compatibility value
-```
-
-See [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md), [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md), [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md), and [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md).
-
-The accepted Stage A scores and failure examples are in [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md).
-
-## Architecture
-
-The implementation is a TypeScript modular monolith. The application layer depends on two asynchronous ports:
-
-- `MemoryStore` is the durable source-of-truth boundary. `SqliteMemoryStore` is the zero-configuration MVP adapter; a future PostgreSQL adapter can implement the same contract.
-- `CachePort` is optional and defaults to a no-op. A future Redis adapter can cache bootstrap results without becoming the checkpoint consistency boundary.
-
-Checkpoint memory mutations, snapshot creation, and event-boundary advancement commit in one store transaction. The rule-based extractor is also replaceable through `MemoryExtractor`.
-
-Implementation choices are recorded in [`docs/adr/0001-zero-dependency-modular-monolith.md`](docs/adr/0001-zero-dependency-modular-monolith.md).
-
-The MVP uses Node's built-in test runner; the decision and Vitest adoption triggers are recorded in [`docs/adr/0002-use-node-test-for-mvp.md`](docs/adr/0002-use-node-test-for-mvp.md).
-
-The MVP's single-active-process checkpoint assumption and future Provider-to-candidate trust boundary are frozen in [`docs/adr/0003-mvp-execution-and-candidate-trust-boundaries.md`](docs/adr/0003-mvp-execution-and-candidate-trust-boundaries.md).
-
-## Specs
-
-- [`docs/PRODUCT_SPEC.md`](docs/PRODUCT_SPEC.md) — frozen MVP product goals, scope, behaviors, success criteria, non-goals
-- [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md) — frozen Space / Session / SessionEvent / Memory / Checkpoint / HandoffSnapshot contracts and invariants
-- [`docs/MVP_PLAN.md`](docs/MVP_PLAN.md) — original MVP vertical slices and acceptance strategy
-- [`docs/PROVIDER_INTEGRATION_PLAN.md`](docs/PROVIDER_INTEGRATION_PLAN.md) — P0–P4 provider-integration execution history and completion criteria
-- [`docs/PROVIDER_INTEGRATION_GUARDRAILS.md`](docs/PROVIDER_INTEGRATION_GUARDRAILS.md) — normative provider/runtime implementation constraints
-- [`docs/P4_CROSS_SESSION_PROVIDER_EVAL.md`](docs/P4_CROSS_SESSION_PROVIDER_EVAL.md) — accepted P4 cross-session and cross-provider durable-memory eval
-- [`docs/V1_ROADMAP.md`](docs/V1_ROADMAP.md) — post-integration phase order
-- [`docs/PRODUCTIZATION_SPEC.md`](docs/PRODUCTIZATION_SPEC.md) — P5 local CLI/productization requirements
-- [`docs/MEMORY_QUALITY_V1_SPEC.md`](docs/MEMORY_QUALITY_V1_SPEC.md) — P6 umbrella quality requirements and staged-improvement policy
-- [`docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](docs/P6_STAGE_B_RETRIEVAL_SPEC.md) — normative P6 Stage B1 retrieval precision/abstention execution spec
-- [`docs/P6_STAGE_B2_EXTRACTION_SPEC.md`](docs/P6_STAGE_B2_EXTRACTION_SPEC.md) — normative P6 Stage B2 deterministic extraction execution spec
-- [`docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md`](docs/P6_STAGE_B2_DURABILITY_EVAL_HARDENING_SPEC.md) — normative B2.1 durability-boundary and extraction-eval hardening spec
-- [`docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md) — frozen P6 Stage B3 Core/Handoff admission and evaluation policy
-- [`docs/adr/0004-semantic-recall-options-after-b1.md`](docs/adr/0004-semantic-recall-options-after-b1.md) — accepted decision to defer semantic memory to v2
-- [`docs/quality/P6_BASELINE.md`](docs/quality/P6_BASELINE.md) — accepted P6 Stage A metrics, failures, and reproducibility evidence
-- [`docs/quality/P6_STAGE_B1_RESULT.md`](docs/quality/P6_STAGE_B1_RESULT.md) — Stage B1 candidate metrics, deltas, and local validation evidence
-
-## Status
-
-**MVP status: frozen after CR-PHASE2 hardening.**
-
-**Domain contract: MVP v1 frozen.**
-
-**Implementation status: MVP capability surface complete and covered by automated tests/eval.**
-
-**Provider Integration P0: FROZEN. MCP Command Plane P1: FROZEN after CR-PHASE4.**
-
-**Codex P2: FROZEN after the recorded real-Codex CLI smoke.**
-
-**Claude Code P3: implementation, automated validation, code review, and real hook lifecycle PASS. Real model-driven MCP execution remains externally blocked; P3 is ACCEPTED WITH A SCOPED PROGRESSION WAIVER and is not represented as fully FROZEN.**
-
-**P4: implementation COMPLETE; automated cross-session/cross-provider eval PASS; code review PASS after CR-PHASE7.**
-
-**P5 Productization: implementation PASS; automated validation and local CLI smoke PASS; code review PASS after CR-PHASE8.**
-
-**P6 Memory Quality v1: COMPLETE / REVIEW PASS / FROZEN. Stage A, B1, B2, and B3 are frozen; B4 Semantic Retrieval / Dedup is DEFERRED TO V2 by ADR 0004.**
-
-P4 proves Codex→Codex, Claude→Claude, Codex→Claude, Claude→Codex, and Codex→Claude→Codex→Claude continuity through distinct provider Sessions and SQLite reopen while preserving progressive disclosure, provenance, Space isolation, Handoff advancement, and the exact shared six-tool command plane.
-
-Real Codex evidence: [`docs/validation/CODEX_P2_SMOKE.md`](docs/validation/CODEX_P2_SMOKE.md).
-Claude hook/MCP blocker evidence: [`docs/validation/CLAUDE_P3_SMOKE.md`](docs/validation/CLAUDE_P3_SMOKE.md).
-P4 review evidence: [`docs/code-review/CR-PHASE7.md`](docs/code-review/CR-PHASE7.md).
-P6 Stage A review evidence: [`docs/code-review/CR-PHASE9.md`](docs/code-review/CR-PHASE9.md).
+- [Product spec](docs/PRODUCT_SPEC.md)
+- [Domain model](docs/DOMAIN_MODEL.md)
+- [HTTP / daemon API](docs/API.md)
+- [Provider Integration Guardrails](docs/PROVIDER_INTEGRATION_GUARDRAILS.md)
+- [Codex integration](docs/CODEX_INTEGRATION.md)
+- [Claude Code integration](docs/CLAUDE_CODE_INTEGRATION.md)
+- [v1 roadmap](docs/V1_ROADMAP.md)
+- [P6 Memory Quality v1](docs/MEMORY_QUALITY_V1_SPEC.md)
+- [P6 B3 result](docs/quality/P6_STAGE_B3_RESULT.md)
+- [ADR 0004: defer semantic memory to v2](docs/adr/0004-semantic-recall-options-after-b1.md)
