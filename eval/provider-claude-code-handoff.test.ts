@@ -86,7 +86,7 @@ test("eval Claude native lifecycle completes durable bootstrap, capture, checkpo
       type: "message",
       payload: {
         role: "user",
-        content: "数据库确定使用 SQLite；下一步完成 Claude Code hooks。"
+        content: "Decision: SQLite remains the local default."
       }
     });
     await first.checkpoint({

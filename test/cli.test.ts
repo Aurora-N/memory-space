@@ -7,28 +7,28 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
 import type { P7ImplicitRecallReport } from "../eval/p7-implicit-recall.ts";
-import type { MemoryQualityReport } from "../eval/quality/types.ts";
 import { runStageB1Comparison } from "../eval/quality/comparison.ts";
-import { runStageB2ExtractionComparison } from "../eval/quality/extraction-comparison.ts";
 import { runStageB3CoreHandoffComparison } from "../eval/quality/core-handoff-comparison.ts";
-import { runCli, type CliDependencies } from "../src/cli/main.ts";
-import { CliError } from "../src/cli/errors.ts";
-import { detectProviderConfigs } from "../src/cli/provider-config.ts";
-import {
-  LocalMemorySpaceClient,
-  MEMORY_MCP_TOOLS,
-  type InspectorBinding,
-  type LocalMemorySpaceClientPort
-} from "../src/cli/local-client.ts";
-import type { HandoffSnapshot, Space } from "../src/domain/types.ts";
+import { runStageB2ExtractionComparison } from "../eval/quality/extraction-comparison.ts";
+import type { MemoryQualityReport } from "../eval/quality/types.ts";
+import type { CrossSessionEvalReport } from "../eval/support/cross-session-runner.ts";
 import { SpaceResolver } from "../src/binding/space-resolver.ts";
+import { CliError } from "../src/cli/errors.ts";
+import {
+  type InspectorBinding,
+  LocalMemorySpaceClient,
+  type LocalMemorySpaceClientPort,
+  MEMORY_MCP_TOOLS,
+} from "../src/cli/local-client.ts";
+import { type CliDependencies, runCli } from "../src/cli/main.ts";
+import { detectProviderConfigs } from "../src/cli/provider-config.ts";
+import type { HandoffSnapshot, Space } from "../src/domain/types.ts";
 import { createDefaultMemorySpace, createMemorySpaceDaemon } from "../src/index.ts";
 
 class FakeClient implements LocalMemorySpaceClientPort {
@@ -59,7 +59,7 @@ class FakeClient implements LocalMemorySpaceClientPort {
       id: input.id ?? `space-${this.createCalls}`,
       name: input.name,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     this.spaces.set(space.id, space);
     return space;
@@ -95,7 +95,7 @@ class FakeClient implements LocalMemorySpaceClientPort {
     return {
       space,
       binding: { spaceId: space.id, source: "config" },
-      cwd: this.inspectorCwd
+      cwd: this.inspectorCwd,
     };
   }
 
@@ -129,7 +129,7 @@ async function cli(
     clientFactory: () => client,
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
-    ...options.dependencies
+    ...options.dependencies,
   });
   return { code, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
 }
@@ -157,8 +157,8 @@ function addSpace(client: FakeClient, id: string, name = "CLI Space"): void {
 function claudeHook(command = "pnpm claude-code:hook"): object {
   return {
     hooks: {
-      SessionStart: [{ hooks: [{ type: "command", command }] }]
-    }
+      SessionStart: [{ hooks: [{ type: "command", command }] }],
+    },
   };
 }
 
@@ -168,24 +168,28 @@ function claudeMcp(secret?: string): object {
       memory_space: {
         type: "http",
         url: "http://127.0.0.1:4310/mcp",
-        headers: secret ? { authorization: secret } : undefined
-      }
-    }
+        headers: secret ? { authorization: secret } : undefined,
+      },
+    },
   };
 }
 
 async function claudeConfigState(project: string, home: string): Promise<string> {
-  return (await detectProviderConfigs(project, home))
-    .find((provider) => provider.provider === "claude-code")?.state ?? "missing";
+  return (
+    (await detectProviderConfigs(project, home)).find(
+      (provider) => provider.provider === "claude-code"
+    )?.state ?? "missing"
+  );
 }
 
 test("init creates an atomic v1 binding and is idempotent for the same Space", async () => {
   const { directory, project } = temporaryProject("init");
   const client = new FakeClient();
   try {
-    const first = await cli([
-      "init", "--cwd", project, "--name", "Unicode Project", "--space-id", "space-init"
-    ], { cwd: project, client });
+    const first = await cli(
+      ["init", "--cwd", project, "--name", "Unicode Project", "--space-id", "space-init"],
+      { cwd: project, client }
+    );
     assert.equal(first.code, 0);
     assert.equal(client.createCalls, 1);
     assert.deepEqual(
@@ -194,9 +198,10 @@ test("init creates an atomic v1 binding and is idempotent for the same Space", a
     );
     assert.match(first.stdout, /global configuration was not modified/u);
 
-    const second = await cli([
-      "init", "--cwd", project, "--space-id", "space-init"
-    ], { cwd: project, client });
+    const second = await cli(["init", "--cwd", project, "--space-id", "space-init"], {
+      cwd: project,
+      client,
+    });
     assert.equal(second.code, 0);
     assert.equal(client.createCalls, 1);
     assert.match(second.stdout, /already initialized/u);
@@ -211,15 +216,19 @@ test("init rejects conflicting and malformed bindings without changing them", as
   try {
     const path = bind(project, { version: 1, spaceId: "space-existing" });
     addSpace(client, "space-existing");
-    const conflict = await cli([
-      "init", "--cwd", project, "--space-id", "space-other"
-    ], { cwd: project, client });
+    const conflict = await cli(["init", "--cwd", project, "--space-id", "space-other"], {
+      cwd: project,
+      client,
+    });
     assert.equal(conflict.code, 1);
     assert.match(conflict.stderr, /BINDING_CONFLICT/u);
-    assert.equal(readFileSync(path, "utf8"), JSON.stringify({
-      version: 1,
-      spaceId: "space-existing"
-    }));
+    assert.equal(
+      readFileSync(path, "utf8"),
+      JSON.stringify({
+        version: 1,
+        spaceId: "space-existing",
+      })
+    );
     assert.equal(client.createCalls, 0);
 
     const malformed = "{not-json";
@@ -252,35 +261,39 @@ test("nested init preserves inherited binding unless a different Space is explic
     assert.equal(existsSync(join(nested, ".memory-space", "config.json")), false);
     assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
 
-    const explicitSame = await cli([
-      "init", "--cwd", nested, "--space-id", "space-a"
-    ], { cwd: nested, client });
+    const explicitSame = await cli(["init", "--cwd", nested, "--space-id", "space-a"], {
+      cwd: nested,
+      client,
+    });
     assert.equal(explicitSame.code, 0, explicitSame.stderr);
     assert.match(explicitSame.stdout, /inherited binding/u);
     assert.equal(client.createCalls, 0);
     assert.equal(existsSync(join(nested, ".memory-space", "config.json")), false);
 
-    const override = await cli([
-      "init", "--cwd", nested, "--space-id", "space-b", "--name", "Nested Space B"
-    ], { cwd: nested, client });
+    const override = await cli(
+      ["init", "--cwd", nested, "--space-id", "space-b", "--name", "Nested Space B"],
+      { cwd: nested, client }
+    );
     assert.equal(override.code, 0, override.stderr);
     assert.equal(client.createCalls, 1);
     assert.equal((await resolver.resolve({ cwd: project })).spaceId, "space-a");
     assert.equal((await resolver.resolve({ cwd: nested })).spaceId, "space-b");
     assert.equal(readFileSync(rootConfigPath, "utf8"), rootConfigBefore);
 
-    const repeated = await cli([
-      "init", "--cwd", nested, "--space-id", "space-b"
-    ], { cwd: nested, client });
+    const repeated = await cli(["init", "--cwd", nested, "--space-id", "space-b"], {
+      cwd: nested,
+      client,
+    });
     assert.equal(repeated.code, 0, repeated.stderr);
     assert.match(repeated.stdout, /already initialized/u);
     assert.equal(client.createCalls, 1);
 
     const nestedConfigPath = join(nested, ".memory-space", "config.json");
     const nestedConfigBefore = readFileSync(nestedConfigPath, "utf8");
-    const conflict = await cli([
-      "init", "--cwd", nested, "--space-id", "space-c"
-    ], { cwd: nested, client });
+    const conflict = await cli(["init", "--cwd", nested, "--space-id", "space-c"], {
+      cwd: nested,
+      client,
+    });
     assert.equal(conflict.code, 1);
     assert.match(conflict.stderr, /BINDING_CONFLICT/u);
     assert.equal(readFileSync(nestedConfigPath, "utf8"), nestedConfigBefore);
@@ -308,8 +321,8 @@ test("unbind removes only the exact local binding and preserves ancestor and Mem
       dependencies: {
         clientFactory: () => {
           throw new Error("unbind must not contact or open the daemon");
-        }
-      }
+        },
+      },
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(existsSync(nestedPath), false);
@@ -333,9 +346,9 @@ test("unbind preserves mismatched and malformed local bindings", async () => {
   try {
     const path = bind(project, { version: 1, spaceId: "space-actual" });
     const before = readFileSync(path, "utf8");
-    const mismatch = await cli([
-      "unbind", "--cwd", project, "--space-id", "space-other"
-    ], { cwd: project });
+    const mismatch = await cli(["unbind", "--cwd", project, "--space-id", "space-other"], {
+      cwd: project,
+    });
     assert.equal(mismatch.code, 1);
     assert.match(mismatch.stderr, /BINDING_CONFLICT/u);
     assert.equal(readFileSync(path, "utf8"), before);
@@ -356,7 +369,7 @@ test("configure codex creates project hooks and MCP configuration and is idempot
   try {
     const dryRun = await cli(["configure", "codex", project, "--dry-run"], {
       cwd: directory,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(dryRun.code, 0, dryRun.stderr);
     assert.match(dryRun.stdout, /would be created/u);
@@ -365,7 +378,7 @@ test("configure codex creates project hooks and MCP configuration and is idempot
 
     const configured = await cli(["configure", "codex", project], {
       cwd: directory,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(configured.code, 0, configured.stderr);
     const hooksPath = join(project, ".codex", "hooks.json");
@@ -376,26 +389,30 @@ test("configure codex creates project hooks and MCP configuration and is idempot
       hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
     };
     assert.deepEqual(Object.keys(hooks.hooks), [
-      "SessionStart", "UserPromptSubmit", "Stop", "PreCompact", "SessionEnd"
+      "SessionStart",
+      "UserPromptSubmit",
+      "Stop",
+      "PreCompact",
+      "SessionEnd",
     ]);
     assert.equal(
       hooks.hooks.SessionStart?.[0]?.hooks[0]?.command,
       `pnpm --dir '${installationRoot}' --silent codex:hook`
     );
-    assert.equal(mcpBefore, [
-      "[mcp_servers.memory_space]",
-      'url = "http://127.0.0.1:4310/mcp"',
-      ""
-    ].join("\n"));
     assert.equal(
-      (await detectProviderConfigs(project, join(directory, "home")))
-        .find((value) => value.provider === "codex")?.state,
+      mcpBefore,
+      ["[mcp_servers.memory_space]", 'url = "http://127.0.0.1:4310/mcp"', ""].join("\n")
+    );
+    assert.equal(
+      (await detectProviderConfigs(project, join(directory, "home"))).find(
+        (value) => value.provider === "codex"
+      )?.state,
       "detected"
     );
 
     const repeated = await cli(["configure", "codex", project], {
       cwd: directory,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(repeated.code, 0, repeated.stderr);
     assert.match(repeated.stdout, /was unchanged/u);
@@ -412,24 +429,34 @@ test("configure codex preserves unrelated hooks, TOML, and secret values without
   const secret = "never-print-provider-token";
   try {
     mkdirSync(codexDirectory);
-    writeFileSync(join(codexDirectory, "hooks.json"), JSON.stringify({
-      description: "existing",
-      token: secret,
-      hooks: {
-        UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }]
-      }
-    }, null, 2));
-    writeFileSync(join(codexDirectory, "config.toml"), [
-      "# memory_space is configured below by the project command",
-      "[mcp_servers.other]",
-      'url = "http://127.0.0.1:9999/mcp"',
-      `authorization_token = "${secret}"`,
-      ""
-    ].join("\n"));
+    writeFileSync(
+      join(codexDirectory, "hooks.json"),
+      JSON.stringify(
+        {
+          description: "existing",
+          token: secret,
+          hooks: {
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }],
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(codexDirectory, "config.toml"),
+      [
+        "# memory_space is configured below by the project command",
+        "[mcp_servers.other]",
+        'url = "http://127.0.0.1:9999/mcp"',
+        `authorization_token = "${secret}"`,
+        "",
+      ].join("\n")
+    );
 
     const result = await cli(["configure", "codex", project], {
       cwd: directory,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(result.code, 0, result.stderr);
     assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(secret, "u"));
@@ -449,7 +476,7 @@ test("configure codex preserves unrelated hooks, TOML, and secret values without
 
     const repeated = await cli(["configure", "codex", project], {
       cwd: directory,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(repeated.code, 0, repeated.stderr);
     assert.match(repeated.stdout, /was unchanged/u);
@@ -466,15 +493,17 @@ test("configure codex rejects hook or MCP conflicts before changing either file"
     mkdirSync(hookDirectory);
     const conflictingHooks = JSON.stringify({
       hooks: {
-        SessionStart: [{
-          hooks: [{ type: "command", command: "pnpm --dir /other codex:hook" }]
-        }]
-      }
+        SessionStart: [
+          {
+            hooks: [{ type: "command", command: "pnpm --dir /other codex:hook" }],
+          },
+        ],
+      },
     });
     writeFileSync(join(hookDirectory, "hooks.json"), conflictingHooks);
     const hookConflict = await cli(["configure", "codex", hookFixture.project], {
       cwd: hookFixture.project,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(hookConflict.code, 1);
     assert.match(hookConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -488,12 +517,12 @@ test("configure codex rejects hook or MCP conflicts before changing either file"
       "[mcp_servers.memory_space]",
       'url = "http://127.0.0.1:9999/mcp"',
       `authorization_token = "${secret}"`,
-      ""
+      "",
     ].join("\n");
     writeFileSync(join(mcpDirectory, "config.toml"), conflictingMcp);
     const mcpConflict = await cli(["configure", "codex", mcpFixture.project], {
       cwd: mcpFixture.project,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(mcpConflict.code, 1);
     assert.match(mcpConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -534,7 +563,7 @@ test("configure claude-code creates project hooks and MCP configuration and is i
     const dryRun = await cli(["configure", "claude-code", project, "--dry-run"], {
       cwd: directory,
       home,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(dryRun.code, 0, dryRun.stderr);
     assert.match(dryRun.stdout, /would be created/u);
@@ -545,7 +574,7 @@ test("configure claude-code creates project hooks and MCP configuration and is i
     const configured = await cli(["configure", "claude-code", project], {
       cwd: directory,
       home,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(configured.code, 0, configured.stderr);
     const hooksPath = join(project, ".claude", "settings.json");
@@ -556,7 +585,11 @@ test("configure claude-code creates project hooks and MCP configuration and is i
       hooks: Record<string, Array<{ hooks: Array<{ command: string; timeout: number }> }>>;
     };
     assert.deepEqual(Object.keys(hooks.hooks), [
-      "SessionStart", "UserPromptSubmit", "Stop", "PreCompact", "SessionEnd"
+      "SessionStart",
+      "UserPromptSubmit",
+      "Stop",
+      "PreCompact",
+      "SessionEnd",
     ]);
     assert.equal(
       hooks.hooks.SessionStart?.[0]?.hooks[0]?.command,
@@ -565,15 +598,15 @@ test("configure claude-code creates project hooks and MCP configuration and is i
     assert.equal(hooks.hooks.SessionEnd?.[0]?.hooks[0]?.timeout, 8);
     assert.deepEqual(JSON.parse(mcpBefore), {
       mcpServers: {
-        memory_space: { type: "http", url: "http://127.0.0.1:4310/mcp" }
-      }
+        memory_space: { type: "http", url: "http://127.0.0.1:4310/mcp" },
+      },
     });
     assert.equal(await claudeConfigState(project, home), "detected");
 
     const repeated = await cli(["configure", "claude-code", project], {
       cwd: directory,
       home,
-      dependencies: { installationRoot }
+      dependencies: { installationRoot },
     });
     assert.equal(repeated.code, 0, repeated.stderr);
     assert.match(repeated.stdout, /was unchanged/u);
@@ -590,23 +623,37 @@ test("configure claude-code preserves unrelated JSON and secrets without disclos
   const secret = "never-print-claude-token";
   try {
     mkdirSync(claudeDirectory);
-    writeFileSync(join(claudeDirectory, "settings.json"), JSON.stringify({
-      permissions: { allow: ["Read"] },
-      env: { PROVIDER_TOKEN: secret },
-      hooks: {
-        UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }]
-      }
-    }, null, 2));
-    writeFileSync(join(project, ".mcp.json"), JSON.stringify({
-      note: secret,
-      mcpServers: {
-        other: { type: "http", url: "http://127.0.0.1:9999/mcp", headers: { token: secret } }
-      }
-    }, null, 2));
+    writeFileSync(
+      join(claudeDirectory, "settings.json"),
+      JSON.stringify(
+        {
+          permissions: { allow: ["Read"] },
+          env: { PROVIDER_TOKEN: secret },
+          hooks: {
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: "pnpm lint" }] }],
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(project, ".mcp.json"),
+      JSON.stringify(
+        {
+          note: secret,
+          mcpServers: {
+            other: { type: "http", url: "http://127.0.0.1:9999/mcp", headers: { token: secret } },
+          },
+        },
+        null,
+        2
+      )
+    );
 
     const result = await cli(["configure", "claude-code", project], {
       cwd: directory,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(result.code, 0, result.stderr);
     assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(secret, "u"));
@@ -624,7 +671,8 @@ test("configure claude-code preserves unrelated JSON and secrets without disclos
     assert.equal(mcp.note, secret);
     assert.ok(mcp.mcpServers.other);
     assert.deepEqual(mcp.mcpServers.memory_space, {
-      type: "http", url: "http://127.0.0.1:4310/mcp"
+      type: "http",
+      url: "http://127.0.0.1:4310/mcp",
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -639,15 +687,17 @@ test("configure claude-code rejects hook or MCP conflicts before changing either
     mkdirSync(hookDirectory);
     const conflictingHooks = JSON.stringify({
       hooks: {
-        SessionStart: [{
-          hooks: [{ type: "command", command: "pnpm --dir /other claude-code:hook" }]
-        }]
-      }
+        SessionStart: [
+          {
+            hooks: [{ type: "command", command: "pnpm --dir /other claude-code:hook" }],
+          },
+        ],
+      },
     });
     writeFileSync(join(hookDirectory, "settings.json"), conflictingHooks);
     const hookConflict = await cli(["configure", "claude-code", hookFixture.project], {
       cwd: hookFixture.project,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(hookConflict.code, 1);
     assert.match(hookConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -660,14 +710,14 @@ test("configure claude-code rejects hook or MCP conflicts before changing either
         memory_space: {
           type: "http",
           url: "http://127.0.0.1:9999/mcp",
-          headers: { authorization: secret }
-        }
-      }
+          headers: { authorization: secret },
+        },
+      },
     });
     writeFileSync(join(mcpFixture.project, ".mcp.json"), conflictingMcp);
     const mcpConflict = await cli(["configure", "claude-code", mcpFixture.project], {
       cwd: mcpFixture.project,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(mcpConflict.code, 1);
     assert.match(mcpConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -690,7 +740,7 @@ test("configure claude-code rejects duplicate active scopes but ignores unrelate
       JSON.stringify(claudeHook("pnpm --dir /existing claude-code:hook"))
     );
     const localConflict = await cli(["configure", "claude-code", localFixture.project], {
-      cwd: localFixture.project
+      cwd: localFixture.project,
     });
     assert.equal(localConflict.code, 1);
     assert.match(localConflict.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -700,24 +750,30 @@ test("configure claude-code rejects duplicate active scopes but ignores unrelate
     const home = join(globalFixture.directory, "home");
     mkdirSync(home);
     const unrelatedProject = join(globalFixture.directory, "unrelated");
-    writeFileSync(join(home, ".claude.json"), JSON.stringify({
-      projects: { [unrelatedProject]: claudeMcp("unrelated-secret") }
-    }));
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        projects: { [unrelatedProject]: claudeMcp("unrelated-secret") },
+      })
+    );
     const unrelated = await cli(["configure", "claude-code", globalFixture.project], {
       cwd: globalFixture.project,
       home,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(unrelated.code, 0, unrelated.stderr);
 
     rmSync(join(globalFixture.project, ".claude"), { recursive: true, force: true });
     rmSync(join(globalFixture.project, ".mcp.json"));
-    writeFileSync(join(home, ".claude.json"), JSON.stringify({
-      projects: { [globalFixture.project]: claudeMcp("current-project-secret") }
-    }));
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        projects: { [globalFixture.project]: claudeMcp("current-project-secret") },
+      })
+    );
     const currentProject = await cli(["configure", "claude-code", globalFixture.project], {
       cwd: globalFixture.project,
-      home
+      home,
     });
     assert.equal(currentProject.code, 1);
     assert.match(currentProject.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -728,7 +784,7 @@ test("configure claude-code rejects duplicate active scopes but ignores unrelate
     writeFileSync(join(home, ".claude.json"), JSON.stringify(claudeMcp("user-mcp-secret")));
     const userMcp = await cli(["configure", "claude-code", globalFixture.project], {
       cwd: globalFixture.project,
-      home
+      home,
     });
     assert.equal(userMcp.code, 1);
     assert.match(userMcp.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -742,7 +798,7 @@ test("configure claude-code rejects duplicate active scopes but ignores unrelate
     );
     const userHook = await cli(["configure", "claude-code", globalFixture.project], {
       cwd: globalFixture.project,
-      home
+      home,
     });
     assert.equal(userHook.code, 1);
     assert.match(userHook.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -762,7 +818,7 @@ test("configure claude-code preserves malformed and symlinked files and rejects 
     mkdirSync(join(malformedFixture.project, ".claude"));
     writeFileSync(join(malformedFixture.project, ".claude", "settings.json"), "{malformed");
     const malformed = await cli(["configure", "claude-code", malformedFixture.project], {
-      cwd: malformedFixture.project
+      cwd: malformedFixture.project,
     });
     assert.equal(malformed.code, 1);
     assert.match(malformed.stderr, /PROVIDER_CONFIG_INVALID/u);
@@ -776,17 +832,23 @@ test("configure claude-code preserves malformed and symlinked files and rejects 
     writeFileSync(ownedMcp, JSON.stringify({ mcpServers: {} }));
     symlinkSync(ownedMcp, join(symlinkFixture.project, ".mcp.json"));
     const symlink = await cli(["configure", "claude-code", symlinkFixture.project], {
-      cwd: symlinkFixture.project
+      cwd: symlinkFixture.project,
     });
     assert.equal(symlink.code, 1);
     assert.match(symlink.stderr, /PROVIDER_CONFIG_INVALID/u);
     assert.equal(readFileSync(ownedMcp, "utf8"), JSON.stringify({ mcpServers: {} }));
     assert.equal(existsSync(join(symlinkFixture.project, ".claude")), false);
 
-    const endpoint = await cli([
-      "configure", "claude-code", endpointFixture.project,
-      "--endpoint", "https://memory.example.test"
-    ], { cwd: endpointFixture.project });
+    const endpoint = await cli(
+      [
+        "configure",
+        "claude-code",
+        endpointFixture.project,
+        "--endpoint",
+        "https://memory.example.test",
+      ],
+      { cwd: endpointFixture.project }
+    );
     assert.equal(endpoint.code, 1);
     assert.match(endpoint.stderr, /DAEMON_ENDPOINT_INVALID/u);
     assert.equal(existsSync(join(endpointFixture.project, ".claude")), false);
@@ -804,21 +866,28 @@ test("configure codex refuses to create a duplicate active user/project scope", 
   const secret = "user-scope-config-secret";
   try {
     mkdirSync(join(home, ".codex"), { recursive: true });
-    writeFileSync(join(home, ".codex", "hooks.json"), JSON.stringify({
-      hooks: {
-        SessionStart: [{
-          hooks: [{
-            type: "command",
-            command: "pnpm --dir /existing memory-space codex:hook",
-            env: { TOKEN: secret }
-          }]
-        }]
-      }
-    }));
+    writeFileSync(
+      join(home, ".codex", "hooks.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: "pnpm --dir /existing memory-space codex:hook",
+                  env: { TOKEN: secret },
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
     const result = await cli(["configure", "codex", project], {
       cwd: project,
       home,
-      dependencies: { installationRoot: "/safe/memory-space" }
+      dependencies: { installationRoot: "/safe/memory-space" },
     });
     assert.equal(result.code, 1);
     assert.match(result.stderr, /PROVIDER_CONFIG_CONFLICT/u);
@@ -834,10 +903,10 @@ test("configure codex rejects non-loopback endpoints and symlink configuration f
   const endpointFixture = temporaryProject("configure-codex-endpoint");
   const symlinkFixture = temporaryProject("configure-codex-symlink");
   try {
-    const endpoint = await cli([
-      "configure", "codex", endpointFixture.project,
-      "--endpoint", "https://memory.example.test"
-    ], { cwd: endpointFixture.project });
+    const endpoint = await cli(
+      ["configure", "codex", endpointFixture.project, "--endpoint", "https://memory.example.test"],
+      { cwd: endpointFixture.project }
+    );
     assert.equal(endpoint.code, 1);
     assert.match(endpoint.stderr, /DAEMON_ENDPOINT_INVALID/u);
     assert.equal(existsSync(join(endpointFixture.project, ".codex")), false);
@@ -848,7 +917,7 @@ test("configure codex rejects non-loopback endpoints and symlink configuration f
     writeFileSync(ownedFile, JSON.stringify({ hooks: {} }));
     symlinkSync(ownedFile, join(codexDirectory, "hooks.json"));
     const symlink = await cli(["configure", "codex", symlinkFixture.project], {
-      cwd: symlinkFixture.project
+      cwd: symlinkFixture.project,
     });
     assert.equal(symlink.code, 1);
     assert.match(symlink.stderr, /PROVIDER_CONFIG_INVALID/u);
@@ -872,8 +941,10 @@ test("inspect validates an existing binding and opens the running daemon UI", as
       cwd: directory,
       client,
       dependencies: {
-        openBrowser: async (url) => { browserUrls.push(url); }
-      }
+        openBrowser: async (url) => {
+          browserUrls.push(url);
+        },
+      },
     });
     assert.equal(result.code, 0, result.stderr);
     assert.deepEqual(browserUrls, ["http://127.0.0.1:4310/inspector/"]);
@@ -895,7 +966,7 @@ test("inspect never starts or initializes when daemon or binding is unavailable"
     const offline = await cli(["inspect", offlineFixture.project, "--no-open"], {
       cwd: offlineFixture.project,
       client,
-      dependencies: { openBrowser: async () => undefined }
+      dependencies: { openBrowser: async () => undefined },
     });
     assert.equal(offline.code, 1);
     assert.match(offline.stderr, /DAEMON_UNAVAILABLE/u);
@@ -907,7 +978,7 @@ test("inspect never starts or initializes when daemon or binding is unavailable"
     const unbound = await cli(["inspect", unboundFixture.project, "--no-open"], {
       cwd: unboundFixture.project,
       client,
-      dependencies: { openBrowser: async () => undefined }
+      dependencies: { openBrowser: async () => undefined },
     });
     assert.equal(unbound.code, 1);
     assert.match(unbound.stderr, /BINDING_NOT_FOUND/u);
@@ -929,7 +1000,7 @@ test("inspect rejects a daemon attached to another project before any mutation",
     const result = await cli(["inspect", project, "--no-open"], {
       cwd: project,
       client,
-      dependencies: { openBrowser: async () => undefined }
+      dependencies: { openBrowser: async () => undefined },
     });
     assert.equal(result.code, 1);
     assert.match(result.stderr, /different project/u);
@@ -948,25 +1019,21 @@ test("init leaves no binding when daemon or Space creation fails", async () => {
     offlineClient.healthError = new CliError("DAEMON_UNAVAILABLE", "Daemon unavailable.");
     const offline = await cli(["init", "--cwd", unavailable.project], {
       cwd: unavailable.project,
-      client: offlineClient
+      client: offlineClient,
     });
     assert.equal(offline.code, 1);
     assert.equal(offlineClient.createCalls, 0);
-    assert.throws(() => readFileSync(join(
-      unavailable.project, ".memory-space", "config.json"
-    )));
+    assert.throws(() => readFileSync(join(unavailable.project, ".memory-space", "config.json")));
 
     const createClient = new FakeClient();
     createClient.createError = new CliError("DAEMON_REQUEST_FAILED", "Space creation rejected.");
     const creation = await cli(["init", "--cwd", failedCreate.project], {
       cwd: failedCreate.project,
-      client: createClient
+      client: createClient,
     });
     assert.equal(creation.code, 1);
     assert.equal(createClient.createCalls, 1);
-    assert.throws(() => readFileSync(join(
-      failedCreate.project, ".memory-space", "config.json"
-    )));
+    assert.throws(() => readFileSync(join(failedCreate.project, ".memory-space", "config.json")));
   } finally {
     rmSync(unavailable.directory, { recursive: true, force: true });
     rmSync(failedCreate.directory, { recursive: true, force: true });
@@ -979,9 +1046,7 @@ test("init reports an orphan Space when the final binding write fails", async ()
   const stdout: string[] = [];
   const stderr: string[] = [];
   try {
-    const code = await runCli([
-      "init", "--cwd", project, "--space-id", "orphan-space"
-    ], {
+    const code = await runCli(["init", "--cwd", project, "--space-id", "orphan-space"], {
       cwd: project,
       home: join(directory, "home"),
       env: {},
@@ -989,12 +1054,10 @@ test("init reports an orphan Space when the final binding write fails", async ()
       stdout: (line) => stdout.push(line),
       stderr: (line) => stderr.push(line),
       writeBinding: async () => {
-        throw new CliError(
-          "BINDING_WRITE_FAILED",
-          "simulated write failure",
-          { remediation: "write the binding manually" }
-        );
-      }
+        throw new CliError("BINDING_WRITE_FAILED", "simulated write failure", {
+          remediation: "write the binding manually",
+        });
+      },
     });
     assert.equal(code, 1);
     assert.ok(client.spaces.has("orphan-space"));
@@ -1015,32 +1078,65 @@ test("doctor reports a healthy exact-six project without exposing credentials", 
     addSpace(client, "space-doctor", "Doctor Space");
     mkdirSync(join(project, ".codex"), { recursive: true });
     mkdirSync(join(project, ".claude"), { recursive: true });
-    writeFileSync(join(project, ".codex", "hooks.json"), JSON.stringify({
-      command: "pnpm codex:hook",
-      token: "codex-super-secret"
-    }));
-    writeFileSync(join(project, ".codex", "config.toml"), [
-      "[mcp_servers.memory_space]",
-      "token = 'codex-mcp-secret'"
-    ].join("\n"));
-    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify({
-      ...claudeHook(),
-      apiKey: "claude-super-secret"
-    }));
-    writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp(
-      "Bearer claude-mcp-secret"
-    )));
-    const result = await cli([
-      "doctor", "--cwd", project, "--json"
-    ], { cwd: project, home, client });
+    writeFileSync(
+      join(project, ".codex", "hooks.json"),
+      JSON.stringify({
+        command: "pnpm codex:hook",
+        token: "codex-super-secret",
+      })
+    );
+    writeFileSync(
+      join(project, ".codex", "config.toml"),
+      ["[mcp_servers.memory_space]", "token = 'codex-mcp-secret'"].join("\n")
+    );
+    writeFileSync(
+      join(project, ".claude", "settings.json"),
+      JSON.stringify({
+        ...claudeHook(),
+        apiKey: "claude-super-secret",
+      })
+    );
+    writeFileSync(
+      join(project, ".mcp.json"),
+      JSON.stringify(claudeMcp("Bearer claude-mcp-secret"))
+    );
+    writeFileSync(
+      join(project, ".memory-space", "extraction-rules.json"),
+      JSON.stringify({
+        version: 1,
+        rules: [
+          {
+            id: "project.frontend.framework",
+            family: "knowledge",
+            type: "decision",
+            key: "project.frontend.framework",
+            match: {
+              kind: "prefix",
+              prefixes: ["前端框架使用"],
+              value: "identifier",
+            },
+            contentTemplate: "前端框架使用 $" + "{value}",
+            coreCandidate: true,
+          },
+        ],
+      })
+    );
+    const result = await cli(["doctor", "--cwd", project, "--json"], {
+      cwd: project,
+      home,
+      client,
+    });
     assert.equal(result.code, 0);
     const parsed = JSON.parse(result.stdout) as { checks: Array<{ id: string; status: string }> };
     assert.equal(parsed.checks.find((item) => item.id === "mcp")?.status, "ok");
     assert.equal(parsed.checks.find((item) => item.id === "codex")?.status, "ok");
     assert.equal(parsed.checks.find((item) => item.id === "claude-code")?.status, "ok");
-    assert.equal(parsed.checks.find(
-      (item) => item.id === "claude-real-mcp-waiver"
-    )?.status, "warn");
+    assert.equal(parsed.checks.find((item) => item.id === "extraction-rules")?.status, "ok");
+    assert.match(result.stdout, /Configured project extraction rules: 1 enabled/u);
+    assert.equal(
+      parsed.checks.find((item) => item.id === "claude-real-mcp-waiver")?.status,
+      "warn"
+    );
     assert.doesNotMatch(result.stdout, /super-secret|mcp-secret/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1052,9 +1148,10 @@ test("Claude detection supports project MCP and settings.local.json hooks", asyn
   const home = join(directory, "home");
   try {
     mkdirSync(join(project, ".claude"), { recursive: true });
-    writeFileSync(join(project, ".claude", "settings.local.json"), JSON.stringify(
-      claudeHook("pnpm claude-code:hook --local")
-    ));
+    writeFileSync(
+      join(project, ".claude", "settings.local.json"),
+      JSON.stringify(claudeHook("pnpm claude-code:hook --local"))
+    );
     writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp()));
     assert.equal(await claudeConfigState(project, home), "detected");
   } finally {
@@ -1070,17 +1167,23 @@ test("Claude local MCP detection reads only the resolved current project", async
     mkdirSync(join(project, ".claude"), { recursive: true });
     mkdirSync(home, { recursive: true });
     writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(claudeHook()));
-    writeFileSync(join(home, ".claude.json"), JSON.stringify({
-      projects: {
-        [unrelated]: claudeMcp("Bearer unrelated-secret"),
-        [join(project, ".")]: claudeMcp("Bearer current-project-secret")
-      }
-    }));
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        projects: {
+          [unrelated]: claudeMcp("Bearer unrelated-secret"),
+          [join(project, ".")]: claudeMcp("Bearer current-project-secret"),
+        },
+      })
+    );
     assert.equal(await claudeConfigState(project, home), "detected");
 
-    writeFileSync(join(home, ".claude.json"), JSON.stringify({
-      projects: { [unrelated]: claudeMcp("Bearer unrelated-secret") }
-    }));
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        projects: { [unrelated]: claudeMcp("Bearer unrelated-secret") },
+      })
+    );
     assert.equal(await claudeConfigState(project, home), "partial");
 
     writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify({ hooks: {} }));
@@ -1100,15 +1203,18 @@ test("Claude user MCP scope is detected without disclosing parsed secrets", asyn
     mkdirSync(join(project, ".claude"), { recursive: true });
     mkdirSync(home, { recursive: true });
     writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(claudeHook()));
-    writeFileSync(join(home, ".claude.json"), JSON.stringify({
-      ...claudeMcp("Bearer user-scope-api-key"),
-      env: { ANTHROPIC_API_KEY: "user-scope-env-secret" }
-    }));
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({
+        ...claudeMcp("Bearer user-scope-api-key"),
+        env: { ANTHROPIC_API_KEY: "user-scope-env-secret" },
+      })
+    );
 
     const result = await cli(["doctor", "--cwd", project, "--json"], {
       cwd: project,
       home,
-      client
+      client,
     });
     assert.equal(result.code, 0, result.stderr);
     const parsed = JSON.parse(result.stdout) as {
@@ -1127,12 +1233,14 @@ test("Claude detection reports multiple active Memory Space scopes as ambiguous"
   try {
     mkdirSync(join(project, ".claude"), { recursive: true });
     mkdirSync(join(home, ".claude"), { recursive: true });
-    writeFileSync(join(project, ".claude", "settings.json"), JSON.stringify(
-      claudeHook("pnpm claude-code:hook --project")
-    ));
-    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify(
-      claudeHook("pnpm claude-code:hook --user")
-    ));
+    writeFileSync(
+      join(project, ".claude", "settings.json"),
+      JSON.stringify(claudeHook("pnpm claude-code:hook --project"))
+    );
+    writeFileSync(
+      join(home, ".claude", "settings.json"),
+      JSON.stringify(claudeHook("pnpm claude-code:hook --user"))
+    );
     writeFileSync(join(project, ".mcp.json"), JSON.stringify(claudeMcp()));
     assert.equal(await claudeConfigState(project, home), "ambiguous");
   } finally {
@@ -1150,7 +1258,7 @@ test("doctor identifies daemon, binding, Space, MCP, and provider configuration 
     offline.mcpError = new CliError("MCP_UNAVAILABLE", "offline");
     const unbound = await cli(["doctor", "--cwd", noBinding.project, "--json"], {
       cwd: noBinding.project,
-      client: offline
+      client: offline,
     });
     assert.equal(unbound.code, 1);
     assert.match(unbound.stdout, /"id": "daemon"[\s\S]*"status": "error"/u);
@@ -1160,21 +1268,23 @@ test("doctor identifies daemon, binding, Space, MCP, and provider configuration 
     const malformedText = "not-json";
     const malformedPath = bind(malformed.project, malformedText);
     const invalid = await cli(["doctor", "--cwd", malformed.project, "--json"], {
-      cwd: malformed.project
+      cwd: malformed.project,
     });
     assert.equal(invalid.code, 1);
     assert.match(invalid.stdout, /Project binding is malformed/u);
     assert.equal(readFileSync(malformedPath, "utf8"), malformedText);
 
     bind(missingSpace.project, { version: 1, spaceId: "missing-space" });
+    writeFileSync(join(missingSpace.project, ".memory-space", "extraction-rules.json"), "not-json");
     const mismatchClient = new FakeClient();
     mismatchClient.tools = ["memory_bootstrap", "unexpected_tool"];
     const missing = await cli(["doctor", "--cwd", missingSpace.project, "--json"], {
       cwd: missingSpace.project,
-      client: mismatchClient
+      client: mismatchClient,
     });
     assert.equal(missing.code, 1);
     assert.match(missing.stdout, /Bound Space does not exist/u);
+    assert.match(missing.stdout, /file is not valid JSON/u);
     assert.match(missing.stdout, /MCP tool mismatch/u);
     assert.match(missing.stdout, /not detected/u);
   } finally {
@@ -1201,11 +1311,11 @@ test("status is read-only and reports binding, Space, checkpoint, and Handoff", 
       blockers: [],
       openQuestions: [],
       nextSteps: ["continue P5"],
-      createdAt: new Date(0).toISOString()
+      createdAt: new Date(0).toISOString(),
     };
     const result = await cli(["status", "--cwd", project, "--json"], {
       cwd: project,
-      client
+      client,
     });
     assert.equal(result.code, 0);
     const report = JSON.parse(result.stdout) as {
@@ -1228,7 +1338,7 @@ test("status fails safely when unbound or daemon is unavailable", async () => {
   const offline = temporaryProject("status-offline");
   try {
     const missing = await cli(["status", "--cwd", unbound.project], {
-      cwd: unbound.project
+      cwd: unbound.project,
     });
     assert.equal(missing.code, 1);
     assert.match(missing.stderr, /BINDING_NOT_FOUND/u);
@@ -1239,7 +1349,7 @@ test("status fails safely when unbound or daemon is unavailable", async () => {
     client.healthError = new CliError("DAEMON_UNAVAILABLE", "Daemon unavailable.");
     const unavailable = await cli(["status", "--cwd", offline.project], {
       cwd: offline.project,
-      client
+      client,
     });
     assert.equal(unavailable.code, 1);
     assert.match(unavailable.stderr, /DAEMON_UNAVAILABLE/u);
@@ -1257,25 +1367,27 @@ test("doctor and status expose invalid recall config as effective off without in
     bind(project, {
       version: 1,
       spaceId: "space-invalid-recall",
-      implicitRecall: { mode: "surprise" }
+      implicitRecall: { mode: "surprise" },
     });
     addSpace(client, "space-invalid-recall");
 
     const doctor = await cli(["doctor", "--cwd", project, "--json"], {
       cwd: project,
-      client
+      client,
     });
     assert.equal(doctor.code, 1);
-    const checks = (JSON.parse(doctor.stdout) as {
-      checks: Array<{ id: string; status: string; message: string }>;
-    }).checks;
+    const checks = (
+      JSON.parse(doctor.stdout) as {
+        checks: Array<{ id: string; status: string; message: string }>;
+      }
+    ).checks;
     const recall = checks.find((item) => item.id === "implicit-recall");
     assert.equal(recall?.status, "error");
     assert.match(recall?.message ?? "", /effective mode is off/u);
 
     const status = await cli(["status", "--cwd", project, "--json"], {
       cwd: project,
-      client
+      client,
     });
     assert.equal(status.code, 1);
     const report = JSON.parse(status.stdout) as {
@@ -1283,10 +1395,13 @@ test("doctor and status expose invalid recall config as effective off without in
       implicitRecall: { effectiveMode: string; source: string; error: string };
     };
     assert.equal(report.space.id, "space-invalid-recall");
-    assert.deepEqual({
-      effectiveMode: report.implicitRecall.effectiveMode,
-      source: report.implicitRecall.source
-    }, { effectiveMode: "off", source: "invalid" });
+    assert.deepEqual(
+      {
+        effectiveMode: report.implicitRecall.effectiveMode,
+        source: report.implicitRecall.source,
+      },
+      { effectiveMode: "off", source: "invalid" }
+    );
     assert.doesNotMatch(status.stdout, /token|authorization|api[_-]?key/iu);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1297,7 +1412,7 @@ function evalReport(status: "pass" | "fail"): CrossSessionEvalReport {
   return {
     checks: [{ id: "matrix.codex.codex", label: "Codex → Codex", status }],
     overall: status,
-    claudeRealMcp: "waived"
+    claudeRealMcp: "waived",
   };
 }
 
@@ -1313,10 +1428,13 @@ function qualityEvalReport(status: "pass" | "fail"): MemoryQualityReport {
         abstainedQueries: 0,
         falsePositiveRate: 0,
         abstentionRate: 1,
-        queries: []
+        queries: [],
       },
       corePollution: {
-        numerator: 0, denominator: 1, value: 0, pollutedKeys: []
+        numerator: 0,
+        denominator: 1,
+        value: 0,
+        pollutedKeys: [],
       },
       bootstrap: {
         criticalCoverage: { numerator: 1, denominator: 1, value: 1 },
@@ -1325,21 +1443,28 @@ function qualityEvalReport(status: "pass" | "fail"): MemoryQualityReport {
         coreItemCount: 1,
         handoffFactCount: 1,
         chars: 100,
-        bytes: 100
+        bytes: 100,
       },
       handoff: {
-        numerator: 1, denominator: 1, value: 1, missingFacts: [], unexpectedFacts: []
+        numerator: 1,
+        denominator: 1,
+        value: 1,
+        missingFacts: [],
+        unexpectedFacts: [],
       },
       staleMemory: { numerator: 0, denominator: 1, value: 0, staleKeys: [] },
       duplicateMemory: {
-        numerator: 0, denominator: 1, value: 0, groups: []
+        numerator: 0,
+        denominator: 1,
+        value: 0,
+        groups: [],
       },
       contradiction: { numerator: 1, denominator: 1, value: 1, checks: [] },
-      longHorizonSessions: 20
+      longHorizonSessions: 20,
     },
     correctness: { overall: status, checks: [] },
     scenarios: [],
-    failures: []
+    failures: [],
   };
 }
 
@@ -1356,10 +1481,10 @@ function p7EvalReport(status: "pass" | "fail"): P7ImplicitRecallReport {
       metadataLeakageRate: 0,
       optOutComplianceRate: 1,
       budgetComplianceRate: 1,
-      crossProviderMatrix: { passed: 4, total: 4 }
+      crossProviderMatrix: { passed: 4, total: 4 },
     },
     scenarios: [],
-    hardCorrectness: status
+    hardCorrectness: status,
   };
 }
 
@@ -1373,8 +1498,8 @@ test("eval CLI uses the injected canonical runner and maps overall status to exi
         evalRunner: async () => {
           calls += 1;
           return evalReport("pass");
-        }
-      }
+        },
+      },
     });
     assert.equal(success.code, 0);
     assert.equal(calls, 1);
@@ -1383,7 +1508,7 @@ test("eval CLI uses the injected canonical runner and maps overall status to exi
 
     const failure = await cli(["eval", "cross-session", "--json"], {
       cwd: project,
-      dependencies: { evalRunner: async () => evalReport("fail") }
+      dependencies: { evalRunner: async () => evalReport("fail") },
     });
     assert.equal(failure.code, 1);
     assert.match(failure.stdout, /"overall": "fail"/u);
@@ -1405,8 +1530,8 @@ test("implicit recall eval CLI is daemon-independent and supports human/JSON out
         },
         clientFactory: () => {
           throw new Error("P7 eval must not construct a daemon client");
-        }
-      }
+        },
+      },
     });
     assert.equal(human.code, 0, human.stderr);
     assert.equal(calls, 1);
@@ -1416,13 +1541,10 @@ test("implicit recall eval CLI is daemon-independent and supports human/JSON out
 
     const json = await cli(["eval", "implicit-recall", "--json"], {
       cwd: project,
-      dependencies: { p7ImplicitRecallEvalRunner: async () => p7EvalReport("fail") }
+      dependencies: { p7ImplicitRecallEvalRunner: async () => p7EvalReport("fail") },
     });
     assert.equal(json.code, 1);
-    assert.equal(
-      (JSON.parse(json.stdout) as { hardCorrectness: string }).hardCorrectness,
-      "fail"
-    );
+    assert.equal((JSON.parse(json.stdout) as { hardCorrectness: string }).hardCorrectness, "fail");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1441,8 +1563,8 @@ test("quality eval CLI is daemon-independent and separates metrics from correctn
         },
         clientFactory: () => {
           throw new Error("quality eval must not construct a daemon client");
-        }
-      }
+        },
+      },
     });
     assert.equal(success.code, 0, success.stderr);
     assert.equal(calls, 1);
@@ -1451,14 +1573,14 @@ test("quality eval CLI is daemon-independent and separates metrics from correctn
 
     const json = await cli(["eval", "quality", "--json"], {
       cwd: project,
-      dependencies: { qualityEvalRunner: async () => qualityEvalReport("pass") }
+      dependencies: { qualityEvalRunner: async () => qualityEvalReport("pass") },
     });
     assert.equal(json.code, 0, json.stderr);
     assert.equal((JSON.parse(json.stdout) as { version: number }).version, 1);
 
     const correctnessFailure = await cli(["eval", "quality"], {
       cwd: project,
-      dependencies: { qualityEvalRunner: async () => qualityEvalReport("fail") }
+      dependencies: { qualityEvalRunner: async () => qualityEvalReport("fail") },
     });
     assert.equal(correctnessFailure.code, 1);
   } finally {
@@ -1480,8 +1602,8 @@ test("quality eval CLI exposes deterministic Stage A comparison in human and JSO
         },
         clientFactory: () => {
           throw new Error("quality comparison must not construct a daemon client");
-        }
-      }
+        },
+      },
     });
     assert.equal(human.code, 0, human.stderr);
     assert.equal(calls, 1);
@@ -1490,7 +1612,7 @@ test("quality eval CLI exposes deterministic Stage A comparison in human and JSO
 
     const json = await cli(["eval", "quality", "--json", "--compare-stage-a"], {
       cwd: project,
-      dependencies: { qualityComparisonRunner: async () => report }
+      dependencies: { qualityComparisonRunner: async () => report },
     });
     assert.equal(json.code, 0, json.stderr);
     assert.equal(
@@ -1499,7 +1621,7 @@ test("quality eval CLI exposes deterministic Stage A comparison in human and JSO
     );
 
     const invalid = await cli(["eval", "cross-session", "--compare-stage-a"], {
-      cwd: project
+      cwd: project,
     });
     assert.equal(invalid.code, 2);
     assert.match(invalid.stderr, /Unknown option/u);
@@ -1522,8 +1644,8 @@ test("quality eval CLI exposes a distinct B2 extraction comparison", async () =>
         },
         clientFactory: () => {
           throw new Error("extraction comparison must not construct a daemon client");
-        }
-      }
+        },
+      },
     });
     assert.equal(human.code, 0, human.stderr);
     assert.equal(calls, 1);
@@ -1531,11 +1653,9 @@ test("quality eval CLI exposes a distinct B2 extraction comparison", async () =>
     assert.doesNotMatch(human.stdout, /Retrieval comparison/u);
     assert.match(human.stdout, /Overall PASS/u);
 
-    const json = await cli([
-      "eval", "quality", "--compare-stage-a-extraction", "--json"
-    ], {
+    const json = await cli(["eval", "quality", "--compare-stage-a-extraction", "--json"], {
       cwd: project,
-      dependencies: { qualityExtractionComparisonRunner: async () => report }
+      dependencies: { qualityExtractionComparisonRunner: async () => report },
     });
     assert.equal(json.code, 0, json.stderr);
     const parsed = JSON.parse(json.stdout) as {
@@ -1545,9 +1665,10 @@ test("quality eval CLI exposes a distinct B2 extraction comparison", async () =>
     assert.equal(parsed.contract.status, "pass");
     assert.equal(parsed.acceptance.overall, "pass");
 
-    const ambiguous = await cli([
-      "eval", "quality", "--compare-stage-a", "--compare-stage-a-extraction"
-    ], { cwd: project });
+    const ambiguous = await cli(
+      ["eval", "quality", "--compare-stage-a", "--compare-stage-a-extraction"],
+      { cwd: project }
+    );
     assert.equal(ambiguous.code, 2);
     assert.match(ambiguous.stderr, /only one Stage A comparison mode/u);
   } finally {
@@ -1569,8 +1690,8 @@ test("quality eval CLI exposes a distinct B3 Core/Handoff comparison", async () 
         },
         clientFactory: () => {
           throw new Error("Core/Handoff comparison must not construct a daemon client");
-        }
-      }
+        },
+      },
     });
     assert.equal(human.code, 0, human.stderr);
     assert.equal(calls, 1);
@@ -1578,19 +1699,18 @@ test("quality eval CLI exposes a distinct B3 Core/Handoff comparison", async () 
     assert.doesNotMatch(human.stdout, /Retrieval comparison|Extraction comparison/u);
     assert.match(human.stdout, /Overall PASS/u);
 
-    const json = await cli([
-      "eval", "quality", "--compare-stage-b2-core-handoff", "--json"
-    ], {
+    const json = await cli(["eval", "quality", "--compare-stage-b2-core-handoff", "--json"], {
       cwd: project,
-      dependencies: { qualityCoreHandoffComparisonRunner: async () => report }
+      dependencies: { qualityCoreHandoffComparisonRunner: async () => report },
     });
     assert.equal(json.code, 0, json.stderr);
     const parsed = JSON.parse(json.stdout) as { acceptance: { overall: string } };
     assert.equal(parsed.acceptance.overall, "pass");
 
-    const ambiguous = await cli([
-      "eval", "quality", "--compare-stage-a", "--compare-stage-b2-core-handoff"
-    ], { cwd: project });
+    const ambiguous = await cli(
+      ["eval", "quality", "--compare-stage-a", "--compare-stage-b2-core-handoff"],
+      { cwd: project }
+    );
     assert.equal(ambiguous.code, 2);
     assert.match(ambiguous.stderr, /only one Stage A comparison mode/u);
   } finally {
@@ -1601,8 +1721,7 @@ test("quality eval CLI exposes a distinct B3 Core/Handoff comparison", async () 
 test("LocalMemorySpaceClient enforces loopback and never retries failed Space writes", async () => {
   assert.throws(
     () => new LocalMemorySpaceClient({ endpoint: "https://memory.example.test" }),
-    (error: unknown) => error instanceof CliError
-      && error.code === "DAEMON_ENDPOINT_INVALID"
+    (error: unknown) => error instanceof CliError && error.code === "DAEMON_ENDPOINT_INVALID"
   );
   let calls = 0;
   const client = new LocalMemorySpaceClient({
@@ -1611,10 +1730,13 @@ test("LocalMemorySpaceClient enforces loopback and never retries failed Space wr
       assert.equal(init?.method, "POST");
       assert.equal(init?.redirect, "error");
       assert.deepEqual(init?.headers, { "content-type": "application/json" });
-      return new Response(JSON.stringify({
-        error: { code: "INTERNAL_ERROR", message: "Internal server error" }
-      }), { status: 500, headers: { "content-type": "application/json" } });
-    }) as typeof fetch
+      return new Response(
+        JSON.stringify({
+          error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+        }),
+        { status: 500, headers: { "content-type": "application/json" } }
+      );
+    }) as typeof fetch,
   });
   await assert.rejects(() => client.createSpace({ name: "No retry" }), CliError);
   assert.equal(calls, 1);
@@ -1642,7 +1764,7 @@ test("real CLI client uses one loopback daemon owner for init, doctor, and statu
     memorySpaceFactory(options) {
       factoryCalls += 1;
       return createDefaultMemorySpace(options);
-    }
+    },
   });
   try {
     const address = await daemon.listen();
@@ -1655,13 +1777,17 @@ test("real CLI client uses one loopback daemon owner for init, doctor, and statu
         home: join(directory, "home"),
         env: { MEMORY_SPACE_URL: endpoint },
         stdout: (line) => stdout.push(line),
-        stderr: (line) => stderr.push(line)
+        stderr: (line) => stderr.push(line),
       });
       return { code, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
     };
 
     const initialized = await execute([
-      "init", "--space-id", "real-cli-space", "--name", "Real CLI Space"
+      "init",
+      "--space-id",
+      "real-cli-space",
+      "--name",
+      "Real CLI Space",
     ]);
     assert.equal(initialized.code, 0, initialized.stderr);
     assert.equal((await daemon.memorySpace.getSpace("real-cli-space")).name, "Real CLI Space");

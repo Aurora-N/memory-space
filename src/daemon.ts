@@ -1,36 +1,35 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { createMcpHandler, type McpHttpHandler } from "@modelcontextprotocol/server";
 import {
   localhostHostValidation,
   localhostOriginValidation,
-  toNodeHandler
+  toNodeHandler,
 } from "@modelcontextprotocol/node";
-import type { MemorySpace } from "./application/memory-space.ts";
-import { ClaudeCodeLifecycleIntegration } from "./adapters/providers/claude-code/integration.ts";
+import { createMcpHandler, type McpHttpHandler } from "@modelcontextprotocol/server";
 import type { ClaudeCodeLifecycleRuntimeContext } from "./adapters/providers/claude-code/integration.ts";
-import { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
+import { ClaudeCodeLifecycleIntegration } from "./adapters/providers/claude-code/integration.ts";
 import type { CodexLifecycleRuntimeContext } from "./adapters/providers/codex/integration.ts";
+import { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
+import type { MemorySpace } from "./application/memory-space.ts";
 import { SpaceResolver } from "./binding/space-resolver.ts";
 import {
+  createDefaultMemoryExtractor,
   createDefaultMemorySpace,
-  type DefaultMemorySpaceOptions
+  type DefaultMemorySpaceOptions,
 } from "./composition.ts";
 import { MemorySpaceError, ValidationError } from "./domain/errors.ts";
-import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { createInspectorRequestHandler } from "./http/inspector.ts";
 import { createInspectorStaticHandler } from "./http/inspector-static.ts";
+import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
-import {
-  LifecycleHandler,
-  type LifecycleDiagnostic
-} from "./integration/lifecycle-handler.ts";
 import { ImplicitRecallService } from "./integration/implicit-recall.ts";
+import { type LifecycleDiagnostic, LifecycleHandler } from "./integration/lifecycle-handler.ts";
+import { ProjectExtractionRuleExtractor } from "./integration/project-extraction-rule-extractor.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
+import type { MCPRuntimeContext } from "./mcp/request-context.ts";
 import { createMemoryMcpServerForGateway } from "./mcp/server.ts";
 import { MemoryMcpGateway } from "./mcp/tools.ts";
-import type { MCPRuntimeContext } from "./mcp/request-context.ts";
 
 /** Runtime configuration for the loopback-only daemon composition root. */
 export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
@@ -81,15 +80,13 @@ function internalError(response: ServerResponse, error: unknown): void {
   sendJson(response, known ? error.status : 500, {
     error: {
       code: known ? error.code : "INTERNAL_ERROR",
-      message: known ? error.message : "Internal server error"
-    }
+      message: known ? error.message : "Internal server error",
+    },
   });
 }
 
 /** Composes HTTP, MCP, lifecycle integrations, and Inspector around one MemorySpace. */
-export function createMemorySpaceDaemon(
-  options: MemorySpaceDaemonOptions = {}
-): MemorySpaceDaemon {
+export function createMemorySpaceDaemon(options: MemorySpaceDaemonOptions = {}): MemorySpaceDaemon {
   const host = options.host ?? process.env.MEMORY_SPACE_HOST ?? "127.0.0.1";
   if (!isLoopbackHost(host)) {
     throw new ValidationError(
@@ -97,14 +94,27 @@ export function createMemorySpaceDaemon(
     );
   }
   const port = options.port ?? Number(process.env.MEMORY_SPACE_PORT ?? 4310);
+  const runtimeCwd = options.mcpRuntime?.cwd ?? process.env.MEMORY_SPACE_CWD ?? process.cwd();
+  const runtime: MCPRuntimeContext = {
+    cwd: runtimeCwd,
+    explicitSpaceId: options.mcpRuntime?.explicitSpaceId ?? process.env.MEMORY_SPACE_SPACE_ID,
+  };
+  const spaceResolver = new SpaceResolver();
   const memorySpaceOptions: DefaultMemorySpaceOptions = {
     databasePath: options.databasePath ?? process.env.MEMORY_SPACE_DB ?? "./data/memory-space.db",
-    extractor: options.extractor,
+    extractor:
+      options.extractor ??
+      createDefaultMemoryExtractor([
+        new ProjectExtractionRuleExtractor({
+          cwd: runtimeCwd,
+          explicitSpaceId: runtime.explicitSpaceId,
+          spaceResolver,
+        }),
+      ]),
     cache: options.cache,
-    coreLimit: options.coreLimit ?? Number(process.env.MEMORY_SPACE_CORE_LIMIT ?? 64)
+    coreLimit: options.coreLimit ?? Number(process.env.MEMORY_SPACE_CORE_LIMIT ?? 64),
   };
   const memorySpace = (options.memorySpaceFactory ?? createDefaultMemorySpace)(memorySpaceOptions);
-  const spaceResolver = new SpaceResolver();
   const checkpointPolicy = new CheckpointPolicy(memorySpace);
   const lifecycleHandler = new LifecycleHandler({
     memorySpace,
@@ -112,67 +122,63 @@ export function createMemorySpaceDaemon(
     sessionResolver: new ProviderSessionResolver(memorySpace),
     checkpointPolicy,
     implicitRecall: new ImplicitRecallService(memorySpace),
-    onWarning: options.onLifecycleDiagnostic ?? logLifecycleDiagnostic
+    onWarning: options.onLifecycleDiagnostic ?? logLifecycleDiagnostic,
   });
-  const runtime: MCPRuntimeContext = {
-    cwd: options.mcpRuntime?.cwd ?? process.env.MEMORY_SPACE_CWD ?? process.cwd(),
-    explicitSpaceId: options.mcpRuntime?.explicitSpaceId ?? process.env.MEMORY_SPACE_SPACE_ID
-  };
   const codexRuntime: CodexLifecycleRuntimeContext = {
     cwd: options.codexRuntime?.cwd ?? runtime.cwd,
-    explicitSpaceId: options.codexRuntime?.explicitSpaceId ?? runtime.explicitSpaceId
+    explicitSpaceId: options.codexRuntime?.explicitSpaceId ?? runtime.explicitSpaceId,
   };
   const codexIntegration = new CodexLifecycleIntegration({
     lifecycleHandler,
-    runtime: codexRuntime
+    runtime: codexRuntime,
   });
   const claudeCodeRuntime: ClaudeCodeLifecycleRuntimeContext = {
     cwd: options.claudeCodeRuntime?.cwd ?? runtime.cwd,
-    explicitSpaceId: options.claudeCodeRuntime?.explicitSpaceId ?? runtime.explicitSpaceId
+    explicitSpaceId: options.claudeCodeRuntime?.explicitSpaceId ?? runtime.explicitSpaceId,
   };
   const claudeCodeIntegration = new ClaudeCodeLifecycleIntegration({
     lifecycleHandler,
-    runtime: claudeCodeRuntime
+    runtime: claudeCodeRuntime,
   });
   const mcpGateway = new MemoryMcpGateway({
     memorySpace,
     spaceResolver,
     checkpointPolicy,
-    ...runtime
+    ...runtime,
   });
-  const mcpHttpHandler = createMcpHandler(
-    () => createMemoryMcpServerForGateway(mcpGateway),
-    {
-      legacy: "stateless",
-      onerror: options.onMcpError ?? ((error) => console.error(error))
-    }
-  );
+  const mcpHttpHandler = createMcpHandler(() => createMemoryMcpServerForGateway(mcpGateway), {
+    legacy: "stateless",
+    onerror: options.onMcpError ?? ((error) => console.error(error)),
+  });
   const mcpNodeHandler = toNodeHandler(mcpHttpHandler, {
-    onerror: options.onMcpError ?? ((error) => console.error(error))
+    onerror: options.onMcpError ?? ((error) => console.error(error)),
   });
   const httpHandler = createRequestHandler(memorySpace);
   const inspectorHandler = createInspectorRequestHandler({
     memorySpace,
     spaceResolver,
-    runtime
+    runtime,
   });
-  const inspectorDirectory = options.inspectorDirectory
-    ?? fileURLToPath(new URL("../apps/inspector/dist", import.meta.url));
+  const inspectorDirectory =
+    options.inspectorDirectory ?? fileURLToPath(new URL("../apps/inspector/dist", import.meta.url));
   const inspectorStaticHandler = createInspectorStaticHandler(inspectorDirectory);
   const validateLocalHost = localhostHostValidation();
   const validateLocalOrigin = localhostOriginValidation();
   const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const url = new URL(request.url ?? "/", "http://memory-space.local");
     const healthRequest = request.method === "GET" && url.pathname === "/health";
-    if (!healthRequest
-      && (!validateLocalHost(request, response) || !validateLocalOrigin(request, response))) return;
+    if (
+      !healthRequest &&
+      (!validateLocalHost(request, response) || !validateLocalOrigin(request, response))
+    )
+      return;
     if (url.pathname === "/mcp") {
       await mcpNodeHandler(request, response);
       return;
     }
     if (request.method === "GET" && url.pathname === "/daemon/identity") {
       sendJson(response, 200, {
-        cwd: runtime.cwd
+        cwd: runtime.cwd,
       });
       return;
     }
@@ -180,8 +186,7 @@ export function createMemorySpaceDaemon(
       sendJson(response, 200, await codexIntegration.handleNative(await readJsonBody(request)));
       return;
     }
-    if (request.method === "POST"
-      && url.pathname === "/providers/claude-code/lifecycle") {
+    if (request.method === "POST" && url.pathname === "/providers/claude-code/lifecycle") {
       sendJson(
         response,
         200,
@@ -221,7 +226,7 @@ export function createMemorySpaceDaemon(
       if (server.listening) {
         try {
           await new Promise<void>((resolve, reject) => {
-            server.close((error) => error ? reject(error) : resolve());
+            server.close((error) => (error ? reject(error) : resolve()));
           });
         } catch (error) {
           firstError ??= error;
@@ -246,7 +251,7 @@ export function createMemorySpaceDaemon(
     mcpGateway,
     mcpHttpHandler,
     listen,
-    close
+    close,
   };
 }
 
@@ -258,25 +263,35 @@ export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpace
     process.off("SIGTERM", shutdown);
   };
   const shutdown = (): void => {
-    void daemon.close().then(detachSignals).catch((error: unknown) => {
-      console.error(error);
-      process.exitCode = 1;
-      detachSignals();
-    });
+    void daemon
+      .close()
+      .then(detachSignals)
+      .catch((error: unknown) => {
+        console.error(error);
+        process.exitCode = 1;
+        detachSignals();
+      });
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
-  void daemon.listen().then((address) => {
-    console.log(`memory-space listening on http://${address.address}:${address.port}`);
-    console.log(`memory-space MCP endpoint: http://${address.address}:${address.port}/mcp`);
-    console.log(`memory-space Codex lifecycle endpoint: http://${address.address}:${address.port}/providers/codex/lifecycle`);
-    console.log(`memory-space Claude Code lifecycle endpoint: http://${address.address}:${address.port}/providers/claude-code/lifecycle`);
-    console.log(`memory-space Inspector: http://${address.address}:${address.port}/inspector/`);
-  }).catch(async (error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
-    await daemon.close().catch((closeError: unknown) => console.error(closeError));
-    detachSignals();
-  });
+  void daemon
+    .listen()
+    .then((address) => {
+      console.log(`memory-space listening on http://${address.address}:${address.port}`);
+      console.log(`memory-space MCP endpoint: http://${address.address}:${address.port}/mcp`);
+      console.log(
+        `memory-space Codex lifecycle endpoint: http://${address.address}:${address.port}/providers/codex/lifecycle`
+      );
+      console.log(
+        `memory-space Claude Code lifecycle endpoint: http://${address.address}:${address.port}/providers/claude-code/lifecycle`
+      );
+      console.log(`memory-space Inspector: http://${address.address}:${address.port}/inspector/`);
+    })
+    .catch(async (error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+      await daemon.close().catch((closeError: unknown) => console.error(closeError));
+      detachSignals();
+    });
   return daemon;
 }

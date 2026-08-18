@@ -162,6 +162,12 @@ mode defaults to `exact`, while `lexical` enables full-prompt lexical recall and
 `off` disables automatic Indexed disclosure. Core is excluded. Binding/config
 or recall failures remain fail-open for the Claude prompt.
 
+Optional project-specific automatic extraction rules are shared across
+providers through `.memory-space/extraction-rules.json`. They are evaluated at
+checkpoint time and do not change Claude hook or MCP configuration. See
+[Project Extraction Rules](./EXTRACTION_RULES.md) and validate them with
+`memory-space doctor`.
+
 ## 4. Automated and real validation
 
 The normal project check includes native adapter regressions, daemon routing,

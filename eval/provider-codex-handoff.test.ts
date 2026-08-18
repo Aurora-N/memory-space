@@ -75,7 +75,7 @@ test("eval Codex native lifecycle completes durable bootstrap, capture, checkpoi
     const priorEvent = await first.appendEvent({
       sessionId: prior.id,
       type: "message",
-      payload: { role: "user", content: "数据库确定使用 SQLite；下一步完成 Codex hooks。" }
+      payload: { role: "user", content: "Decision: SQLite remains the local default." }
     });
     await first.checkpoint({
       sessionId: prior.id,

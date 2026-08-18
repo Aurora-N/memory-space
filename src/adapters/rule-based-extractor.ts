@@ -1,5 +1,7 @@
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
+import { builtInExtractionRules, DeclarativeRuleExtractor } from "./declarative-rule-extractor.ts";
+import { isTransientExtractionEvidence } from "./extraction-policy.ts";
 
 interface TypeDefinition {
   type: string;
@@ -15,75 +17,106 @@ interface MatchedDefinition {
 }
 
 const definitions: TypeDefinition[] = [
-  { type: "goal", family: "state", pattern: /^(?:goal|目标)\s*[:：]\s*(.+)$/iu, key: "project.goal.primary", core: true },
-  { type: "roadmap", family: "state", pattern: /^(?:roadmap|路线图|计划)\s*[:：]\s*(.+)$/iu, key: "project.roadmap.current", core: true },
-  { type: "progress", family: "state", pattern: /^(?:progress|进度|已完成)\s*[:：]\s*(.+)$/iu, key: "project.progress.current", core: true },
-  { type: "task", family: "state", pattern: /^(?:task|todo|任务|下一步)\s*[:：]\s*(.+)$/iu, core: true },
-  { type: "decision", family: "knowledge", pattern: /^(?:decision|决定)\s*[:：]\s*(.+)$/iu, core: true },
-  { type: "constraint", family: "knowledge", pattern: /^(?:constraint|约束)\s*[:：]\s*(.+)$/iu, core: true },
-  { type: "convention", family: "knowledge", pattern: /^(?:convention|约定)\s*[:：]\s*(.+)$/iu, core: true },
+  {
+    type: "goal",
+    family: "state",
+    pattern: /^(?:goal|目标)\s*[:：]\s*(.+)$/iu,
+    key: "project.goal.primary",
+    core: true,
+  },
+  {
+    type: "roadmap",
+    family: "state",
+    pattern: /^(?:roadmap|路线图|计划)\s*[:：]\s*(.+)$/iu,
+    key: "project.roadmap.current",
+    core: true,
+  },
+  {
+    type: "progress",
+    family: "state",
+    pattern: /^(?:progress|进度|已完成)\s*[:：]\s*(.+)$/iu,
+    key: "project.progress.current",
+    core: true,
+  },
+  {
+    type: "task",
+    family: "state",
+    pattern: /^(?:task|todo|任务|下一步)\s*[:：]\s*(.+)$/iu,
+    core: true,
+  },
+  {
+    type: "decision",
+    family: "knowledge",
+    pattern: /^(?:decision|决定)\s*[:：]\s*(.+)$/iu,
+    core: true,
+  },
+  {
+    type: "constraint",
+    family: "knowledge",
+    pattern: /^(?:constraint|约束)\s*[:：]\s*(.+)$/iu,
+    core: true,
+  },
+  {
+    type: "convention",
+    family: "knowledge",
+    pattern: /^(?:convention|约定)\s*[:：]\s*(.+)$/iu,
+    core: true,
+  },
   { type: "blocker", family: "state", pattern: /^(?:blocker|阻塞)\s*[:：]\s*(.+)$/iu, core: true },
-  { type: "question", family: "state", pattern: /^(?:question|待确认|问题)\s*[:：]\s*(.+)$/iu, core: true },
-  { type: "fact", family: "knowledge", pattern: /^(?:fact|事实)\s*[:：]\s*(.+)$/iu, core: false }
+  {
+    type: "question",
+    family: "state",
+    pattern: /^(?:question|待确认|问题)\s*[:：]\s*(.+)$/iu,
+    core: true,
+  },
+  { type: "fact", family: "knowledge", pattern: /^(?:fact|事实)\s*[:：]\s*(.+)$/iu, core: false },
 ];
-
-const currentExecutionNarrationPatterns = [
-  /^(?:i(?:'m| am)|we(?:'re| are))\s+(?:now\s+|currently\s+|just\s+)?(?:checking|inspecting|reading|running|executing|opening|building|testing|analy[sz]ing|replying|responding|writing|editing|modifying)\b/iu,
-  /^(?:i|we)\s+(?:will\s+)?(?:now|first|next|just)\s+(?:check|inspect|read|run|execute|open|build|test|analy[sz]e|reply|respond|output|write|edit|modify|handle|fix)\b/iu,
-  /^(?:i|we)\s+(?:have\s+)?just\s+(?:checked|inspected|read|ran|executed|opened|built|tested|analy[sz]ed|replied|responded|wrote|edited|modified|handled|fixed)\b/iu,
-  /^(?:next|now|first),?\s+(?:i|we)\s+(?:will\s+)?(?:check|inspect|read|run|execute|open|build|test|analy[sz]e|reply|respond|output|write|edit|modify|handle|fix)\b/iu,
-  /^(?:我|我们)(?:(?:现在|先|接下来|稍后|刚刚|刚才|刚|正在|等一下)){1,3}(?:会|将|要|再|正)?(?:检查|查看|读取|运行|执行|打开|构建|测试|分析|回复|输出|修改|处理|修复)/u,
-  /^接下来我(?:会|将|要)(?:检查|查看|读取|运行|执行|打开|构建|测试|分析|回复|输出|修改|处理|修复)/u,
-  /^(?:正在|刚刚|刚才|稍后)(?:检查|查看|读取|运行|执行|打开|构建|测试|分析|回复|输出|修改|处理|修复)/u
-] as const;
-
-const recentOperationFailurePatterns = [
-  /^(?:the\s+)?(?:command|tool(?:\s+call)?|test|build)\s+(?:has\s+)?just\s+(?:failed|errored)(?:\s+(?:because|due\s+to)\b.*)?[.!]?$/iu,
-  /^(?:刚才|刚刚)(?:的)?(?:命令|工具调用|测试|构建).*(?:失败|报错|出错)[。！？]?$/u
-] as const;
-
-const operationLocalCompletionPatterns = [
-  /^(?:the\s+)?(?:command|tool\s+call|test)\s+(?:has\s+been\s+)?(?:completed|finished)[.!]?$/iu,
-  /^(?:命令|工具调用|测试)(?:已经|已)(?:完成|结束)[。！？]?$/u
-] as const;
-
-const currentInteractionScope = /(?:\b(?:this|the\s+current)\s+(?:command|tool\s+call|test|turn|response)\b|(?:本次|这次|当前|这一轮|这轮)(?:命令|工具调用|测试|对话|回复|响应))/iu;
 
 const durableEnglishSubjectClasses = [
   /^(?:all\s+)?(?:public\s+)?apis?\b/iu,
   /^(?:the\s+)?(?:project|team|service|system|database)\b/iu,
   /\b(?:credentials|tokens?|configuration|components?)\b/iu,
-  /\b(?:release|rollout|migration|deployment|pipeline)\b/iu
+  /\b(?:release|rollout|migration|deployment|pipeline)\b/iu,
 ] as const;
 
 const durableChineseSubjectClasses = [
   /^(?:项目|团队|服务|系统|数据库)/u,
   /(?:API|接口|凭证|令牌|配置|组件)/iu,
-  /(?:发布|上线|迁移|部署|里程碑|构建流程|流水线)/u
+  /(?:发布|上线|迁移|部署|里程碑|构建流程|流水线)/u,
 ] as const;
 
 const durableProjectBoundaryShapes = [
   /^(?:(?:项目|团队|服务|系统|数据库|生产|正式|版本)(?:的)?)?(?:发布|上线|部署|迁移)(?:阶段|窗口|节点|里程碑)?$/u,
-  /^(?:项目|团队|服务|系统)(?:的)?(?:阶段|里程碑|交付节点)$/u
+  /^(?:项目|团队|服务|系统)(?:的)?(?:阶段|里程碑|交付节点)$/u,
 ] as const;
 
 function isInteractionLocalSubject(subject: string): boolean {
   const normalized = subject.trim();
-  return /\b(?:i|we|you)\b/iu.test(normalized)
-    || /^(?:(?:this|the|the\s+current)\s+)?(?:command|tool\s+call|test|response|turn|run)$/iu.test(normalized)
-    || /(?:我|我们|你)/u.test(normalized)
-    || /^(?:(?:这次|本次|当前|这一轮|这轮)的?)?(?:命令|工具调用|测试|回复|对话|运行)$/u.test(normalized);
+  return (
+    /\b(?:i|we|you)\b/iu.test(normalized) ||
+    /^(?:(?:this|the|the\s+current)\s+)?(?:command|tool\s+call|test|response|turn|run)$/iu.test(
+      normalized
+    ) ||
+    /(?:我|我们|你)/u.test(normalized) ||
+    /^(?:(?:这次|本次|当前|这一轮|这轮)的?)?(?:命令|工具调用|测试|回复|对话|运行)$/u.test(
+      normalized
+    )
+  );
 }
 
 function hasDurableProjectSubject(subject: string): boolean {
   if (isInteractionLocalSubject(subject)) return false;
-  return durableEnglishSubjectClasses.some((pattern) => pattern.test(subject))
-    || durableChineseSubjectClasses.some((pattern) => pattern.test(subject));
+  return (
+    durableEnglishSubjectClasses.some((pattern) => pattern.test(subject)) ||
+    durableChineseSubjectClasses.some((pattern) => pattern.test(subject))
+  );
 }
 
 function hasDurableProjectScope(scope: string): boolean {
-  return hasDurableProjectSubject(scope)
-    && durableProjectBoundaryShapes.some((pattern) => pattern.test(scope.trim()));
+  return (
+    hasDurableProjectSubject(scope) &&
+    durableProjectBoundaryShapes.some((pattern) => pattern.test(scope.trim()))
+  );
 }
 
 function explicitDefinition(line: string): MatchedDefinition | undefined {
@@ -92,13 +125,6 @@ function explicitDefinition(line: string): MatchedDefinition | undefined {
     if (match) return { definition, content: match[1].trim() };
   }
   return undefined;
-}
-
-function isTransientEvidence(text: string): boolean {
-  return currentInteractionScope.test(text)
-    || currentExecutionNarrationPatterns.some((pattern) => pattern.test(text))
-    || recentOperationFailurePatterns.some((pattern) => pattern.test(text))
-    || operationLocalCompletionPatterns.some((pattern) => pattern.test(text));
 }
 
 function candidateFromDefinition(
@@ -118,13 +144,18 @@ function candidateFromDefinition(
     recommendedTier: definition.core ? "core" : "indexed",
     promoteReason: definition.core ? promoteReason : undefined,
     sourceEventIds: [sourceEventId],
-    operation: definition.key ? "update" : "create"
+    operation: definition.key ? "update" : "create",
   };
 }
 
 function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate | undefined {
-  const naturalDecision = /^(?:we|the (?:project|team))\s+(?:(?:have|had)\s+)?(?:(?:selected|chose)\s+.+\s+(?:for|as)\s+.+|adopted\s+.+|standardized\s+on\s+.+|decided\s+to\s+(?:use|adopt|keep|move\s+to)\s+.+)[.!?]?$/iu.test(line)
-    || /^(?:(?:项目|团队)(?:已经|已)?(?:决定|选择|确定)(?:采用|使用|改用|保留)|我们(?:已经|已)?(?:决定|确定)(?:采用|使用|改用|保留))\s*.+[。！？]?$/u.test(line);
+  const naturalDecision =
+    /^(?:we|the (?:project|team))\s+(?:(?:have|had)\s+)?(?:(?:selected|chose)\s+.+\s+(?:for|as)\s+.+|adopted\s+.+|standardized\s+on\s+.+|decided\s+to\s+(?:use|adopt|keep|move\s+to)\s+.+)[.!?]?$/iu.test(
+      line
+    ) ||
+    /^(?:(?:项目|团队)(?:已经|已)?(?:决定|选择|确定)(?:采用|使用|改用|保留)|我们(?:已经|已)?(?:决定|确定)(?:采用|使用|改用|保留))\s*.+[。！？]?$/u.test(
+      line
+    );
   if (naturalDecision) {
     return candidateFromDefinition(
       { family: "knowledge", type: "decision", core: true },
@@ -134,12 +165,21 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const englishDurableTask = /^(?:(?:the\s+)?project(?:'s)?\s+(?:next\s+(?:phase|milestone)\s+)?(?:must|needs?\s+to|plans?\s+to)|before\s+.+?,?\s+(?:the\s+)?project\s+(?:must|needs?\s+to))\s+(?:complete|implement|deliver|migrate|prepare|finish|ship|add|remove|upgrade|deploy)\b.+$/iu.test(line);
-  const chineseProjectTask = /^(?:项目|团队)(?:的)?(?:下一阶段|下个阶段|下一里程碑)(?:需要|必须|计划)\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u.test(line);
-  const chineseBoundaryTask = line.match(/^(.+?)(?:之前|前)必须\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u);
-  const durableTask = englishDurableTask
-    || chineseProjectTask
-    || Boolean(chineseBoundaryTask && hasDurableProjectScope(chineseBoundaryTask[1]));
+  const englishDurableTask =
+    /^(?:(?:the\s+)?project(?:'s)?\s+(?:next\s+(?:phase|milestone)\s+)?(?:must|needs?\s+to|plans?\s+to)|before\s+.+?,?\s+(?:the\s+)?project\s+(?:must|needs?\s+to))\s+(?:complete|implement|deliver|migrate|prepare|finish|ship|add|remove|upgrade|deploy)\b.+$/iu.test(
+      line
+    );
+  const chineseProjectTask =
+    /^(?:项目|团队)(?:的)?(?:下一阶段|下个阶段|下一里程碑)(?:需要|必须|计划)\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u.test(
+      line
+    );
+  const chineseBoundaryTask = line.match(
+    /^(.+?)(?:之前|前)必须\s*(?:完成|实现|交付|迁移|准备|修复|升级|发布|部署)\s*.+[。！？]?$/u
+  );
+  const durableTask =
+    englishDurableTask ||
+    chineseProjectTask ||
+    Boolean(chineseBoundaryTask && hasDurableProjectScope(chineseBoundaryTask[1]));
   if (durableTask) {
     return candidateFromDefinition(
       { family: "state", type: "task", core: true },
@@ -150,10 +190,14 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
   }
   if (chineseBoundaryTask) return undefined;
 
-  const englishConstraint = line.match(/^(.+?)\s+(?:must(?:\s+not)?|shall(?:\s+not)?|is\s+required\s+to)\s+.+$/iu);
+  const englishConstraint = line.match(
+    /^(.+?)\s+(?:must(?:\s+not)?|shall(?:\s+not)?|is\s+required\s+to)\s+.+$/iu
+  );
   const chineseConstraint = line.match(/^(.+?)(?:必须|不得|只能).+[。！？]?$/u);
-  if ((englishConstraint && hasDurableProjectSubject(englishConstraint[1]))
-    || (chineseConstraint && hasDurableProjectSubject(chineseConstraint[1]))) {
+  if (
+    (englishConstraint && hasDurableProjectSubject(englishConstraint[1])) ||
+    (chineseConstraint && hasDurableProjectSubject(chineseConstraint[1]))
+  ) {
     return candidateFromDefinition(
       { family: "knowledge", type: "constraint", core: true },
       line,
@@ -162,10 +206,16 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     );
   }
 
-  const englishProgress = line.match(/^(.+?)\s+(?:(?:has\s+been\s+)?(?:completed|finished|deployed|shipped)|is\s+(?:now\s+)?complete)[.!]?$/iu);
-  const chineseProgress = line.match(/^(.+?)(?:已经|已)(?:完成|结束|上线|发布|部署|就绪)[。！？]?$/u);
-  if ((englishProgress && hasDurableProjectSubject(englishProgress[1]))
-    || (chineseProgress && hasDurableProjectSubject(chineseProgress[1]))) {
+  const englishProgress = line.match(
+    /^(.+?)\s+(?:(?:has\s+been\s+)?(?:completed|finished|deployed|shipped)|is\s+(?:now\s+)?complete)[.!]?$/iu
+  );
+  const chineseProgress = line.match(
+    /^(.+?)(?:已经|已)(?:完成|结束|上线|发布|部署|就绪)[。！？]?$/u
+  );
+  if (
+    (englishProgress && hasDurableProjectSubject(englishProgress[1])) ||
+    (chineseProgress && hasDurableProjectSubject(chineseProgress[1]))
+  ) {
     return candidateFromDefinition(
       { family: "state", type: "progress", key: "project.progress.current", core: true },
       line,
@@ -175,9 +225,13 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
   }
 
   const englishBlocker = line.match(/^(.+?)\s+(?:is|remains)\s+blocked\s+(?:by|on)\s+.+[.!]?$/iu);
-  const chineseBlocker = line.match(/^(.+?)(?:被.+(?:阻塞|阻断)|因.+(?:无法继续|无法发布|受阻))[。！？]?$/u);
-  if ((englishBlocker && hasDurableProjectSubject(englishBlocker[1]))
-    || (chineseBlocker && hasDurableProjectSubject(chineseBlocker[1]))) {
+  const chineseBlocker = line.match(
+    /^(.+?)(?:被.+(?:阻塞|阻断)|因.+(?:无法继续|无法发布|受阻))[。！？]?$/u
+  );
+  if (
+    (englishBlocker && hasDurableProjectSubject(englishBlocker[1])) ||
+    (chineseBlocker && hasDurableProjectSubject(chineseBlocker[1]))
+  ) {
     return candidateFromDefinition(
       { family: "state", type: "blocker", core: true },
       line,
@@ -204,13 +258,15 @@ function structuredCandidates(event: SessionEvent): MemoryCandidate[] {
       confidence: candidate.confidence ?? 1,
       recommendedTier: candidate.recommendedTier ?? "indexed",
       sourceEventIds: candidate.sourceEventIds ?? [event.id],
-      operation: candidate.operation ?? "create"
+      operation: candidate.operation ?? "create",
     } as MemoryCandidate;
   });
 }
 
 /** Deterministic provider-neutral extractor for supported durable-memory patterns. */
 export class RuleBasedExtractor implements MemoryExtractor {
+  readonly specialCases = new DeclarativeRuleExtractor(builtInExtractionRules);
+
   async extract(events: SessionEvent[], _context: ExtractionContext): Promise<MemoryCandidate[]> {
     const candidates: MemoryCandidate[] = [];
     for (const event of events) {
@@ -218,39 +274,28 @@ export class RuleBasedExtractor implements MemoryExtractor {
       if (event.type !== "message") continue;
       const text = event.payload.text ?? event.payload.content;
       if (typeof text !== "string") continue;
-      for (const line of text.split(/\r?\n/u).map((value) => value.trim()).filter(Boolean)) {
+      for (const line of text
+        .split(/\r?\n/u)
+        .map((value) => value.trim())
+        .filter(Boolean)) {
         const explicit = explicitDefinition(line);
         const evidence = explicit?.content ?? line;
-        if (isTransientEvidence(evidence)) continue;
-
-        const database = line.match(/数据库(?:已)?(?:确定)?使用\s*([A-Za-z][\w.+-]*)/iu);
-        if (database) {
-          candidates.push({
-            family: "knowledge", type: "decision", key: "project.database",
-            content: `数据库使用 ${database[1]}`, confidence: 0.98, importance: 0.9,
-            recommendedTier: "core", promoteReason: "Stable project-wide database decision",
-            sourceEventIds: [event.id], operation: "update"
-          });
-          continue;
-        }
-        const firstTask = line.match(/^先(?:完成|实现)\s*(.+)$/u);
-        if (firstTask) {
-          candidates.push({
-            family: "state", type: "task", key: "project.task.current",
-            content: `完成 ${firstTask[1]}`, confidence: 0.9, importance: 0.8,
-            recommendedTier: "core", promoteReason: "Explicit current next task",
-            sourceEventIds: [event.id], operation: "update"
-          });
+        if (isTransientExtractionEvidence(evidence)) continue;
+        const special = this.specialCases.extractLine(line, event.id);
+        if (special.length > 0) {
+          candidates.push(...special);
           continue;
         }
         if (explicit) {
-          candidates.push(candidateFromDefinition(
-            explicit.definition,
-            explicit.content,
-            event.id,
-            0.9,
-            `Explicit project ${explicit.definition.type}`
-          ));
+          candidates.push(
+            candidateFromDefinition(
+              explicit.definition,
+              explicit.content,
+              event.id,
+              0.9,
+              `Explicit project ${explicit.definition.type}`
+            )
+          );
           continue;
         }
         const natural = naturalCandidate(line, event.id);

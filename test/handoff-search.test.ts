@@ -17,14 +17,14 @@ test("Session B recovers Core + latest handoff and recalls Indexed detail", asyn
   await memorySpace.promote(goal.id, { actor: "agent", reason: "Primary goal" });
   const event = await memorySpace.appendEvent({
     sessionId: sessionA.id, type: "message",
-    payload: { text: "数据库确定使用 PostgreSQL。\n先完成 recall API" }
+    payload: { text: "Decision: Use PostgreSQL for hosted deployments.\n先完成 recall API" }
   });
   await memorySpace.checkpoint({ sessionId: sessionA.id, toEventId: event.id, idempotencyKey: "handoff-1" });
 
   const sessionB = await memorySpace.createSession({ spaceId: space.id, agentId: "agent-b", provider: "other" });
   const boot = await memorySpace.bootstrap(sessionB.spaceId);
   assert.match(boot.context, /Deliver cross-session handoff/);
-  assert.match(boot.context, /数据库使用 PostgreSQL/);
+  assert.match(boot.context, /Use PostgreSQL for hosted deployments/);
   assert.match(boot.context, /完成 recall API/);
   assert.equal(boot.handoffSnapshot?.sessionId, sessionA.id);
   assert.doesNotMatch(boot.context, /src\/modules\/recall\.ts/);

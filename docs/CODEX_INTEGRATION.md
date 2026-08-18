@@ -147,6 +147,12 @@ never searched or re-injected by this path. If the binding is missing, malformed
 or no longer matches the Session's frozen Space, the prompt is still recorded
 and continues without recalled content.
 
+Optional project-specific automatic extraction rules are shared across
+providers through `.memory-space/extraction-rules.json`. They are evaluated at
+checkpoint time and do not change Codex hook or MCP configuration. See
+[Project Extraction Rules](./EXTRACTION_RULES.md) and validate them with
+`memory-space doctor`.
+
 ## 5. Manual smoke test
 
 The real-provider smoke passed on 2026-08-11 with `codex-cli 0.147.0`. The

@@ -350,13 +350,12 @@ test("natural blockers require durable subjects and explicit durable prefixes st
   ]);
 });
 
-test("B2.1 preserves keyed database and explicit current-task compatibility", async () => {
+test("default extraction stays domain-neutral while preserving explicit current-task compatibility", async () => {
   const candidates = await extract([
     "数据库使用 PostgreSQL",
     "先完成迁移回滚演练"
   ].join("\n"));
   assert.deepEqual(candidates.map(({ type, key, content }) => ({ type, key, content })), [
-    { type: "decision", key: "project.database", content: "数据库使用 PostgreSQL" },
     { type: "task", key: "project.task.current", content: "完成 迁移回滚演练" }
   ]);
 });

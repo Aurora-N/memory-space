@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "project.database",
+      "family": "knowledge",
+      "type": "decision",
+      "key": "project.database",
+      "match": {
+        "kind": "prefix",
+        "prefixes": [
+          "数据库已确定使用",
+          "数据库确定使用",
+          "数据库已使用",
+          "数据库使用"
+        ],
+        "value": "identifier",
+        "caseSensitive": false
+      },
+      "contentTemplate": "数据库使用 ${value}",
+      "coreCandidate": true
+    },
+    {
+      "id": "project.frontend.framework",
+      "family": "knowledge",
+      "type": "decision",
+      "key": "project.frontend.framework",
+      "match": {
+        "kind": "prefix",
+        "prefixes": [
+          "前端框架使用",
+          "Frontend framework:"
+        ],
+        "value": "identifier",
+        "caseSensitive": false
+      },
+      "contentTemplate": "前端框架使用 ${value}",
+      "coreCandidate": true
+    },
+    {
+      "id": "project.release.note",
+      "enabled": true,
+      "family": "knowledge",
+      "type": "fact",
+      "match": {
+        "kind": "prefix",
+        "prefixes": [
+          "发布说明：",
+          "Release note:"
+        ],
+        "value": "text"
+      },
+      "contentTemplate": "发布说明：${value}",
+      "coreCandidate": false
+    }
+  ]
+}

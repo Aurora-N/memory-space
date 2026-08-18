@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createDefaultMemorySpace } from "../src/index.ts";
+import { createEvaluationExtractor } from "./support/extraction-rules.ts";
 
 type Scenario =
   | { category: "extraction"; name: string; events: string[]; expected: { key: string; contains: string } }
@@ -14,7 +15,7 @@ const scenarios = JSON.parse(readFileSync(
 
 for (const scenario of scenarios) {
   test(`eval ${scenario.category}: ${scenario.name}`, async () => {
-    const memorySpace = createDefaultMemorySpace();
+    const memorySpace = createDefaultMemorySpace({ extractor: createEvaluationExtractor() });
     const space = await memorySpace.createSpace({ name: scenario.name });
     try {
       if (scenario.category === "extraction") {

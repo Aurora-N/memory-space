@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createDefaultMemorySpace } from "../src/index.ts";
+import { createEvaluationExtractor } from "./support/extraction-rules.ts";
 
 interface Scenario {
   name: string;
@@ -16,7 +17,7 @@ const scenario = JSON.parse(readFileSync(
 )) as Scenario;
 
 test(`eval: ${scenario.name}`, async () => {
-  const memorySpace = createDefaultMemorySpace();
+  const memorySpace = createDefaultMemorySpace({ extractor: createEvaluationExtractor() });
   const space = await memorySpace.createSpace({ id: scenario.space, name: scenario.space });
   const sessionA = await memorySpace.createSession({ spaceId: space.id, agentId: scenario.sessionA.agentId });
   let lastEventId = "";

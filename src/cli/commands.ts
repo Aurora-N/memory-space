@@ -1,38 +1,37 @@
-import { basename, resolve } from "node:path";
 import { stat } from "node:fs/promises";
-import type {
-  CrossSessionEvalReport
-} from "../../eval/support/cross-session-runner.ts";
+import { basename, resolve } from "node:path";
+import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import {
   formatStageB1Comparison,
-  type StageB1ComparisonReport
+  type StageB1ComparisonReport,
 } from "../../eval/quality/comparison.ts";
 import {
-  formatStageB2ExtractionComparison,
-  type StageB2ExtractionComparisonReport
-} from "../../eval/quality/extraction-comparison.ts";
-import {
   formatStageB3CoreHandoffComparison,
-  type StageB3CoreHandoffComparisonReport
+  type StageB3CoreHandoffComparisonReport,
 } from "../../eval/quality/core-handoff-comparison.ts";
+import {
+  formatStageB2ExtractionComparison,
+  type StageB2ExtractionComparisonReport,
+} from "../../eval/quality/extraction-comparison.ts";
 import { formatMemoryQualityReport } from "../../eval/quality/report.ts";
 import type { MemoryQualityReport } from "../../eval/quality/types.ts";
-import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
-import type { Space } from "../domain/types.ts";
+import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
+import {
+  ProjectExtractionRulesInvalidError,
+  readProjectExtractionRules,
+} from "../binding/extraction-rules.ts";
 import type { ImplicitRecallConfiguration } from "../binding/project-config.ts";
-import { configureClaudeCodeProject } from "./claude-code-config.ts";
-import { configureCodexProject } from "./codex-config.ts";
-import { CliError } from "./errors.ts";
+import type { Space } from "../domain/types.ts";
 import {
   readLocalProjectBinding,
   removeLocalProjectBinding,
   resolveOptionalBinding,
-  writeBindingAtomically
+  writeBindingAtomically,
 } from "./binding.ts";
-import {
-  MEMORY_MCP_TOOLS,
-  type LocalMemorySpaceClientPort
-} from "./local-client.ts";
+import { configureClaudeCodeProject } from "./claude-code-config.ts";
+import { configureCodexProject } from "./codex-config.ts";
+import { CliError } from "./errors.ts";
+import { type LocalMemorySpaceClientPort, MEMORY_MCP_TOOLS } from "./local-client.ts";
 import { detectProviderConfigs } from "./provider-config.ts";
 
 export interface CommandContext {
@@ -64,7 +63,7 @@ export async function runConfigureCodex(
     dryRun: options.dryRun,
     installationRoot,
     home: context.home,
-    endpoint: options.endpoint
+    endpoint: options.endpoint,
   });
   const verb = result.dryRun ? "would be" : "was";
   context.write(result.dryRun ? "Codex configuration dry run" : "Codex configuration complete");
@@ -89,12 +88,12 @@ export async function runConfigureClaudeCode(
     dryRun: options.dryRun,
     installationRoot,
     home: context.home,
-    endpoint: options.endpoint
+    endpoint: options.endpoint,
   });
   const verb = result.dryRun ? "would be" : "was";
-  context.write(result.dryRun
-    ? "Claude Code configuration dry run"
-    : "Claude Code configuration complete");
+  context.write(
+    result.dryRun ? "Claude Code configuration dry run" : "Claude Code configuration complete"
+  );
   context.write(`Project: ${result.cwd}`);
   context.write(`Hooks:   ${verb} ${result.hooks.change} (${result.hooks.path})`);
   context.write(`MCP:     ${verb} ${result.mcp.change} (${result.mcp.path})`);
@@ -137,17 +136,14 @@ function required(value: string | undefined, label: string): string | undefined 
   return normalized;
 }
 
-export async function runInit(
-  options: InitOptions,
-  context: CommandContext
-): Promise<void> {
+export async function runInit(options: InitOptions, context: CommandContext): Promise<void> {
   const cwd = resolve(options.cwd ?? context.cwd);
   try {
     if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
   } catch (error) {
     throw new CliError("VALIDATION_ERROR", "Initialization target must be an existing directory.", {
       remediation: "Create the project directory before running memory-space init.",
-      cause: error
+      cause: error,
     });
   }
   const requestedSpaceId = required(options.spaceId, "--space-id");
@@ -173,8 +169,10 @@ export async function runInit(
   }
 
   const inheritedBinding = await resolveOptionalBinding(cwd);
-  if (inheritedBinding
-    && (requestedSpaceId === undefined || requestedSpaceId === inheritedBinding.spaceId)) {
+  if (
+    inheritedBinding &&
+    (requestedSpaceId === undefined || requestedSpaceId === inheritedBinding.spaceId)
+  ) {
     await context.client.health();
     const space = await context.client.getSpace(inheritedBinding.spaceId);
     context.write("Memory Space already initialized (inherited binding)");
@@ -201,8 +199,10 @@ export async function runInit(
   try {
     configPath = await (context.writeBinding ?? writeBindingAtomically)(cwd, space.id);
   } catch (error) {
-    if (error instanceof CliError
-      && (error.code === "BINDING_WRITE_FAILED" || error.code === "BINDING_CONFLICT")) {
+    if (
+      error instanceof CliError &&
+      (error.code === "BINDING_WRITE_FAILED" || error.code === "BINDING_CONFLICT")
+    ) {
       throw new CliError(
         error.code,
         `Space ${space.id} exists, but the project binding could not be written safely.`,
@@ -227,7 +227,7 @@ export async function runInspect(
   const binding = await resolveOptionalBinding(cwd);
   if (!binding) {
     throw new CliError("BINDING_NOT_FOUND", "Inspector target has no effective binding.", {
-      remediation: "Run memory-space init for this project before opening the Inspector."
+      remediation: "Run memory-space init for this project before opening the Inspector.",
     });
   }
   const runtime = await context.client.getInspectorBinding();
@@ -236,7 +236,7 @@ export async function runInspect(
       "DAEMON_REQUEST_FAILED",
       "The running daemon is attached to a different project or Space.",
       {
-        remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project."
+        remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project.",
       }
     );
   }
@@ -262,7 +262,7 @@ export async function runUnbind(
     if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
   } catch (error) {
     throw new CliError("VALIDATION_ERROR", "Unbind target must be an existing directory.", {
-      cause: error
+      cause: error,
     });
   }
   const expectedSpaceId = required(options.spaceId, "--space-id");
@@ -312,7 +312,7 @@ export async function runDoctor(
 ): Promise<number> {
   const cwd = resolve(options.cwd ?? context.cwd);
   const checks: DoctorCheck[] = [
-    check("daemon-endpoint", "ok", `Loopback endpoint accepted: ${context.client.endpoint}`)
+    check("daemon-endpoint", "ok", `Loopback endpoint accepted: ${context.client.endpoint}`),
   ];
 
   let daemonReachable = false;
@@ -322,12 +322,14 @@ export async function runDoctor(
     checks.push(check("daemon", "ok", "Daemon reachable."));
   } catch (error) {
     const value = error instanceof CliError ? error : undefined;
-    checks.push(check(
-      "daemon",
-      "error",
-      "Daemon unavailable.",
-      value?.remediation ?? "Start it with: pnpm start"
-    ));
+    checks.push(
+      check(
+        "daemon",
+        "error",
+        "Daemon unavailable.",
+        value?.remediation ?? "Start it with: pnpm start"
+      )
+    );
   }
 
   let binding: Awaited<ReturnType<typeof resolveOptionalBinding>>;
@@ -335,28 +337,27 @@ export async function runDoctor(
     binding = await resolveOptionalBinding(cwd);
     if (binding) {
       checks.push(check("binding", "ok", `Binding valid for Space ${binding.spaceId}.`));
-      checks.push(check(
-        "binding-source",
-        "ok",
-        `Nearest binding source: ${binding.configPath ?? binding.source}.`
-      ));
+      checks.push(
+        check(
+          "binding-source",
+          "ok",
+          `Nearest binding source: ${binding.configPath ?? binding.source}.`
+        )
+      );
     } else {
-      checks.push(check(
-        "binding",
-        "error",
-        "No project binding found.",
-        "Run memory-space init from the project directory."
-      ));
+      checks.push(
+        check(
+          "binding",
+          "error",
+          "No project binding found.",
+          "Run memory-space init from the project directory."
+        )
+      );
       checks.push(check("binding-source", "error", "Nearest binding source unavailable."));
     }
   } catch (error) {
     const value = error instanceof CliError ? error : undefined;
-    checks.push(check(
-      "binding",
-      "error",
-      "Project binding is malformed.",
-      value?.remediation
-    ));
+    checks.push(check("binding", "error", "Project binding is malformed.", value?.remediation));
     checks.push(check("binding-source", "error", "Nearest binding source unavailable."));
   }
 
@@ -366,40 +367,81 @@ export async function runDoctor(
       checks.push(check("space", "ok", `Bound Space exists: ${space.name} (${space.id}).`));
     } catch (error) {
       const missing = error instanceof CliError && error.code === "SPACE_NOT_FOUND";
-      checks.push(check(
-        "space",
-        "error",
-        missing
-          ? `Bound Space does not exist: ${binding.spaceId}.`
-          : "Bound Space could not be verified because the daemon request failed.",
-        missing
-          ? "Review the binding before creating or selecting a replacement Space."
-          : "Inspect daemon health/logs and retry memory-space doctor."
-      ));
+      checks.push(
+        check(
+          "space",
+          "error",
+          missing
+            ? `Bound Space does not exist: ${binding.spaceId}.`
+            : "Bound Space could not be verified because the daemon request failed.",
+          missing
+            ? "Review the binding before creating or selecting a replacement Space."
+            : "Inspect daemon health/logs and retry memory-space doctor."
+        )
+      );
     }
   } else {
     checks.push(check("space", "error", "Bound Space could not be verified."));
   }
 
   if (binding?.implicitRecall?.source === "invalid") {
-    checks.push(check(
-      "implicit-recall",
-      "error",
-      `${binding.implicitRecall.error}; effective mode is off.`,
-      `Repair implicitRecall.mode in ${binding.configPath ?? ".memory-space/config.json"}.`
-    ));
+    checks.push(
+      check(
+        "implicit-recall",
+        "error",
+        `${binding.implicitRecall.error}; effective mode is off.`,
+        `Repair implicitRecall.mode in ${binding.configPath ?? ".memory-space/config.json"}.`
+      )
+    );
   } else if (binding?.implicitRecall) {
-    checks.push(check(
-      "implicit-recall",
-      "ok",
-      `Effective mode: ${binding.implicitRecall.effectiveMode} (${binding.implicitRecall.source}).`
-    ));
+    checks.push(
+      check(
+        "implicit-recall",
+        "ok",
+        `Effective mode: ${binding.implicitRecall.effectiveMode} (${binding.implicitRecall.source}).`
+      )
+    );
   } else {
-    checks.push(check(
-      "implicit-recall",
-      "error",
-      "No matching project binding can authorize implicit recall; effective mode is off."
-    ));
+    checks.push(
+      check(
+        "implicit-recall",
+        "error",
+        "No matching project binding can authorize implicit recall; effective mode is off."
+      )
+    );
+  }
+
+  if (binding) {
+    try {
+      const rules = await readProjectExtractionRules(binding);
+      checks.push(
+        check(
+          "extraction-rules",
+          "ok",
+          rules.status === "configured"
+            ? `Configured project extraction rules: ${rules.rules.length} enabled.`
+            : "No project extraction rule file; built-in rules remain active."
+        )
+      );
+    } catch (error) {
+      const invalid = error instanceof ProjectExtractionRulesInvalidError ? error : undefined;
+      checks.push(
+        check(
+          "extraction-rules",
+          "error",
+          invalid?.reason ?? "Project extraction rules could not be validated.",
+          `Repair ${invalid?.path ?? ".memory-space/extraction-rules.json"}; configured rules were not applied.`
+        )
+      );
+    }
+  } else {
+    checks.push(
+      check(
+        "extraction-rules",
+        "error",
+        "Project extraction rules cannot be resolved without a valid binding."
+      )
+    );
   }
 
   try {
@@ -407,42 +449,43 @@ export async function runDoctor(
     if (JSON.stringify(tools) === JSON.stringify([...MEMORY_MCP_TOOLS])) {
       checks.push(check("mcp", "ok", "MCP reachable; exact six tools discovered."));
     } else {
-      checks.push(check(
-        "mcp",
-        "error",
-        `MCP tool mismatch: discovered ${tools.length}, expected 6.`,
-        "Use the shared Memory Space daemon without provider-specific aliases."
-      ));
+      checks.push(
+        check(
+          "mcp",
+          "error",
+          `MCP tool mismatch: discovered ${tools.length}, expected 6.`,
+          "Use the shared Memory Space daemon without provider-specific aliases."
+        )
+      );
     }
   } catch (error) {
     const value = error instanceof CliError ? error : undefined;
-    checks.push(check(
-      "mcp",
-      "error",
-      "MCP endpoint unavailable.",
-      value?.remediation
-    ));
+    checks.push(check("mcp", "error", "MCP endpoint unavailable.", value?.remediation));
   }
 
   for (const provider of await detectProviderConfigs(cwd, context.home)) {
     const id = provider.provider === "codex" ? "codex" : "claude-code";
-    checks.push(check(
-      id,
-      provider.state === "detected" ? "ok" : "warn",
-      provider.message,
-      provider.state === "detected"
-        ? undefined
-        : provider.provider === "codex"
-          ? "See docs/CODEX_INTEGRATION.md."
-          : "See docs/CLAUDE_CODE_INTEGRATION.md."
-    ));
+    checks.push(
+      check(
+        id,
+        provider.state === "detected" ? "ok" : "warn",
+        provider.message,
+        provider.state === "detected"
+          ? undefined
+          : provider.provider === "codex"
+            ? "See docs/CODEX_INTEGRATION.md."
+            : "See docs/CLAUDE_CODE_INTEGRATION.md."
+      )
+    );
   }
-  checks.push(check(
-    "claude-real-mcp-waiver",
-    "warn",
-    "Claude real model-driven MCP remains externally blocked / waived for progression.",
-    "Use first-party Anthropic authentication or a gateway that preserves MCP tool names."
-  ));
+  checks.push(
+    check(
+      "claude-real-mcp-waiver",
+      "warn",
+      "Claude real model-driven MCP remains externally blocked / waived for progression.",
+      "Use first-party Anthropic authentication or a gateway that preserves MCP tool names."
+    )
+  );
 
   if (options.json) {
     context.write(JSON.stringify({ checks }, null, 2));
@@ -463,7 +506,7 @@ export async function runStatus(
   const binding = await resolveOptionalBinding(cwd);
   if (!binding) {
     throw new CliError("BINDING_NOT_FOUND", "No project Memory Space binding found.", {
-      remediation: "Run memory-space init from the project directory."
+      remediation: "Run memory-space init from the project directory.",
     });
   }
   await context.client.health();
@@ -476,16 +519,18 @@ export async function runStatus(
     implicitRecall: binding.implicitRecall ?? {
       effectiveMode: "off",
       source: "invalid",
-      error: "No project disclosure configuration is available"
+      error: "No project disclosure configuration is available",
     },
     latestCheckpoint: handoff ? { id: handoff.checkpointId } : undefined,
-    latestHandoff: handoff ? {
-      id: handoff.id,
-      sessionId: handoff.sessionId,
-      createdAt: handoff.createdAt,
-      goal: handoff.goal,
-      nextSteps: handoff.nextSteps
-    } : undefined
+    latestHandoff: handoff
+      ? {
+          id: handoff.id,
+          sessionId: handoff.sessionId,
+          createdAt: handoff.createdAt,
+          goal: handoff.goal,
+          nextSteps: handoff.nextSteps,
+        }
+      : undefined,
   };
   if (options.json) {
     context.write(JSON.stringify(report, null, 2));
@@ -495,10 +540,16 @@ export async function runStatus(
   context.write(`Daemon:           OK (${context.client.endpoint})`);
   context.write(`Space:            ${space.name} (${space.id})`);
   context.write(`Binding source:   ${binding.configPath ?? binding.source}`);
-  context.write(`Implicit Recall:  ${report.implicitRecall.source === "invalid"
-    ? `ERROR (${report.implicitRecall.error}; effective mode off)`
-    : `${report.implicitRecall.effectiveMode} (${report.implicitRecall.source})`}`);
-  context.write(`Latest checkpoint:${report.latestCheckpoint ? ` ${report.latestCheckpoint.id}` : " none"}`);
+  context.write(
+    `Implicit Recall:  ${
+      report.implicitRecall.source === "invalid"
+        ? `ERROR (${report.implicitRecall.error}; effective mode off)`
+        : `${report.implicitRecall.effectiveMode} (${report.implicitRecall.source})`
+    }`
+  );
+  context.write(
+    `Latest checkpoint:${report.latestCheckpoint ? ` ${report.latestCheckpoint.id}` : " none"}`
+  );
   context.write(`Latest Handoff:   ${report.latestHandoff ? report.latestHandoff.id : "none"}`);
   if (report.latestHandoff) {
     context.write(`Handoff Session:  ${report.latestHandoff.sessionId}`);
@@ -542,13 +593,17 @@ export async function runP7ImplicitRecallEvalCommand(
     write("");
     write(`Bare-Identifier Hit Rate          ${report.metrics.bareIdentifierHitRate.toFixed(6)}`);
     write(`Exact-Key Hit Rate                ${report.metrics.exactKeyHitRate.toFixed(6)}`);
-    write(`Implicit Recall Precision@1       ${report.metrics.implicitRecallPrecisionAt1.toFixed(6)}`);
+    write(
+      `Implicit Recall Precision@1       ${report.metrics.implicitRecallPrecisionAt1.toFixed(6)}`
+    );
     write(`Negative Abstention Rate          ${report.metrics.negativeAbstentionRate.toFixed(6)}`);
     write(`Core Re-injection Rate            ${report.metrics.coreReinjectionRate.toFixed(6)}`);
     write(`Metadata Leakage Rate             ${report.metrics.metadataLeakageRate.toFixed(6)}`);
     write(`Opt-out Compliance Rate           ${report.metrics.optOutComplianceRate.toFixed(6)}`);
     write(`Budget Compliance Rate            ${report.metrics.budgetComplianceRate.toFixed(6)}`);
-    write(`Cross-provider matrix             ${report.metrics.crossProviderMatrix.passed}/${report.metrics.crossProviderMatrix.total}`);
+    write(
+      `Cross-provider matrix             ${report.metrics.crossProviderMatrix.passed}/${report.metrics.crossProviderMatrix.total}`
+    );
     write(`Hard correctness                  ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;

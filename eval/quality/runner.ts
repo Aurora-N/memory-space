@@ -14,7 +14,6 @@ import {
   MemoryMcpGateway,
   NoopCache,
   ProviderSessionResolver,
-  RuleBasedExtractor,
   SqliteMemoryStore,
   SpaceResolver,
   type HandoffSnapshot,
@@ -45,6 +44,7 @@ import type {
   RetrievalQueryFixture,
   RetrievalQueryResult
 } from "./types.ts";
+import { createEvaluationExtractor } from "../support/extraction-rules.ts";
 
 const exactMcpTools = [
   "memory_bootstrap",
@@ -93,7 +93,7 @@ class QualityRetrievalStore extends SqliteMemoryStore {
 function createQualityRetrievalMemorySpace(databasePath: string): MemorySpace {
   return new MemorySpace({
     store: new QualityRetrievalStore(databasePath),
-    extractor: new RuleBasedExtractor(),
+    extractor: createEvaluationExtractor(),
     cache: new NoopCache()
   });
 }

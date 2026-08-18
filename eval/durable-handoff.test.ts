@@ -23,7 +23,7 @@ test("eval durability: Session B recovers handoff after persistent storage reope
     await first.promote(goal.id, { actor: "agent", reason: "Primary project goal" });
     const event = await first.appendEvent({
       sessionId: sessionA.id, type: "message",
-      payload: { text: "数据库确定使用 PostgreSQL。\n先完成 recall API" }
+      payload: { text: "Decision: Use PostgreSQL for hosted deployments.\n先完成 recall API" }
     });
     await first.checkpoint({ sessionId: sessionA.id, toEventId: event.id, idempotencyKey: "durable-eval" });
     await first.close();

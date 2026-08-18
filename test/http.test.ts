@@ -173,7 +173,8 @@ test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async (
     });
     assert.equal(promotion.body.tier, "core");
     const event = (await request("POST", `/sessions/${sessionA.id}/events`, {
-      type: "message", payload: { text: "数据库确定使用 PostgreSQL。\n先完成 recall API" }
+      type: "message",
+      payload: { text: "Decision: Use PostgreSQL for hosted deployments.\n先完成 recall API" }
     })).body;
     const checkpointBody = {
       toEventId: event.id, idempotencyKey: "http-handoff-checkpoint"
@@ -189,7 +190,7 @@ test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async (
     })).body;
     const bootstrap = await request("GET", `/spaces/${sessionB.spaceId}/bootstrap`);
     assert.match(bootstrap.body.context, /完成跨 Agent 记忆管理系统/u);
-    assert.match(bootstrap.body.context, /数据库使用 PostgreSQL/u);
+    assert.match(bootstrap.body.context, /Use PostgreSQL for hosted deployments/u);
     assert.match(bootstrap.body.context, /完成 recall API/u);
     assert.doesNotMatch(bootstrap.body.context, /src\/modules\/recall\.ts/u);
     assert.equal(bootstrap.body.handoffSnapshot.sessionId, sessionA.id);
