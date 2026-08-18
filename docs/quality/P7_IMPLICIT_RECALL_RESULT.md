@@ -117,6 +117,39 @@ real-bridge gates passed. P7 is therefore complete, review pass, and frozen.
 GitHub CI was not independently confirmed; the evidence below is from the local
 macOS environment.
 
+## Post-freeze correctness patch — P7.1 Exact-Key Lookup
+
+**Patch commit:** `ebdd20585abd67ceeb25bd693512952441c99fe1`
+
+The original exact path searched lexically with `limit: 20` and then checked
+normalized key equality inside that truncated result. Twenty-one higher-scoring
+content distractors could therefore hide a Memory whose key matched exactly.
+
+P7.1 adds an application-level normalized exact-key lookup. It uses the existing
+raw active-key lookup as a fast path, then performs a correctness fallback over
+the requested Space's active Indexed Memories with symmetric
+`normalizeLexicalText` equality. `ImplicitRecallService` no longer uses lexical
+ranking, ordering, or a result limit for exact candidates. Concurrent candidate
+lookups still merge in prompt occurrence order; lexical mode still runs the
+unchanged frozen P6 full-prompt search and merges exact results first.
+
+Regression coverage proves that 21 higher-ranked distractors cannot hide the
+exact key, case normalization remains symmetric, and Core, archived, resolved,
+and other-Space Memories remain ineligible. The patch also verifies exact mode
+does not run the lexical full-prompt search. P6 scoring, ordering, abstention,
+storage schema, provider contracts, and the six-tool MCP surface are unchanged.
+
+P7.1 verification:
+
+```text
+pnpm run check                                      PASS (196/196)
+pnpm run check:workspace                            PASS (root + Inspector)
+pnpm memory-space eval implicit-recall              PASS
+pnpm memory-space eval implicit-recall --json       PASS
+pnpm memory-space eval quality --json               PASS (P6 metrics unchanged)
+pnpm run smoke:p7                                   NOT RUN (provider path unchanged)
+```
+
 ## Verification
 
 ```text
