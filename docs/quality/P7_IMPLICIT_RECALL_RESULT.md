@@ -1,14 +1,16 @@
 # P7 Implicit Prompt-Time Recall Result
 
-**Date:** 2026-08-17
+**Date:** 2026-08-18
 
 **Spec commit:** `4a32ebb387a4d56627bb61554fcfb8332ffa4071`
 
 **Implementation commit:** `5bedf63a7bcc5e3731c8b5ef2cba618b21be8219`
 
-**Hardening:** working tree on `5bedf63`, awaiting re-review commit
+**Hardening commit:** `e75afca415e9f6b6f47f4e3d0ec7ebe18cffa490`
 
-**Status:** CR HARDENING IMPLEMENTED / VALIDATED / AWAITING RE-REVIEW — NOT FROZEN
+**Final eval/review commit:** `bd73caf41d23cd88acc5c22b514ab3c01a532000`
+
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 
 ## Outcome
 
@@ -50,6 +52,14 @@ Two complete JSON runs were byte-equivalent. The fixture contract rejects
 mutations to scenario set, prompt, classification, source/target provider,
 expected keys/order, and abstention expectation.
 
+The evaluator injects a recording `LifecycleHandler` seam into the real Codex
+and Claude lifecycle integrations. Reported `effectiveMode` and `bypassed`
+values are read from the resulting `LifecycleResult.user_prompt.recall`; they
+are not reconstructed from fixture classification or rendered context. A
+scenario passes only when those observed decisions match the frozen expected
+decision. Regression tests prove that either an effective-mode mismatch or a
+bypass mismatch fails acceptance.
+
 ## Provider evidence
 
 - P7.0A native `UserPromptSubmit.additionalContext`: PASS for Codex 0.147.0 and Claude Code 2.1.112.
@@ -80,7 +90,8 @@ See [`P7_PROVIDER_CAPABILITY_SPIKE.md`](./P7_PROVIDER_CAPABILITY_SPIKE.md).
 
 ## Code-review hardening
 
-The initial review requested four closeout changes. The working tree now:
+The initial review requested four closeout changes. Hardening commit `e75afca`
+now:
 
 - extracts a complete allowed-character run before enforcing the 3–128 exact-key
   boundary, preventing overlong-prefix and invalid-leading-character disclosure;
@@ -95,17 +106,21 @@ Regression tests cover both exact token boundary attacks, diagnostic fail-open
 behavior and non-disclosure of prompt/path data, integration-level provider
 output, and concurrent Memory query execution.
 
-## Remaining gate
+Final eval/review commit `bd73caf` closes the remaining evidence-validity issue:
+the provider matrix now records the actual lifecycle recall decision and rejects
+decision mismatches before metric aggregation.
 
-P7 has not been declared review pass or frozen. Independent re-review and a real
-hardening/review commit remain closeout blockers. The implementation commit is
-pinned above; no review SHA is fabricated from the current working tree. GitHub
-CI was not independently confirmed.
+## Closeout
+
+All required local deterministic, workspace, regression, native-provider, and
+real-bridge gates passed. P7 is therefore complete, review pass, and frozen.
+GitHub CI was not independently confirmed; the evidence below is from the local
+macOS environment.
 
 ## Verification
 
 ```text
-pnpm run check                                      PASS (191/191)
+pnpm run check                                      PASS (193/193)
 pnpm run check:workspace                            PASS (root + Inspector)
 pnpm memory-space eval implicit-recall              PASS
 pnpm memory-space eval implicit-recall --json × 2   PASS (parsed JSON byte-equivalent)

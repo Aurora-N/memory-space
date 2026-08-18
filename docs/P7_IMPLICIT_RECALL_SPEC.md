@@ -1,6 +1,6 @@
 # P7 — Implicit Prompt-Time Recall Spec
 
-**Status:** P7.0A + P7.0B PASS; CR HARDENING IMPLEMENTED / VALIDATED / AWAITING RE-REVIEW; NOT FROZEN
+**Status:** COMPLETE / REVIEW PASS / FROZEN; P7.0A + P7.0B PASS
 **Phase:** P7  
 **Depends on:** P4 cross-session/provider durability, P5 productization, P6 Stage B1 retrieval precision & abstention, P6 Stage B3 Core/Handoff policy, Provider Integration v1  
 **Related:** `PROVIDER_INTEGRATION_SPEC.md`, `PRODUCTIZATION_SPEC.md`, `P4_CROSS_SESSION_PROVIDER_EVAL.md`, `P6_STAGE_B_RETRIEVAL_SPEC.md`, `P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, `DOMAIN_MODEL.md`, `PRODUCT_SPEC.md`

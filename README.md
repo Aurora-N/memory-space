@@ -244,7 +244,7 @@ pnpm memory-space inspect /absolute/path/to/project
 - P5 Productization：Complete / Review Pass。
 - P6 Memory Quality v1：Complete / Review Pass / Frozen。
 - P6 B4 Semantic Retrieval / Dedup：经过评估后主动延期到 v2，而不是遗漏功能。详见 [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md)。
-- P7 Implicit Prompt-Time Recall：review hardening 与自动化/真实 Provider 验证已完成，等待独立 re-review，尚未 Frozen。
+- P7 Implicit Prompt-Time Recall：自动化与真实 Provider 验证、最终 review 均已通过；COMPLETE / REVIEW PASS / FROZEN。
 
 v1 已知仍存在无词面重叠的语义表达不一致（semantic wording mismatch）和无稳定 key 的重复记忆（unkeyed duplicate）；当前证据不足以证明 embedding/vector infrastructure 的收益值得引入其存储、迁移、隐私、离线和模型版本复杂度。后续由真实自用（dogfooding）数据决定是否在 v2 重启。
 
@@ -504,7 +504,7 @@ SQLite is the zero-configuration v1 implementation. The application depends on a
 - P5 Productization: Complete / Review Pass.
 - P6 Memory Quality v1: Complete / Review Pass / Frozen.
 - P6 B4 Semantic Retrieval / Dedup: deliberately deferred to v2. See [ADR 0004](docs/adr/0004-semantic-recall-options-after-b1.md).
-- P7 Implicit Prompt-Time Recall: review hardening is implemented and validated with deterministic and real-provider evidence; awaiting independent re-review, not frozen.
+- P7 Implicit Prompt-Time Recall: deterministic and real-provider validation plus final review have passed; COMPLETE / REVIEW PASS / FROZEN.
 
 Known v1 limitations include semantic wording mismatches with no lexical overlap and unkeyed duplicates. Current evidence does not show that embedding/vector infrastructure is worth its storage, migration, privacy, offline, and model-version complexity. Real dogfooding data should drive any v2 reopening.
 
