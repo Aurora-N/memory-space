@@ -84,6 +84,25 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 | 本地可视化检查 | 只读 Inspector 展示 Memory、历史、真实 bootstrap、最新 Handoff，以及 Stored 与 Disclosed 的差异。 |
 | 本地优先 | v1 daemon 只监听 loopback，SQLite 是默认且唯一的持久权威数据源（Source of Truth）。 |
 
+### 能力边界
+
+**可以做：**
+
+- 在同一项目 Space 内跨 Session、进程重启以及 Codex / Claude Code 保存和恢复项目记忆；
+- 在 Session 启动时注入有界的 Core Memory 与最新 Handoff；
+- 通过 `exact` 或 `lexical` 模式自动召回 Indexed Memory，也可通过六个 MCP 工具显式搜索、记忆、提升和 checkpoint；
+- 记录完整用户 prompt 与 Provider 提供的可靠最终回复，保留来源和变更历史；
+- 通过只读 Inspector 检查实际存储、披露、bootstrap 和 Handoff。
+
+**不能做或不保证：**
+
+- 不会自主扫描代码仓库，也不会用旧 Memory 覆盖当前代码事实；
+- 不会默认读取或复制完整 Provider transcript、工具调用轨迹或内部推理；
+- 不保证每句话都会成为 Memory；当前提取和召回是保守的确定性规则/词面策略，不是通用语义搜索；
+- 不提供远程访问认证、多用户安全隔离、LAN / 公网部署或多个 daemon 共享同一 SQLite 文件；
+- Inspector 不能创建、编辑或删除 Memory；PostgreSQL、Redis 和远程/LLM extractor 尚未交付；
+- Claude Code 在会改写 MCP 工具名的兼容网关下，模型主动调用 MCP 可能不可用，但 lifecycle 与 prompt-time recall 仍可工作。
+
 ### 它如何工作
 
 集成有两条通道：Lifecycle hook 负责自动启动上下文、prompt-time Indexed 召回、捕获对话证据和触发 checkpoint；MCP 负责 Agent 主动发起的搜索、记忆、提升和 checkpoint 命令。两条通道最终都进入同一个本地 memory-space daemon 与 `MemorySpace` 实例。
@@ -110,51 +129,97 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 
 ### 快速开始
 
-要求：Git、Node.js `>= 22.13.0`、pnpm `11.x`。以下命令从仓库根目录运行：
+要求：Git、Node.js `>= 22.13.0`、pnpm `11.x`。以下示例中：
+
+```bash
+MEMORY_SPACE_ROOT=/absolute/path/to/memory-space
+PROJECT_ROOT=/absolute/path/to/your-project
+```
+
+Shell 变量只在当前终端有效；每打开一个新终端都先执行这两行，或直接把后续
+命令中的变量替换为绝对路径。
+
+#### 1. 安装
 
 ```bash
 git clone https://github.com/Aurora-N/memory-space.git
 cd memory-space
 corepack enable
 pnpm install
-pnpm run check
 pnpm inspector:build
 ```
 
-`pnpm start` 保持原有的前台 daemon 语义。在第一个终端中指定目标项目并启动；需要关闭时按 `Ctrl+C`：
+#### 2. 启动 daemon
+
+在第一个终端中运行一个长期驻留的前台 daemon。`MEMORY_SPACE_CWD` 必须指向准备绑定的项目；需要关闭时按 `Ctrl+C`：
 
 ```bash
-MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+cd "$MEMORY_SPACE_ROOT"
+MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 ```
 
-默认 daemon 只监听 `http://127.0.0.1:4310`，数据仍写入启动目录下的 `./data/memory-space.db`。如需自定义，继续使用 `.env.example` 中已有的环境变量。
+默认监听 `http://127.0.0.1:4310`，数据库是
+`$MEMORY_SPACE_ROOT/data/memory-space.db`。当前脚本不会自动加载 `.env`；
+需要自定义时，请在启动命令前导出环境变量或以内联形式传入。
 
-在第二个终端中初始化绑定，然后打开 Inspector：
+#### 3. 初始化项目绑定
+
+在第二个终端中运行：
 
 ```bash
-pnpm memory-space init /absolute/path/to/project --name "My project"
-pnpm memory-space configure codex /absolute/path/to/project --dry-run
-pnpm memory-space configure codex /absolute/path/to/project
-# 或配置 Claude Code；建议先预览，再写入项目级配置
-pnpm memory-space configure claude-code /absolute/path/to/project --dry-run
-pnpm memory-space configure claude-code /absolute/path/to/project
-pnpm memory-space inspect /absolute/path/to/project
-
-# 检查当前项目
-pnpm memory-space doctor /absolute/path/to/project
-pnpm memory-space status /absolute/path/to/project
-
-# 只解绑该目录；不会删除 Space 或 Memory，也不会移除祖先绑定
-pnpm memory-space unbind /absolute/path/to/project
+cd "$MEMORY_SPACE_ROOT"
+pnpm memory-space init "$PROJECT_ROOT" --name "My project"
 ```
 
-`inspect` 是纯检查/打开命令：它不会启动 daemon、创建 Space 或写入绑定；daemon 未运行、运行目录不匹配或项目尚未绑定时会给出错误。使用 `--no-open` 可只完成检查并打印 URL。
+该命令创建或确认 Space，并原子写入
+`$PROJECT_ROOT/.memory-space/config.json`。它不会修改 Codex 或 Claude Code
+配置。
 
-`configure codex` 与 `configure claude-code` 是对称的显式、项目级配置命令，均支持 `--dry-run`、幂等合并和 loopback-only `--endpoint`。Codex 命令写入 `.codex/hooks.json` 与 `.codex/config.toml`；Claude Code 命令写入 `.claude/settings.json` 与 `.mcp.json`。已有 Memory Space 冲突配置、覆盖当前项目的其他活动 scope、损坏文件或非普通文件会导致整次预检失败。命令不会修改用户目录中的 `~/.codex`、`~/.claude/settings.json` 或 `~/.claude.json`，也不会输出现有 token、header 或 env。配置后重新启动对应 Agent，并分别用 `/hooks` 与 `/mcp` 确认连接。
+#### 4. 配置 Codex 或 Claude Code
 
-`unbind --space-id <expected-id>` 可在删除前校验 Space ID。若当前目录只继承祖先配置，`unbind` 不会创建或删除任何文件；损坏的本地配置会原样保留并报告错误。
+先预览，再应用。可以只配置一个 Provider，也可以依次配置两者：
 
-`init` 会把自动召回边界明确写入项目绑定，默认是稳定 key 精确召回：
+```bash
+# Codex
+pnpm memory-space configure codex "$PROJECT_ROOT" --dry-run
+pnpm memory-space configure codex "$PROJECT_ROOT"
+
+# Claude Code
+pnpm memory-space configure claude-code "$PROJECT_ROOT" --dry-run
+pnpm memory-space configure claude-code "$PROJECT_ROOT"
+```
+
+配置命令只写项目级文件：
+
+| Provider | Lifecycle hooks | MCP |
+| --- | --- | --- |
+| Codex | `.codex/hooks.json` | `.codex/config.toml` |
+| Claude Code | `.claude/settings.json` | `.mcp.json` |
+
+命令支持幂等合并、`--dry-run` 和 loopback-only `--endpoint`，不会修改
+`~/.codex`、`~/.claude/settings.json` 或 `~/.claude.json`。如果发现其他活动
+scope、冲突定义、损坏文件、符号链接或非普通文件，会保留原文件并停止配置。
+
+#### 5. 重启并验证 Provider
+
+重新启动对应 Agent，然后：
+
+1. 在 Codex 或 Claude Code 中运行 `/hooks`，确认 Memory Space hooks 已加载；
+2. 运行 `/mcp`，确认 `memory_space` 已连接且只有约定的六个工具；
+3. 在终端检查整体状态：
+
+```bash
+pnpm memory-space doctor "$PROJECT_ROOT"
+pnpm memory-space status "$PROJECT_ROOT"
+```
+
+`doctor` 会检查 daemon、Space 绑定、Provider 配置 scope 与 MCP 工具列表。
+
+### 配置参考
+
+#### 项目绑定：`.memory-space/config.json`
+
+这是项目可直接维护的 Memory Space 配置。最近祖先目录中的绑定生效：
 
 ```json
 {
@@ -164,17 +229,69 @@ pnpm memory-space unbind /absolute/path/to/project
 }
 ```
 
-将 `mode` 改为 `lexical` 可再启用完整 prompt 的确定性词面召回；改为 `off` 可关闭自动 Indexed 披露。旧绑定缺少该字段时仍兼容并按 `exact` 工作。配置损坏、当前目录绑定与 Session Space 不一致，或召回服务故障时，本次召回会关闭，但 prompt 仍会正常继续。
+| 字段 | 可用值 | 说明 |
+| --- | --- | --- |
+| `version` | `1` | 必填的配置格式版本。 |
+| `spaceId` | 非空字符串 | 必填；由 `init` 创建或确认。不要随意修改，已有 Provider Session 的 Space 绑定不会因此迁移。 |
+| `implicitRecall.mode` | `exact`、`lexical`、`off` | 可选；缺省为 `exact`。非法值会 fail-closed 为 `off`。 |
 
-如果希望 Agent 在检查当前代码时也稳定参考记忆库，使用 `lexical`。Memory
-Space 会在 Agent 开始处理 prompt 前，并发执行有界 exact-key 与完整 prompt
-词面查询，把结果作为不可信历史上下文交给 Agent；Agent 随后可照常并行使用
-代码搜索/读取工具。daemon 不会为了“并发”而越权扫描仓库，当前代码证据仍优先。
+- `exact`：仅按 prompt 中的稳定 Memory key 精确召回，默认且最保守；
+- `lexical`：同时执行 exact-key 与完整 prompt 的有界词面召回；
+- `off`：关闭自动 Indexed 披露，显式 MCP 搜索仍可使用。
 
-如果只需要绑定、不希望启动 Inspector，仍可在已运行的 daemon 上使用 `init`。它只创建或确认 Space，并原子写入项目绑定，不会修改全局 Codex 或 Claude 配置。接下来按 Provider 文档配置 hooks 与 MCP：
+召回结果是“不可信历史上下文”，当前代码仍是事实来源。绑定损坏、Space
+不匹配或召回故障时，本次自动召回关闭，但 prompt 继续执行。
+
+#### Provider 配置文件
+
+`configure` 生成的 hook matcher、命令、timeout 和 MCP server 形状属于受管理的
+集成契约，不是 Memory 策略配置。手工修改后，再次运行 `configure` 可能报告冲突。
+需要手工安装时参考：
 
 - [Codex 集成](docs/CODEX_INTEGRATION.md)
 - [Claude Code 集成](docs/CLAUDE_CODE_INTEGRATION.md)
+
+唯一常用的连接配置是 daemon origin：
+
+```bash
+pnpm memory-space configure codex "$PROJECT_ROOT" \
+  --endpoint http://127.0.0.1:4310
+```
+
+它会派生 MCP URL `/mcp`。如果修改了 daemon 端口，还需要让启动 Codex /
+Claude Code 的环境分别设置 `MEMORY_SPACE_CODEX_HOOK_URL` /
+`MEMORY_SPACE_CLAUDE_CODE_HOOK_URL`，使 lifecycle hook 指向同一 daemon。
+
+#### 运行时环境变量
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `MEMORY_SPACE_DB` | `./data/memory-space.db` | SQLite 文件；相对路径按 daemon 启动目录解析。 |
+| `MEMORY_SPACE_HOST` | `127.0.0.1` | daemon 监听地址；只接受 `127.0.0.1`、`::1` 或 `localhost`。 |
+| `MEMORY_SPACE_PORT` | `4310` | daemon 监听端口。 |
+| `MEMORY_SPACE_CORE_LIMIT` | `64` | 每个 Space 的 Core Memory 容量上限。 |
+| `MEMORY_SPACE_CWD` | daemon 当前目录 | MCP、Inspector 和新 Provider Session 解析项目绑定时使用的工作目录。 |
+| `MEMORY_SPACE_SPACE_ID` | 未设置 | 高级受信任 Space 覆盖；通常应省略并使用项目绑定。 |
+| `MEMORY_SPACE_URL` | `http://127.0.0.1:4310` | CLI 连接的 daemon origin；不改变 daemon 自身监听地址。 |
+| `MEMORY_SPACE_CODEX_HOOK_URL` | `http://127.0.0.1:4310/providers/codex/lifecycle` | Codex hook bridge 地址。 |
+| `MEMORY_SPACE_CLAUDE_CODE_HOOK_URL` | `http://127.0.0.1:4310/providers/claude-code/lifecycle` | Claude Code hook bridge 地址。 |
+| `MEMORY_SPACE_HOOK_TIMEOUT_MS` | `2500` | hook HTTP bridge 超时，单位毫秒；有效值最高按 30 秒处理。 |
+
+`.env.example` 是参考模板，不会被 `pnpm start` 自动读取。Provider hook URL
+通常不需要设置；daemon 端口变化时，Provider 进程必须继承对应的 hook URL。
+`MEMORY_SPACE_ALLOW_STANDALONE=1` 仅用于显式开启开发期 stdio MCP，不能与拥有
+同一 SQLite 文件的 daemon 同时运行，不属于推荐部署方式。
+
+常用 CLI 配置选项：
+
+| 选项 | 适用命令 | 说明 |
+| --- | --- | --- |
+| `--endpoint <url>` | `init`、`configure`、`inspect`、`doctor`、`status` | 指定无凭据的 loopback HTTP origin。 |
+| `--name <name>` | `init` | 新 Space 的显示名称。 |
+| `--space-id <id>` | `init`、`unbind` | 初始化时指定 Space ID，或解绑前校验预期 ID。 |
+| `--dry-run` | `configure` | 只预检并展示文件变化，不写文件。 |
+| `--no-open` | `inspect` | 检查 Inspector 并打印 URL，不打开浏览器。 |
+| `--json` | `doctor`、`status`、`eval` | 输出机器可读 JSON。 |
 
 #### 打开本地 Memory Inspector
 
@@ -182,14 +299,21 @@ Inspector 是 daemon 同源托管的只读可视化界面。完整启动顺序�
 
 ```bash
 pnpm inspector:build
-MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 # 在另一个终端，确保 init 已完成后：
-pnpm memory-space inspect /absolute/path/to/project
+pnpm memory-space inspect "$PROJECT_ROOT"
 ```
 
 打开 <http://127.0.0.1:4310/inspector/>。你可以查看 Overview、搜索和筛选 Memories、打开 provenance/history 详情、核对真实 bootstrap context、查看最新 Handoff，并在 Validation 中比较 Stored 与 Disclosed 状态。界面没有创建、编辑、删除、提升或状态变更操作，不会污染用于验证的 Memory。
 
 开发界面时可保持 daemon 运行，另开终端执行 `pnpm inspector:dev`，再访问 <http://127.0.0.1:5173/inspector/>。
+
+`inspect` 不会启动 daemon、创建 Space 或写入绑定。只解绑当前目录且保留 Space
+和 Memory，可运行：
+
+```bash
+pnpm memory-space unbind "$PROJECT_ROOT"
+```
 
 最短的隐式跨 Agent 验证路径：先用任一 Agent 执行 `memory_remember` 写入 key 为 `CROSS_AGENT_TEST_20260817`、content 为 `CROSS_AGENT_TEST_20260817 = lavender-731` 的 Indexed Memory；打开另一个 Provider 的新 Session，只输入 `CROSS_AGENT_TEST_20260817`。在默认 `exact` 模式下，它应直接回答 `lavender-731`，无需用户要求调用 `memory_search`。完整自动化验证命令见下文。
 
@@ -345,6 +469,25 @@ memory-space separates conversation evidence from durable project memory:
 | Local visual inspection | A read-only Inspector presents Memory, history, real bootstrap, latest Handoff, and Stored-versus-Disclosed validation. |
 | Local-first runtime | The v1 daemon is loopback-only and SQLite is the default and only durable source of truth. |
 
+### Capability boundaries
+
+**What it can do:**
+
+- preserve and restore project memory across Sessions, process restarts, Codex, and Claude Code within one Space;
+- inject bounded Core Memory and the latest Handoff when a Session starts;
+- recall Indexed Memory automatically in `exact` or `lexical` mode, and expose six MCP tools for explicit search, remember, promote, and checkpoint operations;
+- capture full user prompts and reliable final responses supplied by the provider, with provenance and change history;
+- inspect stored, disclosed, bootstrap, and Handoff state through the read-only Inspector.
+
+**What it cannot do or guarantee:**
+
+- it does not autonomously scan the repository or let old Memory override current code evidence;
+- it does not read or copy complete provider transcripts, tool traces, or internal reasoning by default;
+- it does not guarantee that every statement becomes Memory; current extraction and retrieval are conservative deterministic rule/lexical policies, not general semantic search;
+- it does not provide remote authentication, multi-user security isolation, LAN/public deployment, or multiple daemons sharing one SQLite file;
+- the Inspector cannot create, edit, or delete Memory; PostgreSQL, Redis, and remote/LLM extractors are not shipped;
+- direct Claude Code MCP calls may be unavailable behind gateways that rewrite MCP tool names, while lifecycle and prompt-time recall can still operate.
+
 ### How it works
 
 The integration has two channels. Lifecycle hooks bootstrap context, perform prompt-time Indexed recall, capture conversation evidence, and trigger checkpoints. MCP carries agent-initiated search, remember, promote, and checkpoint commands. Both channels enter the same local memory-space daemon and `MemorySpace` instance.
@@ -371,48 +514,103 @@ The integration has two channels. Lifecycle hooks bootstrap context, perform pro
 
 ### Quick start
 
-Requirements: Git, Node.js `>= 22.13.0`, and pnpm `11.x`. Run these commands from the repository root:
+Requirements: Git, Node.js `>= 22.13.0`, and pnpm `11.x`. The examples below use:
+
+```bash
+MEMORY_SPACE_ROOT=/absolute/path/to/memory-space
+PROJECT_ROOT=/absolute/path/to/your-project
+```
+
+These shell variables last only for the current terminal. Set them in every new
+terminal, or replace them with absolute paths directly.
+
+#### 1. Install
 
 ```bash
 git clone https://github.com/Aurora-N/memory-space.git
 cd memory-space
 corepack enable
 pnpm install
-pnpm run check
 pnpm inspector:build
 ```
 
-`pnpm start` retains its original foreground-daemon behavior. Start it for the target project in the first terminal; press `Ctrl+C` there to stop it:
+#### 2. Start the daemon
+
+Run one long-lived foreground daemon in the first terminal.
+`MEMORY_SPACE_CWD` must point to the project that will be bound. Press
+`Ctrl+C` to stop it:
 
 ```bash
-MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+cd "$MEMORY_SPACE_ROOT"
+MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 ```
 
-The daemon still listens only on `http://127.0.0.1:4310` by default and stores data in `./data/memory-space.db` relative to its launch directory. Existing `.env.example` variables remain the customization mechanism.
+By default it listens on `http://127.0.0.1:4310` and stores data at
+`$MEMORY_SPACE_ROOT/data/memory-space.db`. The current scripts do not load
+`.env` automatically; export variables or pass them inline when customization
+is required.
+
+#### 3. Initialize the project binding
+
+In a second terminal:
 
 ```bash
-pnpm memory-space init /absolute/path/to/project --name "My project"
-pnpm memory-space configure codex /absolute/path/to/project --dry-run
-pnpm memory-space configure codex /absolute/path/to/project
-# Or configure Claude Code; preview before writing project-scoped files
-pnpm memory-space configure claude-code /absolute/path/to/project --dry-run
-pnpm memory-space configure claude-code /absolute/path/to/project
-pnpm memory-space inspect /absolute/path/to/project
-
-pnpm memory-space doctor /absolute/path/to/project
-pnpm memory-space status /absolute/path/to/project
-
-# Removes only this directory's exact binding; preserves Space and Memory
-pnpm memory-space unbind /absolute/path/to/project
+cd "$MEMORY_SPACE_ROOT"
+pnpm memory-space init "$PROJECT_ROOT" --name "My project"
 ```
 
-`inspect` only validates and opens: it never starts the daemon, creates a Space, or writes a binding. It fails visibly when the daemon is unavailable, attached to another project, or the project is unbound. Use `--no-open` to validate and print the URL without opening a browser.
+This creates or confirms the Space and atomically writes
+`$PROJECT_ROOT/.memory-space/config.json`. It does not modify Codex or Claude
+Code configuration.
 
-`configure codex` and `configure claude-code` are symmetric, explicit project-scoped commands. Both support `--dry-run`, idempotent merging, and a loopback-only `--endpoint`. Codex writes `.codex/hooks.json` and `.codex/config.toml`; Claude Code writes `.claude/settings.json` and `.mcp.json`. Conflicting Memory Space configuration, another active scope covering the project, malformed files, or non-regular files fail the whole preflight. Neither command edits user-level `~/.codex`, `~/.claude/settings.json`, or `~/.claude.json`, nor prints existing tokens, headers, or environment values. Restart the configured agent afterward, then verify `/hooks` and `/mcp`.
+#### 4. Configure Codex or Claude Code
 
-`unbind --space-id <expected-id>` guards the removal with an expected Space ID. An inherited ancestor binding is never removed, and malformed local configuration is preserved with a visible error.
+Preview first, then apply. Configure either provider or both:
 
-`init` writes an explicit project disclosure policy and defaults it to exact stable-key recall:
+```bash
+# Codex
+pnpm memory-space configure codex "$PROJECT_ROOT" --dry-run
+pnpm memory-space configure codex "$PROJECT_ROOT"
+
+# Claude Code
+pnpm memory-space configure claude-code "$PROJECT_ROOT" --dry-run
+pnpm memory-space configure claude-code "$PROJECT_ROOT"
+```
+
+The commands write only project-scoped files:
+
+| Provider | Lifecycle hooks | MCP |
+| --- | --- | --- |
+| Codex | `.codex/hooks.json` | `.codex/config.toml` |
+| Claude Code | `.claude/settings.json` | `.mcp.json` |
+
+The commands support idempotent merging, `--dry-run`, and a loopback-only
+`--endpoint`. They do not modify `~/.codex`, `~/.claude/settings.json`, or
+`~/.claude.json`. Another active scope, conflicting definitions, malformed
+files, symlinks, or non-regular files preserve existing data and stop setup.
+
+#### 5. Restart and verify the provider
+
+Restart the configured agent, then:
+
+1. run `/hooks` in Codex or Claude Code and confirm that Memory Space hooks are loaded;
+2. run `/mcp` and confirm that `memory_space` is connected with exactly the six contracted tools;
+3. check the overall state from a terminal:
+
+```bash
+pnpm memory-space doctor "$PROJECT_ROOT"
+pnpm memory-space status "$PROJECT_ROOT"
+```
+
+`doctor` checks the daemon, Space binding, provider configuration scopes, and
+the MCP tool list.
+
+### Configuration reference
+
+#### Project binding: `.memory-space/config.json`
+
+This is the project-level Memory Space configuration users can maintain
+directly. The nearest ancestor binding wins:
 
 ```json
 {
@@ -422,19 +620,72 @@ pnpm memory-space unbind /absolute/path/to/project
 }
 ```
 
-Set the mode to `lexical` to add deterministic full-prompt lexical recall, or
-to `off` to disable automatic Indexed disclosure. Older bindings without the
-field remain valid and default to `exact`. Invalid/mismatched binding policy or
-a recall-service failure disables recall for that prompt without blocking it.
+| Field | Values | Meaning |
+| --- | --- | --- |
+| `version` | `1` | Required configuration format version. |
+| `spaceId` | non-empty string | Required; created or confirmed by `init`. Do not casually change it because existing provider Sessions do not migrate. |
+| `implicitRecall.mode` | `exact`, `lexical`, `off` | Optional; defaults to `exact`. Invalid values fail closed to `off`. |
 
-Use `lexical` when the agent should consistently consult Memory while inspecting
-current code. Before the agent processes the prompt, Memory Space concurrently
-runs bounded exact-key lookups and the full-prompt lexical lookup, then supplies
-the result as untrusted historical context. The agent can still use repository
-search/read tools normally; the daemon does not gain implicit repository-read
-authority, and current code remains authoritative.
+- `exact`: recall only stable Memory keys present in the prompt; the most conservative default;
+- `lexical`: run bounded exact-key and full-prompt lexical recall;
+- `off`: disable automatic Indexed disclosure while keeping explicit MCP search available.
 
-If you only need a binding and already have a daemon running, `init` remains available. It creates or confirms the Space and atomically writes the project binding without editing global Codex or Claude configuration. Continue with the [Codex guide](docs/CODEX_INTEGRATION.md) or [Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
+Recall output is untrusted historical context; current code remains the source
+of truth. A malformed binding, Space mismatch, or recall failure disables
+automatic recall for that prompt without blocking the prompt.
+
+#### Provider configuration files
+
+The hook matchers, commands, timeouts, and MCP server shapes generated by
+`configure` are a managed integration contract, not Memory policy knobs.
+Manual edits may cause a later `configure` run to report a conflict. For manual
+installation, use the [Codex guide](docs/CODEX_INTEGRATION.md) or
+[Claude Code guide](docs/CLAUDE_CODE_INTEGRATION.md).
+
+The only commonly changed connection setting is the daemon origin:
+
+```bash
+pnpm memory-space configure codex "$PROJECT_ROOT" \
+  --endpoint http://127.0.0.1:4310
+```
+
+The command derives the `/mcp` URL. If the daemon port changes, the environment
+that launches Codex or Claude Code must also set
+`MEMORY_SPACE_CODEX_HOOK_URL` or `MEMORY_SPACE_CLAUDE_CODE_HOOK_URL` so the
+lifecycle hook reaches the same daemon.
+
+#### Runtime environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MEMORY_SPACE_DB` | `./data/memory-space.db` | SQLite file; relative paths resolve from the daemon launch directory. |
+| `MEMORY_SPACE_HOST` | `127.0.0.1` | Daemon listener; only `127.0.0.1`, `::1`, or `localhost` are accepted. |
+| `MEMORY_SPACE_PORT` | `4310` | Daemon listener port. |
+| `MEMORY_SPACE_CORE_LIMIT` | `64` | Core Memory capacity per Space. |
+| `MEMORY_SPACE_CWD` | daemon current directory | Working directory used to resolve project bindings for MCP, Inspector, and new provider Sessions. |
+| `MEMORY_SPACE_SPACE_ID` | unset | Advanced trusted Space override; normally omit it and use the project binding. |
+| `MEMORY_SPACE_URL` | `http://127.0.0.1:4310` | Daemon origin used by the CLI; it does not change the daemon listener. |
+| `MEMORY_SPACE_CODEX_HOOK_URL` | `http://127.0.0.1:4310/providers/codex/lifecycle` | Codex hook bridge endpoint. |
+| `MEMORY_SPACE_CLAUDE_CODE_HOOK_URL` | `http://127.0.0.1:4310/providers/claude-code/lifecycle` | Claude Code hook bridge endpoint. |
+| `MEMORY_SPACE_HOOK_TIMEOUT_MS` | `2500` | Hook HTTP bridge timeout in milliseconds; valid values are capped at 30 seconds. |
+
+`.env.example` is a reference template and is not loaded automatically by
+`pnpm start`. Provider hook URLs normally need no override. When the daemon
+port changes, the provider process must inherit the corresponding hook URL.
+`MEMORY_SPACE_ALLOW_STANDALONE=1` explicitly enables the
+development-only stdio MCP mode. Never run it alongside a daemon owning the
+same SQLite file.
+
+Common CLI configuration options:
+
+| Option | Commands | Meaning |
+| --- | --- | --- |
+| `--endpoint <url>` | `init`, `configure`, `inspect`, `doctor`, `status` | Use a credential-free loopback HTTP origin. |
+| `--name <name>` | `init` | Display name for a new Space. |
+| `--space-id <id>` | `init`, `unbind` | Choose a Space ID during initialization or guard unbinding with the expected ID. |
+| `--dry-run` | `configure` | Preflight and show file changes without writing. |
+| `--no-open` | `inspect` | Validate the Inspector and print its URL without opening a browser. |
+| `--json` | `doctor`, `status`, `eval` | Emit machine-readable JSON. |
 
 #### Open the local Memory Inspector
 
@@ -442,14 +693,22 @@ The daemon serves the read-only Inspector on the same local origin. The complete
 
 ```bash
 pnpm inspector:build
-MEMORY_SPACE_CWD=/absolute/path/to/project pnpm start
+MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 # In another terminal, after init has completed:
-pnpm memory-space inspect /absolute/path/to/project
+pnpm memory-space inspect "$PROJECT_ROOT"
 ```
 
 Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search and filters, provenance/history detail, the exact production bootstrap context, the latest Handoff, and Stored-versus-Disclosed validation. It has no create, edit, delete, promote, or status-change controls.
 
 For frontend development, keep the daemon running, execute `pnpm inspector:dev` in another terminal, and open <http://127.0.0.1:5173/inspector/>.
+
+`inspect` does not start the daemon, create a Space, or write a binding. To
+remove only the current directory binding while preserving its Space and
+Memory:
+
+```bash
+pnpm memory-space unbind "$PROJECT_ROOT"
+```
 
 For a minimal cross-agent implicit-recall exercise, use either provider to create an Indexed Memory with key `CROSS_AGENT_TEST_20260817` and content `CROSS_AGENT_TEST_20260817 = lavender-731`. Start a new Session in the other provider and submit only `CROSS_AGENT_TEST_20260817`. Default `exact` mode should return `lavender-731` without asking the model to call `memory_search`.
 
