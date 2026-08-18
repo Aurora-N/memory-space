@@ -1,10 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readFile } from "node:fs/promises";
 import { dirname, join, parse, resolve } from "node:path";
 import { ValidationError } from "../domain/errors.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
 import {
+  type ImplicitRecallConfiguration,
   resolveImplicitRecallConfiguration,
-  type ImplicitRecallConfiguration
 } from "./project-config.ts";
 
 /** Inputs for explicit or nearest-ancestor Space binding resolution. */
@@ -28,11 +29,62 @@ function requiredString(value: unknown, label: string): string {
   return value.trim();
 }
 
+function parseProjectBinding(value: unknown, configPath: string): SpaceBinding {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new SpaceBindingInvalidError(configPath);
+  }
+  const config = value as Record<string, unknown>;
+  if (config.version !== 1 || typeof config.spaceId !== "string" || config.spaceId.trim() === "") {
+    throw new SpaceBindingInvalidError(configPath);
+  }
+  return {
+    spaceId: config.spaceId.trim(),
+    source: "config",
+    configPath,
+    implicitRecall: resolveImplicitRecallConfiguration(config),
+  };
+}
+
+/**
+ * Reads one exact project binding without following symlinks or searching
+ * ancestors. Missing files return undefined; present invalid files fail closed.
+ */
+export async function readProjectBindingAtPath(
+  configPath: string
+): Promise<SpaceBinding | undefined> {
+  let file: Awaited<ReturnType<typeof open>>;
+  try {
+    file = await open(configPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new SpaceBindingInvalidError(configPath, error);
+  }
+  try {
+    const metadata = await file.stat();
+    if (!metadata.isFile()) throw new SpaceBindingInvalidError(configPath);
+    let value: unknown;
+    try {
+      value = JSON.parse(await file.readFile("utf8"));
+    } catch (error) {
+      throw new SpaceBindingInvalidError(configPath, error);
+    }
+    return parseProjectBinding(value, configPath);
+  } catch (error) {
+    if (error instanceof SpaceBindingInvalidError) throw error;
+    throw new SpaceBindingInvalidError(configPath, error);
+  } finally {
+    await file.close();
+  }
+}
+
 /** Resolves Space bindings using cwd-to-ancestor precedence without inferring Git identity. */
 export class SpaceResolver {
   async resolve(input: SpaceResolutionInput): Promise<SpaceBinding> {
     if (input.explicitSpaceId !== undefined) {
-      return { spaceId: requiredString(input.explicitSpaceId, "explicitSpaceId"), source: "explicit" };
+      return {
+        spaceId: requiredString(input.explicitSpaceId, "explicitSpaceId"),
+        source: "explicit",
+      };
     }
     const cwd = resolve(requiredString(input.cwd, "cwd"));
 
@@ -40,35 +92,24 @@ export class SpaceResolver {
     const root = parse(directory).root;
     while (true) {
       const configPath = join(directory, ".memory-space", "config.json");
+      let raw: string;
       try {
-        const raw = await readFile(configPath, "utf8");
-        let value: unknown;
-        try {
-          value = JSON.parse(raw);
-        } catch (error) {
-          throw new SpaceBindingInvalidError(configPath, error);
-        }
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          throw new SpaceBindingInvalidError(configPath);
-        }
-        const config = value as Record<string, unknown>;
-        if (config.version !== 1 || typeof config.spaceId !== "string" || config.spaceId.trim() === "") {
-          throw new SpaceBindingInvalidError(configPath);
-        }
-        return {
-          spaceId: config.spaceId.trim(),
-          source: "config",
-          configPath,
-          implicitRecall: resolveImplicitRecallConfiguration(config)
-        };
+        raw = await readFile(configPath, "utf8");
       } catch (error) {
-        if (error instanceof SpaceBindingInvalidError) throw error;
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           throw new SpaceBindingInvalidError(configPath, error);
         }
+        if (directory === root) break;
+        directory = dirname(directory);
+        continue;
       }
-      if (directory === root) break;
-      directory = dirname(directory);
+      let value: unknown;
+      try {
+        value = JSON.parse(raw);
+      } catch (error) {
+        throw new SpaceBindingInvalidError(configPath, error);
+      }
+      return parseProjectBinding(value, configPath);
     }
     throw new SpaceNotBoundError(cwd);
   }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -206,6 +206,68 @@ test("project extraction rules reject executable or unbounded matcher shapes", (
   );
 });
 
+test("project extraction rules reject duplicate enabled Memory keys", () => {
+  const first = (ruleDocument().rules as Record<string, unknown>[])[0] as Record<string, unknown>;
+  assert.throws(
+    () =>
+      parseProjectExtractionRules({
+        version: 1,
+        rules: [
+          first,
+          {
+            ...first,
+            id: "project.frontend.framework.alias",
+            match: {
+              kind: "prefix",
+              prefixes: ["Frontend stack:"],
+              value: "identifier",
+            },
+          },
+        ],
+      }),
+    (error: unknown) =>
+      error instanceof ValidationError &&
+      error.message === "Duplicate extraction rule key: project.frontend.framework"
+  );
+
+  assert.throws(
+    () =>
+      parseProjectExtractionRules({
+        version: 1,
+        rules: [
+          first,
+          {
+            ...first,
+            id: "project.frontend.framework.state",
+            family: "state",
+            type: "task",
+          },
+        ],
+      }),
+    (error: unknown) =>
+      error instanceof ValidationError &&
+      error.message === "Duplicate extraction rule key: project.frontend.framework"
+  );
+});
+
+test("disabled duplicate keys are ignored and one rule may own several prefixes", () => {
+  const first = (ruleDocument().rules as Record<string, unknown>[])[0] as Record<string, unknown>;
+  const parsed = parseProjectExtractionRules({
+    version: 1,
+    rules: [
+      first,
+      {
+        ...first,
+        id: "project.frontend.framework.disabled",
+        enabled: false,
+      },
+    ],
+  });
+
+  assert.equal(parsed.rules.length, 1);
+  assert.deepEqual(parsed.rules[0]?.match.prefixes, ["前端框架使用", "Frontend framework:"]);
+});
+
 test("coreCandidate remains subject to application admission policy", async () => {
   const parsed = parseProjectExtractionRules(
     ruleDocument({
@@ -393,6 +455,195 @@ test("default daemon composition applies matching project rules at checkpoint", 
   } finally {
     await daemon.close();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+interface ProviderRuleCheckpointFixture {
+  directory: string;
+  project: string;
+  memoryDirectory: string;
+  configPath: string;
+  rulesPath: string;
+  daemon: ReturnType<typeof createMemorySpaceDaemon>;
+  common: {
+    session_id: string;
+    transcript_path: string;
+    cwd: string;
+  };
+  internalSessionId: string;
+}
+
+async function providerRuleCheckpointFixture(name: string): Promise<ProviderRuleCheckpointFixture> {
+  const directory = await mkdtemp(join(tmpdir(), `memory-space-rules-${name}-`));
+  const project = join(directory, "project");
+  const memoryDirectory = join(project, ".memory-space");
+  const configPath = join(memoryDirectory, "config.json");
+  const rulesPath = join(memoryDirectory, "extraction-rules.json");
+  await mkdir(memoryDirectory, { recursive: true });
+  await writeFile(configPath, JSON.stringify({ version: 1, spaceId: "space-a" }));
+  const daemon = createMemorySpaceDaemon({
+    host: "127.0.0.1",
+    port: 0,
+    databasePath: join(directory, "memory.db"),
+    mcpRuntime: { cwd: project },
+  });
+  await daemon.memorySpace.createSpace({ id: "space-a", name: "Project A" });
+  const common = {
+    session_id: `${name}-native-session`,
+    transcript_path: join(directory, "opaque-transcript.jsonl"),
+    cwd: project,
+  };
+  const started = await daemon.codexIntegration.handleNative({
+    ...common,
+    hook_event_name: "SessionStart",
+    source: "startup",
+  });
+  if (started.status !== "ok") throw new Error("Expected provider Session to start");
+  const prompted = await daemon.codexIntegration.handleNative({
+    ...common,
+    hook_event_name: "UserPromptSubmit",
+    turn_id: `${name}-turn`,
+    prompt: "前端框架使用 React。",
+  });
+  assert.equal(prompted.status, "ok");
+  return {
+    directory,
+    project,
+    memoryDirectory,
+    configPath,
+    rulesPath,
+    daemon,
+    common,
+    internalSessionId: started.sessionId,
+  };
+}
+
+async function checkpointProviderRuleFixture(
+  fixture: ProviderRuleCheckpointFixture
+): Promise<void> {
+  const checkpointed = await fixture.daemon.codexIntegration.handleNative({
+    ...fixture.common,
+    hook_event_name: "PreCompact",
+    turn_id: `${fixture.common.session_id}-checkpoint`,
+    trigger: "manual",
+  });
+  assert.equal(checkpointed.status, "ok");
+}
+
+async function closeProviderRuleFixture(fixture: ProviderRuleCheckpointFixture): Promise<void> {
+  await fixture.daemon.close();
+  await rm(fixture.directory, { recursive: true, force: true });
+}
+
+test("old provider Session cannot consume rules after its exact config path is rebound", async () => {
+  const fixture = await providerRuleCheckpointFixture("rebound-binding");
+  try {
+    await fixture.daemon.memorySpace.createSpace({ id: "space-b", name: "Project B" });
+    await writeFile(fixture.configPath, JSON.stringify({ version: 1, spaceId: "space-b" }));
+    await writeFile(fixture.rulesPath, JSON.stringify(ruleDocument()));
+
+    await checkpointProviderRuleFixture(fixture);
+
+    const spaceA = await fixture.daemon.memorySpace.browseMemories({ spaceId: "space-a" });
+    const spaceB = await fixture.daemon.memorySpace.browseMemories({ spaceId: "space-b" });
+    assert.deepEqual(spaceA.items, []);
+    assert.deepEqual(spaceB.items, []);
+  } finally {
+    await closeProviderRuleFixture(fixture);
+  }
+});
+
+test("old provider Session does not fall back to cwd when its persisted config is removed", async () => {
+  const fixture = await providerRuleCheckpointFixture("removed-binding");
+  try {
+    await writeFile(fixture.rulesPath, JSON.stringify(ruleDocument()));
+    const fallbackDirectory = join(fixture.directory, ".memory-space");
+    await mkdir(fallbackDirectory);
+    await writeFile(
+      join(fallbackDirectory, "config.json"),
+      JSON.stringify({ version: 1, spaceId: "space-a" })
+    );
+    await writeFile(
+      join(fallbackDirectory, "extraction-rules.json"),
+      JSON.stringify(ruleDocument())
+    );
+    await unlink(fixture.configPath);
+
+    await checkpointProviderRuleFixture(fixture);
+
+    const memories = await fixture.daemon.memorySpace.browseMemories({ spaceId: "space-a" });
+    assert.deepEqual(memories.items, []);
+  } finally {
+    await closeProviderRuleFixture(fixture);
+  }
+});
+
+test("old provider Session does not fall back to cwd when its persisted config is malformed", async () => {
+  const fixture = await providerRuleCheckpointFixture("malformed-binding");
+  try {
+    await writeFile(fixture.rulesPath, JSON.stringify(ruleDocument()));
+    await writeFile(fixture.configPath, "{broken");
+
+    await checkpointProviderRuleFixture(fixture);
+
+    const memories = await fixture.daemon.memorySpace.browseMemories({ spaceId: "space-a" });
+    assert.deepEqual(memories.items, []);
+  } finally {
+    await closeProviderRuleFixture(fixture);
+  }
+});
+
+test("provider Session hot-reloads rules while its exact binding still owns the Space", async () => {
+  const fixture = await providerRuleCheckpointFixture("hot-reload");
+  try {
+    await writeFile(fixture.rulesPath, JSON.stringify(ruleDocument()));
+
+    await checkpointProviderRuleFixture(fixture);
+
+    const memories = await fixture.daemon.memorySpace.browseMemories({ spaceId: "space-a" });
+    assert.deepEqual(
+      memories.items.map(({ key, content, tier }) => ({ key, content, tier })),
+      [
+        {
+          key: "project.frontend.framework",
+          content: "前端框架使用 React",
+          tier: "core",
+        },
+      ]
+    );
+  } finally {
+    await closeProviderRuleFixture(fixture);
+  }
+});
+
+test("owned malformed rule files remain fail-open for lifecycle and fail-visible explicitly", async () => {
+  const fixture = await providerRuleCheckpointFixture("malformed-rules");
+  try {
+    await writeFile(fixture.rulesPath, "not-json");
+
+    const lifecycle = await fixture.daemon.codexIntegration.handleNative({
+      ...fixture.common,
+      hook_event_name: "PreCompact",
+      turn_id: "malformed-rules-turn",
+      trigger: "manual",
+    });
+    assert.equal(lifecycle.status, "warning");
+    if (lifecycle.status === "warning") {
+      assert.equal(lifecycle.warning.error.code, "EXTRACTION_RULES_INVALID");
+      assert.equal(lifecycle.warning.nonBlocking, true);
+    }
+
+    await assert.rejects(
+      fixture.daemon.memorySpace.checkpoint({
+        sessionId: fixture.internalSessionId,
+        idempotencyKey: "malformed-rules-explicit",
+      }),
+      (error: unknown) =>
+        error instanceof ProjectExtractionRulesInvalidError &&
+        error.reason === "file is not valid JSON"
+    );
+  } finally {
+    await closeProviderRuleFixture(fixture);
   }
 });
 

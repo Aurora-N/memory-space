@@ -195,17 +195,13 @@ export function parseProjectExtractionRules(value: unknown): ProjectExtractionRu
     .map(parseRule)
     .filter((rule): rule is DeclarativeExtractionRule => rule !== undefined);
   const ids = new Set<string>();
-  const keyTypes = new Map<string, string>();
+  const keys = new Set<string>();
   for (const rule of rules) {
     if (ids.has(rule.id)) throw new ValidationError(`Duplicate extraction rule id: ${rule.id}`);
     ids.add(rule.id);
     if (!rule.key) continue;
-    const schema = `${rule.family}:${rule.type}`;
-    const existing = keyTypes.get(rule.key);
-    if (existing !== undefined && existing !== schema) {
-      throw new ValidationError(`Extraction rule key ${rule.key} has conflicting schemas`);
-    }
-    keyTypes.set(rule.key, schema);
+    if (keys.has(rule.key)) throw new ValidationError(`Duplicate extraction rule key: ${rule.key}`);
+    keys.add(rule.key);
   }
   return { version: 1, rules };
 }

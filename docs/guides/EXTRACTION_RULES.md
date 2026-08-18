@@ -27,7 +27,12 @@ ancestor binding therefore inherits the ancestor rule file.
 
 For provider Sessions, the binding source selected at first Session creation is
 stored with the Session. Daemon restarts and later provider `cwd` changes do not
-silently switch that Session to another project's rule file.
+silently switch that Session to another project's rule file. At checkpoint,
+the binding file at that exact stored path must still be a valid regular binding
+for the Session's frozen Space. If it is missing, malformed, no longer a regular
+accepted binding file, or rebound to another Space, project rules are not
+applied to that Session. Memory Space does not search for a replacement binding
+from the daemon's current `cwd`.
 
 Rules are read at each checkpoint, so a valid change applies to the next
 `PreCompact`, `SessionEnd`, or explicit `memory_checkpoint`. Prompt and final
@@ -121,10 +126,15 @@ Rule fields:
 | `enabled` | Optional boolean, default `true`. Disabled rules are ignored. |
 | `family` | Required: `knowledge`, `state`, `episode`, or `procedure`. |
 | `type` | Required lowercase type identifier, at most 64 characters. |
-| `key` | Optional stable Memory key, at most 128 characters. A keyed rule updates/deduplicates that Memory; an unkeyed rule creates a new candidate. |
+| `key` | Optional stable Memory key, at most 128 characters. A keyed rule updates/deduplicates that Memory; an unkeyed rule creates a new candidate. One enabled key may be owned by only one rule in a document. |
 | `match` | Required bounded prefix matcher described below. |
 | `contentTemplate` | Required template, at most 500 characters, using only `${value}`. |
 | `coreCandidate` | Optional boolean, default `false`. It recommends Core but cannot force it. |
+
+When several phrases represent the same keyed Memory, put those alternatives
+in one rule's `prefixes` array. Multiple enabled rules with the same `key` are
+invalid, even when their family and type are identical. Disabled rules do not
+participate in this check.
 
 Matcher fields:
 

@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import {
-  SpaceBindingInvalidError,
-  SpaceNotBoundError,
-  SpaceResolver
-} from "../src/index.ts";
+import { readProjectBindingAtPath } from "../src/binding/space-resolver.ts";
+import { SpaceBindingInvalidError, SpaceNotBoundError, SpaceResolver } from "../src/index.ts";
 
 function bind(directory: string, spaceId: string): void {
   const bindingDirectory = join(directory, ".memory-space");
@@ -33,11 +30,17 @@ test("SpaceResolver implements explicit and nearest-ancestor binding semantics",
     const nearest = await resolver.resolve({ cwd: webSrc });
     assert.equal(nearest.spaceId, "space-web");
     assert.equal(nearest.configPath, join(web, ".memory-space", "config.json"));
-    assert.deepEqual(await Promise.all([
-      resolver.resolve({ cwd: root }), resolver.resolve({ cwd: webSrc }), resolver.resolve({ cwd: api })
-    ]).then((values) => values.map((value) => value.spaceId)), ["space-root", "space-web", "space-api"]);
+    assert.deepEqual(
+      await Promise.all([
+        resolver.resolve({ cwd: root }),
+        resolver.resolve({ cwd: webSrc }),
+        resolver.resolve({ cwd: api }),
+      ]).then((values) => values.map((value) => value.spaceId)),
+      ["space-root", "space-web", "space-api"]
+    );
     assert.deepEqual(await resolver.resolve({ cwd: webSrc, explicitSpaceId: "space-explicit" }), {
-      spaceId: "space-explicit", source: "explicit"
+      spaceId: "space-explicit",
+      source: "explicit",
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -53,7 +56,8 @@ test("SpaceResolver rejects the nearest malformed binding instead of skipping it
     writeFileSync(join(nested, ".memory-space", "config.json"), "{broken");
     await assert.rejects(
       new SpaceResolver().resolve({ cwd: nested }),
-      (error: unknown) => error instanceof SpaceBindingInvalidError && error.code === "SPACE_BINDING_INVALID"
+      (error: unknown) =>
+        error instanceof SpaceBindingInvalidError && error.code === "SPACE_BINDING_INVALID"
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -83,34 +87,67 @@ test("SpaceResolver keeps binding validity separate from implicit recall validit
     writeFileSync(path, JSON.stringify({ version: 1, spaceId: "space-default" }));
     assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRecall, {
       effectiveMode: "exact",
-      source: "default"
+      source: "default",
     });
 
     for (const mode of ["off", "exact", "lexical"] as const) {
-      writeFileSync(path, JSON.stringify({
-        version: 1,
-        spaceId: "space-explicit",
-        implicitRecall: { mode }
-      }));
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-explicit",
+          implicitRecall: { mode },
+        })
+      );
       assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRecall, {
         configuredMode: mode,
         effectiveMode: mode,
-        source: "explicit"
+        source: "explicit",
       });
     }
 
     for (const implicitRecall of [{ mode: "unknown" }, [], { mode: 123 }]) {
-      writeFileSync(path, JSON.stringify({
-        version: 1,
-        spaceId: "space-still-valid",
-        implicitRecall
-      }));
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-still-valid",
+          implicitRecall,
+        })
+      );
       const binding = await resolver.resolve({ cwd: root });
       assert.equal(binding.spaceId, "space-still-valid");
       assert.equal(binding.implicitRecall?.effectiveMode, "off");
       assert.equal(binding.implicitRecall?.source, "invalid");
       assert.match(binding.implicitRecall?.error ?? "", /implicitRecall/u);
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("exact project binding reads do not search ancestors or follow symlinks", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memory-space-exact-binding-"));
+  try {
+    const project = join(root, "project");
+    const bindingDirectory = join(project, ".memory-space");
+    const configPath = join(bindingDirectory, "config.json");
+    mkdirSync(bindingDirectory, { recursive: true });
+    bind(root, "space-root");
+
+    assert.equal(await readProjectBindingAtPath(configPath), undefined);
+
+    writeFileSync(configPath, JSON.stringify({ version: 1, spaceId: "space-project" }));
+    assert.equal((await readProjectBindingAtPath(configPath))?.spaceId, "space-project");
+
+    rmSync(configPath);
+    const target = join(root, "shared-config.json");
+    writeFileSync(target, JSON.stringify({ version: 1, spaceId: "space-project" }));
+    symlinkSync(target, configPath);
+    await assert.rejects(
+      readProjectBindingAtPath(configPath),
+      (error: unknown) => error instanceof SpaceBindingInvalidError
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

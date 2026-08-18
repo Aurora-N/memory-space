@@ -4,34 +4,40 @@ import {
   readProjectExtractionRules,
 } from "../binding/extraction-rules.ts";
 import {
+  readProjectBindingAtPath,
   type SpaceBinding,
   type SpaceResolutionInput,
   SpaceResolver,
 } from "../binding/space-resolver.ts";
 import type { MemoryCandidate, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
-import { SpaceNotBoundError } from "./errors.ts";
+import { SpaceBindingInvalidError, SpaceNotBoundError } from "./errors.ts";
 
 interface ProjectRuleSpaceResolver {
   resolve(input: SpaceResolutionInput): Promise<SpaceBinding>;
 }
+
+type ProjectBindingReader = (configPath: string) => Promise<SpaceBinding | undefined>;
 
 /** Loads additive project rules only when the daemon binding matches the Session Space. */
 export class ProjectExtractionRuleExtractor implements MemoryExtractor {
   readonly cwd: string;
   readonly explicitSpaceId?: string;
   readonly spaceResolver: ProjectRuleSpaceResolver;
+  readonly readBinding: ProjectBindingReader;
   readonly loadRules: (binding: SpaceBinding) => Promise<ProjectExtractionRulesResult>;
 
   constructor(options: {
     cwd: string;
     explicitSpaceId?: string;
     spaceResolver?: ProjectRuleSpaceResolver;
+    readBinding?: ProjectBindingReader;
     loadRules?: (binding: SpaceBinding) => Promise<ProjectExtractionRulesResult>;
   }) {
     this.cwd = options.cwd;
     this.explicitSpaceId = options.explicitSpaceId;
     this.spaceResolver = options.spaceResolver ?? new SpaceResolver();
+    this.readBinding = options.readBinding ?? readProjectBindingAtPath;
     this.loadRules = options.loadRules ?? readProjectExtractionRules;
   }
 
@@ -45,11 +51,14 @@ export class ProjectExtractionRuleExtractor implements MemoryExtractor {
       ) {
         return [];
       }
-      binding = {
-        spaceId: context.projectBinding.spaceId,
-        source: "config",
-        configPath: context.projectBinding.configPath,
-      };
+      try {
+        const currentBinding = await this.readBinding(context.projectBinding.configPath);
+        if (!currentBinding || currentBinding.spaceId !== context.session.spaceId) return [];
+        binding = currentBinding;
+      } catch (error) {
+        if (error instanceof SpaceBindingInvalidError) return [];
+        throw error;
+      }
     } else {
       if (this.explicitSpaceId !== undefined) return [];
       try {

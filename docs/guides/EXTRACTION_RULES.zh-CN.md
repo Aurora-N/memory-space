@@ -23,7 +23,11 @@ Provider 私有 payload，也不能绕过 Memory 准入策略。
 子目录也会继承祖先规则文件。
 
 Provider Session 首次创建时选中的绑定来源会随 Session 持久化。daemon 重启或
-Provider 后续改变 `cwd`，都不会静默切换到另一个项目的规则文件。
+Provider 后续改变 `cwd`，都不会静默切换到另一个项目的规则文件。checkpoint 时，
+该持久路径上的绑定文件必须仍是有效的普通绑定文件，并继续指向 Session 已冻结的
+Space。如果该文件缺失、格式错误、不再是可接受的普通绑定文件，或已重新绑定到其他
+Space，则不会为该 Session 应用项目规则。Memory Space 不会从 daemon 当前 `cwd`
+搜索替代绑定。
 
 规则会在每次 checkpoint 时重新读取。有效修改会在下一个 `PreCompact`、
 `SessionEnd` 或显式 `memory_checkpoint` 生效，不需要重启 daemon。prompt 和最终
@@ -113,10 +117,14 @@ Frontend framework: Vue
 | `enabled` | 可选布尔值，默认为 `true`；设为 `false` 时忽略该规则。 |
 | `family` | 必填：`knowledge`、`state`、`episode` 或 `procedure`。 |
 | `type` | 必填的小写类型标识，最多 64 字符。 |
-| `key` | 可选稳定 Memory key，最多 128 字符。有 key 时执行更新/去重，无 key 时创建候选项。 |
+| `key` | 可选稳定 Memory key，最多 128 字符。有 key 时执行更新/去重，无 key 时创建候选项。同一文档中，一个启用 key 只能由一条规则拥有。 |
 | `match` | 必填的有界前缀匹配器。 |
 | `contentTemplate` | 必填，最多 500 字符，只能使用 `${value}` 占位符。 |
 | `coreCandidate` | 可选布尔值，默认为 `false`；只推荐进入 Core，不能强制进入。 |
+
+如果多个句式表示同一个带 key 的 Memory，应把这些别名放入同一规则的 `prefixes`
+数组。即使 family 和 type 相同，多条启用规则使用同一 `key` 也属于无效配置。
+禁用规则不参与该冲突检查。
 
 `match` 字段：
 
