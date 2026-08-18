@@ -26,6 +26,7 @@ export interface ImplicitRecallResult {
 
 interface RecallMemorySpace {
   getSession(id: string): Promise<Session>;
+  findActiveIndexedMemoryByNormalizedKey(spaceId: string, key: string): Promise<Memory | undefined>;
   search(input: MemorySearchInput): Promise<MemorySearchResult[]>;
 }
 
@@ -196,18 +197,12 @@ export class ImplicitRecallService implements ImplicitRecallServicePort {
       this.maxExactKeyCandidates
     );
     const exactRequest = Promise.all(candidates.map(async (candidate) => {
-      const matches = await this.memorySpace.search({
-        spaceId: session.spaceId,
-        query: candidate,
-        tiers: ["indexed"],
-        statuses: ["active"],
-        limit: 20
-      });
-      const normalizedCandidate = normalizeLexicalText(candidate);
-      const exact = matches.find(({ memory }) => memory.key !== undefined
-        && normalizeLexicalText(memory.key) === normalizedCandidate);
+      const exact = await this.memorySpace.findActiveIndexedMemoryByNormalizedKey(
+        session.spaceId,
+        candidate
+      );
       return exact
-        ? { memory: exact.memory, reason: "exact_key" as const, score: exact.score }
+        ? { memory: exact, reason: "exact_key" as const }
         : undefined;
     }));
     const lexicalRequest = input.mode === "lexical"

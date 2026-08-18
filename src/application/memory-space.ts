@@ -470,6 +470,29 @@ export class MemorySpace {
     return results.slice(0, input.limit ?? 20);
   }
 
+  async findActiveIndexedMemoryByNormalizedKey(
+    spaceId: string,
+    key: string
+  ): Promise<Memory | undefined> {
+    const space = await this.getSpace(requiredString(spaceId, "spaceId"));
+    const candidate = requiredString(key, "memory.key");
+    const normalizedCandidate = normalizeLexicalText(candidate);
+    const rawMatch = await this.store.findActiveMemoryByKey(space.id, candidate);
+    if (
+      rawMatch?.tier === "indexed"
+      && normalizeLexicalText(rawMatch.key ?? "") === normalizedCandidate
+    ) {
+      return rawMatch;
+    }
+    const eligible = await this.store.listMemories({
+      spaceId: space.id,
+      tiers: ["indexed"],
+      statuses: ["active"]
+    });
+    return eligible.find((memory) => memory.key !== undefined
+      && normalizeLexicalText(memory.key) === normalizedCandidate);
+  }
+
   async context(input: MemorySearchInput): Promise<ContextResult> {
     const results = await this.search(input);
     const rendered = [

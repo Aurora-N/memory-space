@@ -120,10 +120,11 @@ test("exact recall never prefix- or suffix-matches an invalid complete token", a
   }
 });
 
-test("lexical mode runs bounded exact and full-prompt Memory searches concurrently", async () => {
+test("lexical mode runs bounded exact lookups and full-prompt Memory search concurrently", async () => {
   let active = 0;
   let maximumActive = 0;
-  const queries: string[] = [];
+  const exactKeys: string[] = [];
+  const lexicalQueries: string[] = [];
   const now = new Date(0).toISOString();
   const session: Session = {
     id: "concurrent-session",
@@ -133,20 +134,180 @@ test("lexical mode runs bounded exact and full-prompt Memory searches concurrent
   };
   const service = new ImplicitRecallService({
     async getSession() { return session; },
-    async search(input) {
-      queries.push(input.query);
+    async findActiveIndexedMemoryByNormalizedKey(_spaceId, key) {
+      exactKeys.push(key);
       active += 1;
       maximumActive = Math.max(maximumActive, active);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, key === "ABC_1" ? 8 : 3));
       active -= 1;
-      return [];
+      return memory({ id: `exact-${key}`, key, content: `exact ${key}` });
+    },
+    async search(input) {
+      lexicalQueries.push(input.query);
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      active -= 1;
+      return [{
+        memory: memory({ id: "lexical-result", key: "lexical.result", content: "lexical" }),
+        score: 1
+      }];
     }
   });
   const prompt = "Compare ABC_1 DEF_2 with current repository evidence";
   const result = await service.recall({ sessionId: session.id, prompt, mode: "lexical" });
-  assert.equal(result.context, undefined);
-  assert.deepEqual(queries.sort(), ["ABC_1", "DEF_2", prompt].sort());
+  assert.deepEqual(exactKeys, ["ABC_1", "DEF_2"]);
+  assert.deepEqual(lexicalQueries, [prompt]);
+  assert.deepEqual(result.debugItems.map((item) => item.key), [
+    "ABC_1",
+    "DEF_2",
+    "lexical.result"
+  ]);
   assert.equal(maximumActive, 3);
+});
+
+test("exact mode does not run the lexical full-prompt search", async () => {
+  const now = new Date(0).toISOString();
+  const session: Session = {
+    id: "exact-only-session",
+    spaceId: "exact-only-space",
+    createdAt: now,
+    updatedAt: now
+  };
+  let lexicalSearches = 0;
+  const service = new ImplicitRecallService({
+    async getSession() { return session; },
+    async findActiveIndexedMemoryByNormalizedKey(_spaceId, key) {
+      return memory({ id: "exact-only-memory", key, content: "exact-only content" });
+    },
+    async search() {
+      lexicalSearches += 1;
+      return [];
+    }
+  });
+  const result = await service.recall({
+    sessionId: session.id,
+    prompt: "PROJECT.VERSION_2026",
+    mode: "exact"
+  });
+  assert.equal(lexicalSearches, 0);
+  assert.equal(result.debugItems[0]?.key, "PROJECT.VERSION_2026");
+});
+
+test("exact recall is independent of lexical top-20 truncation", async () => {
+  const memorySpace = createDefaultMemorySpace({ extractor: new NoopExtractor() });
+  try {
+    const space = await memorySpace.createSpace({ id: "space-exact-rank", name: "Exact rank" });
+    const source = await memorySpace.createSession({ spaceId: space.id });
+    const target = await memorySpace.createSession({ spaceId: space.id });
+    const key = "service.feature.module.version.build.id";
+    const exact = await memorySpace.remember({
+      spaceId: space.id,
+      sourceSessionId: source.id,
+      family: "knowledge",
+      type: "fact",
+      key,
+      content: "canonical exact key memory"
+    });
+    for (let index = 0; index < 21; index += 1) {
+      await memorySpace.remember({
+        spaceId: space.id,
+        sourceSessionId: source.id,
+        family: "knowledge",
+        type: "fact",
+        key: `distractor.${String(index).padStart(2, "0")}`,
+        content: `${key} distractor content ${index}`
+      });
+    }
+
+    const legacyTopTwenty = await memorySpace.search({
+      spaceId: space.id,
+      query: key,
+      tiers: ["indexed"],
+      statuses: ["active"],
+      limit: 20
+    });
+    assert.equal(legacyTopTwenty.some(({ memory }) => memory.id === exact.id), false);
+
+    const result = await new ImplicitRecallService(memorySpace).recall({
+      sessionId: target.id,
+      prompt: key,
+      mode: "exact"
+    });
+    assert.equal(result.debugItems[0]?.key, key);
+    assert.match(result.context ?? "", /canonical exact key memory/u);
+    assert.doesNotMatch(result.context ?? "", /distractor content/u);
+  } finally {
+    await memorySpace.close();
+  }
+});
+
+test("application exact-key lookup normalizes equality and enforces Space, active, and Indexed eligibility", async () => {
+  const memorySpace = createDefaultMemorySpace({ extractor: new NoopExtractor() });
+  try {
+    const space = await memorySpace.createSpace({ id: "space-exact-eligibility", name: "Eligibility" });
+    const other = await memorySpace.createSpace({ id: "space-exact-other", name: "Other" });
+    const normalized = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      key: "PROJECT.VERSION_2026",
+      content: "normalized exact hit"
+    });
+    const core = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      key: "CORE.VERSION_2026",
+      content: "core is bootstrap only"
+    });
+    await memorySpace.promote(core.id, { actor: "user" });
+    const archived = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      key: "ARCHIVED.VERSION_2026",
+      content: "archived must not return"
+    });
+    await memorySpace.setMemoryStatus(archived.id, "archived");
+    const resolved = await memorySpace.remember({
+      spaceId: space.id,
+      family: "knowledge",
+      type: "fact",
+      key: "RESOLVED.VERSION_2026",
+      content: "resolved must not return"
+    });
+    await memorySpace.setMemoryStatus(resolved.id, "resolved");
+    await memorySpace.remember({
+      spaceId: other.id,
+      family: "knowledge",
+      type: "fact",
+      key: "OTHER.VERSION_2026",
+      content: "other Space must not return"
+    });
+
+    assert.equal(
+      (await memorySpace.findActiveIndexedMemoryByNormalizedKey(
+        space.id,
+        "project.version_2026"
+      ))?.id,
+      normalized.id
+    );
+    for (const key of [
+      "core.version_2026",
+      "archived.version_2026",
+      "resolved.version_2026",
+      "other.version_2026"
+    ]) {
+      assert.equal(
+        await memorySpace.findActiveIndexedMemoryByNormalizedKey(space.id, key),
+        undefined,
+        key
+      );
+    }
+  } finally {
+    await memorySpace.close();
+  }
 });
 
 test("prompt Memory directive is narrow and deterministic", () => {
