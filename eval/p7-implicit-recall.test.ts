@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertP7FixtureContract,
+  expectedP7LifecycleDecision,
   loadP7Fixture,
+  p7LifecycleDecisionMatches,
   runP7ImplicitRecallEval,
   validateP7Fixture,
   type P7ImplicitRecallFixture
@@ -26,6 +28,30 @@ test("P7 deterministic implicit recall eval passes the frozen 4x4 contract", asy
   assert.equal(first.metrics.metadataLeakageRate, 0);
   assert.equal(first.metrics.optOutComplianceRate, 1);
   assert.equal(first.metrics.budgetComplianceRate, 1);
+});
+
+test("P7 scenario acceptance rejects an observed effectiveMode mismatch", () => {
+  const scenario = { classification: "exact-key" as const, mode: "exact" as const };
+  assert.deepEqual(expectedP7LifecycleDecision(scenario), {
+    effectiveMode: "exact",
+    bypassed: false
+  });
+  assert.equal(p7LifecycleDecisionMatches(scenario, {
+    effectiveMode: "lexical",
+    bypassed: false
+  }), false);
+});
+
+test("P7 scenario acceptance rejects an observed bypass mismatch", () => {
+  const scenario = { classification: "opt-out" as const, mode: "lexical" as const };
+  assert.deepEqual(expectedP7LifecycleDecision(scenario), {
+    effectiveMode: "off",
+    bypassed: true
+  });
+  assert.equal(p7LifecycleDecisionMatches(scenario, {
+    effectiveMode: "off",
+    bypassed: false
+  }), false);
 });
 
 test("P7 fixture schema rejects malformed or incomplete fields", async () => {

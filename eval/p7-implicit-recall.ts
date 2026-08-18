@@ -14,6 +14,9 @@ import {
   ProviderSessionResolver,
   SpaceResolver,
   type ImplicitRecallMode,
+  type LifecycleContext,
+  type LifecycleResult,
+  type LifecycleWarning,
   type MemoryStatus,
   type MemoryTier
 } from "../src/index.ts";
@@ -89,6 +92,41 @@ export interface P7ImplicitRecallReport {
   };
   scenarios: P7ScenarioResult[];
   hardCorrectness: "pass" | "fail";
+}
+
+export interface P7LifecycleDecision {
+  effectiveMode: ImplicitRecallMode;
+  bypassed: boolean;
+}
+
+class RecordingLifecycleHandler extends LifecycleHandler {
+  lastResult?: LifecycleResult | LifecycleWarning;
+
+  override async handleFailOpen(
+    value: unknown,
+    context: LifecycleContext = {}
+  ): Promise<LifecycleResult | LifecycleWarning> {
+    const result = await super.handleFailOpen(value, context);
+    this.lastResult = result;
+    return result;
+  }
+}
+
+export function expectedP7LifecycleDecision(
+  scenario: Pick<P7ImplicitRecallScenario, "classification" | "mode">
+): P7LifecycleDecision {
+  return scenario.classification === "opt-out"
+    ? { effectiveMode: "off", bypassed: true }
+    : { effectiveMode: scenario.mode, bypassed: false };
+}
+
+export function p7LifecycleDecisionMatches(
+  scenario: Pick<P7ImplicitRecallScenario, "classification" | "mode">,
+  observed: P7LifecycleDecision
+): boolean {
+  const expected = expectedP7LifecycleDecision(scenario);
+  return observed.effectiveMode === expected.effectiveMode
+    && observed.bypassed === expected.bypassed;
 }
 
 const fixtureUrl = new URL("./fixtures/p7-implicit-recall.json", import.meta.url);
@@ -257,7 +295,7 @@ async function runScenario(
       spaceId: primary.id,
       implicitRecall: { mode: scenario.mode }
     }));
-    const handler = new LifecycleHandler({
+    const handler = new RecordingLifecycleHandler({
       memorySpace,
       spaceResolver: new SpaceResolver(),
       sessionResolver: new ProviderSessionResolver(memorySpace),
@@ -298,6 +336,17 @@ async function runScenario(
     if (response.status !== "ok" || response.type !== "user_prompt") {
       throw new Error("Expected provider UserPromptSubmit success");
     }
+    const lifecycleResult = handler.lastResult;
+    assert.equal(lifecycleResult?.status, "ok");
+    assert.equal(lifecycleResult?.type, "user_prompt");
+    if (lifecycleResult?.status !== "ok" || lifecycleResult.type !== "user_prompt") {
+      throw new Error("Provider integration did not consume a user_prompt LifecycleResult");
+    }
+    assert.ok(lifecycleResult.recall, "user_prompt LifecycleResult must include recall decision");
+    const observedDecision: P7LifecycleDecision = {
+      effectiveMode: lifecycleResult.recall.effectiveMode,
+      bypassed: lifecycleResult.recall.bypassed
+    };
     const output = response.output;
     const context = output?.hookSpecificOutput?.hookEventName === "UserPromptSubmit"
       ? output.hookSpecificOutput.additionalContext
@@ -328,15 +377,15 @@ async function runScenario(
       && !coreReinjected
       && (context?.length ?? 0) <= 2400
       && (output?.hookSpecificOutput?.hookEventName
-        === (context ? "UserPromptSubmit" : undefined));
+        === (context ? "UserPromptSubmit" : undefined))
+      && p7LifecycleDecisionMatches(scenario, observedDecision);
     return {
       scenarioId: scenario.scenarioId,
       sourceProvider: scenario.sourceProvider,
       targetProvider: scenario.targetProvider,
       classification: scenario.classification,
-      effectiveMode: scenario.classification === "opt-out" ? "off" : scenario.mode,
-      bypassed: scenario.classification === "opt-out"
-        && (context?.includes("disabled Memory Space reads") ?? false),
+      effectiveMode: observedDecision.effectiveMode,
+      bypassed: observedDecision.bypassed,
       bootstrapExcluded,
       injectedKeys,
       firstKey,
