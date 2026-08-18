@@ -28,7 +28,7 @@ pnpm memory-space eval implicit-recall --json
 The runner uses isolated temporary SQLite stores and provider-native event
 normalization/rendering, but does not require a daemon or authenticated CLI.
 Real native/production bridge evidence is recorded in
-[`../docs/quality/P7_PROVIDER_CAPABILITY_SPIKE.md`](../docs/quality/P7_PROVIDER_CAPABILITY_SPIKE.md).
+[`../docs/reports/quality/P7_PROVIDER_CAPABILITY_SPIKE.md`](../docs/reports/quality/P7_PROVIDER_CAPABILITY_SPIKE.md).
 
 The P4 cross-session proof is implemented once in `eval/support/cross-session-runner.ts`. The `node:test` wrapper and P5 CLI both call that canonical runner:
 
@@ -84,14 +84,14 @@ Accepted Stage A reference:
 
 Evidence:
 
-- [`../docs/quality/P6_BASELINE.md`](../docs/quality/P6_BASELINE.md)
-- [`../docs/code-review/CR-PHASE9.md`](../docs/code-review/CR-PHASE9.md)
+- [`../docs/reports/quality/P6_BASELINE.md`](../docs/reports/quality/P6_BASELINE.md)
+- [`../docs/reviews/CR-PHASE9.md`](../docs/reviews/CR-PHASE9.md)
 
 ## P6 Stage B1 comparison rule
 
 Stage B1 is the frozen retrieval-quality optimization and is defined by:
 
-[`../docs/P6_STAGE_B_RETRIEVAL_SPEC.md`](../docs/P6_STAGE_B_RETRIEVAL_SPEC.md)
+[`../docs/specs/P6_STAGE_B_RETRIEVAL_SPEC.md`](../docs/specs/P6_STAGE_B_RETRIEVAL_SPEC.md)
 
 Before production retrieval changes, the implementation froze the immutable
 machine-readable Stage A snapshot at:
@@ -130,7 +130,7 @@ The comparison command exits non-zero when the Stage B1 delta gate or accepted
 hard-correctness checks fail. Regular `eval quality` still separates observational
 quality scores from its hard-correctness exit status.
 
-Candidate evidence: [`../docs/quality/P6_STAGE_B1_RESULT.md`](../docs/quality/P6_STAGE_B1_RESULT.md).
+Candidate evidence: [`../docs/reports/quality/P6_STAGE_B1_RESULT.md`](../docs/reports/quality/P6_STAGE_B1_RESULT.md).
 
 ## P6 Stage B2 extraction comparison rule
 
@@ -152,9 +152,9 @@ candidate TP/FP/FN, precision/recall, fixed/removed/new/unchanged failures, hard
 correctness, and the B2 acceptance gate. It does not run or relabel the B1
 retrieval comparison.
 
-Candidate evidence: [`../docs/quality/P6_STAGE_B2_RESULT.md`](../docs/quality/P6_STAGE_B2_RESULT.md).
+Candidate evidence: [`../docs/reports/quality/P6_STAGE_B2_RESULT.md`](../docs/reports/quality/P6_STAGE_B2_RESULT.md).
 
 The proposed B3 baseline/comparison contract is design-only and is documented in
-[`../docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](../docs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md).
+[`../docs/specs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`](../docs/specs/P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md).
 No B3 baseline artifact or comparison command exists until implementation is
 separately authorized.

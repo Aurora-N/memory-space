@@ -293,8 +293,8 @@ export async function runUnbind(
 function providerNextSteps(write: (line: string) => void): void {
   write("");
   write("Provider next steps (global configuration was not modified):");
-  write("Codex:       docs/CODEX_INTEGRATION.md and examples/codex/");
-  write("Claude Code: docs/CLAUDE_CODE_INTEGRATION.md and examples/claude-code/");
+  write("Codex:       docs/guides/CODEX_INTEGRATION.md and examples/codex/");
+  write("Claude Code: docs/guides/CLAUDE_CODE_INTEGRATION.md and examples/claude-code/");
 }
 
 function check(
@@ -473,8 +473,8 @@ export async function runDoctor(
         provider.state === "detected"
           ? undefined
           : provider.provider === "codex"
-            ? "See docs/CODEX_INTEGRATION.md."
-            : "See docs/CLAUDE_CODE_INTEGRATION.md."
+            ? "See docs/guides/CODEX_INTEGRATION.md."
+            : "See docs/guides/CLAUDE_CODE_INTEGRATION.md."
       )
     );
   }

@@ -23,8 +23,8 @@ Memory Space is a provider-neutral persistent memory layer for coding agents. Pr
   behavior.
 
 Read the relevant specification before editing behavior. Product and domain contracts live in
-`docs/PRODUCT_SPEC.md`, `docs/DOMAIN_MODEL.md`, and the active phase spec. Provider work must also follow
-`docs/PROVIDER_INTEGRATION_GUARDRAILS.md`. Treat a phase marked frozen as change-controlled: do not alter
+`docs/specs/PRODUCT_SPEC.md`, `docs/specs/DOMAIN_MODEL.md`, and the active phase spec. Provider work must also follow
+`docs/specs/PROVIDER_INTEGRATION_GUARDRAILS.md`. Treat a phase marked frozen as change-controlled: do not alter
 its production policy merely to improve a metric or simplify a new feature.
 
 ## Architecture boundaries
