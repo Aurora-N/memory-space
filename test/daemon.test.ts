@@ -11,8 +11,7 @@ import {
   createDefaultMemorySpace,
   createMemorySpaceDaemon,
   isLoopbackHost,
-  ValidationError,
-  type MemorySpace
+  ValidationError
 } from "../src/index.ts";
 
 function structured<T>(result: CallToolResult): T {

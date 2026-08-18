@@ -8,6 +8,7 @@ import { createRequestHandler } from "../src/http/server.ts";
 
 interface HttpResult {
   status: number;
+  // biome-ignore lint/suspicious/noExplicitAny: The HTTP contract test intentionally inspects heterogeneous decoded JSON bodies.
   body: Record<string, any>;
 }
 
@@ -34,6 +35,7 @@ function createClient(memorySpace: MemorySpace) {
       end(value?: string) { responseBody = value ?? ""; }
     } as unknown as ServerResponse;
     await handler(incoming, response);
+    // biome-ignore lint/suspicious/noExplicitAny: The test client preserves arbitrary JSON shapes for endpoint-specific assertions.
     return { status, body: JSON.parse(responseBody) as Record<string, any> };
   };
 }

@@ -912,12 +912,12 @@ function selfTest() {
 
 function preflight() {
   const facts = validatePrerequisites();
-  process.stdout.write([
+  process.stdout.write(`${[
     "Claude P3 smoke preflight: PASS",
     `Claude Code: ${facts.claudeVersion}`,
     `Source tree: ${facts.sourceStatus === "" ? "clean" : "working-tree"}`,
     `Implementation SHA-256: ${facts.sourceDigest}`
-  ].join("\n") + "\n");
+  ].join("\n")}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {

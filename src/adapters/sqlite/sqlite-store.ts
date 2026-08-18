@@ -17,6 +17,7 @@ import type {
 import type { MemoryFilters, MemoryHistoryRecord, MemoryStore } from "../../ports/store.ts";
 import { migrations } from "./migrations.ts";
 
+// biome-ignore lint/suspicious/noExplicitAny: node:sqlite returns dynamically typed row columns at this adapter boundary.
 type Row = Record<string, any>;
 
 function parseJson<T>(value: unknown, fallback?: T): T | undefined {
@@ -219,7 +220,9 @@ export class SqliteMemoryStore implements MemoryStore {
     this.database.prepare(
       "INSERT INTO session_events (id, session_id, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)"
     ).run(event.id, event.sessionId, event.type, JSON.stringify(event.payload), event.createdAt);
-    return (await this.findEvent(event.sessionId, event.id))!;
+    const persisted = await this.findEvent(event.sessionId, event.id);
+    if (!persisted) throw new Error(`Inserted SessionEvent was not found: ${event.id}`);
+    return persisted;
   }
 
   async findEvent(sessionId: string, eventId: string): Promise<SessionEvent | undefined> {
@@ -241,7 +244,11 @@ export class SqliteMemoryStore implements MemoryStore {
     return (this.database.prepare(`
       SELECT * FROM session_events
       WHERE session_id = ? AND sequence > ? AND sequence <= ? ORDER BY sequence
-    `).all(sessionId, afterSequence, throughSequence) as Row[]).map((row) => mapEvent(row)!);
+    `).all(sessionId, afterSequence, throughSequence) as Row[]).map((row) => {
+      const event = mapEvent(row);
+      if (!event) throw new Error("SQLite returned an empty SessionEvent row");
+      return event;
+    });
   }
 
   async insertMemory(memory: Memory): Promise<void> {
@@ -288,6 +295,7 @@ export class SqliteMemoryStore implements MemoryStore {
   async listMemories(filters: MemoryFilters): Promise<Memory[]> {
     await this.#ready();
     const clauses = ["space_id = ?"];
+    // biome-ignore lint/suspicious/noExplicitAny: node:sqlite accepts a heterogeneous positional parameter list.
     const parameters: any[] = [filters.spaceId];
     const add = (column: string, values?: string[]) => {
       if (!values) return;
@@ -300,7 +308,11 @@ export class SqliteMemoryStore implements MemoryStore {
     add("status", filters.statuses);
     return (this.database.prepare(
       `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY updated_at, id`
-    ).all(...parameters) as Row[]).map((row) => mapMemory(row)!);
+    ).all(...parameters) as Row[]).map((row) => {
+      const memory = mapMemory(row);
+      if (!memory) throw new Error("SQLite returned an empty Memory row");
+      return memory;
+    });
   }
 
   async addMemorySource(memoryId: string, eventId: string, createdAt: string): Promise<void> {

@@ -194,6 +194,9 @@ export class MemoryMcpGateway {
 
   async #requiredSession(sessionId: string): Promise<Session> {
     const resolved = await this.requestContext.resolve({ sessionId });
-    return resolved.session!;
+    if (!resolved.session) {
+      throw commandError("SESSION_NOT_FOUND", `Session not found: ${sessionId}`, false);
+    }
+    return resolved.session;
   }
 }

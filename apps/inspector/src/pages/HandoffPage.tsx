@@ -17,11 +17,17 @@ function HandoffSection({
   icon: IconName;
   tone: string;
 }) {
+  const occurrences = new Map<string, number>();
+  const items = values.map((value) => {
+    const occurrence = occurrences.get(value) ?? 0;
+    occurrences.set(value, occurrence + 1);
+    return { key: `${value}\u0000${occurrence}`, value };
+  });
   return (
     <section className={`handoff-section handoff-section--${tone}`}>
       <header><span><Icon name={icon} size={17} /></span><h2>{title}</h2><strong>{values.length}</strong></header>
       {values.length > 0 ? (
-        <ul>{values.map((value, index) => <li key={`${index}-${value}`}>{value}</li>)}</ul>
+        <ul>{items.map((item) => <li key={item.key}>{item.value}</li>)}</ul>
       ) : <p>None recorded</p>}
     </section>
   );

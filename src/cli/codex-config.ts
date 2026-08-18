@@ -113,10 +113,9 @@ async function assertNoUserScope(home: string | undefined): Promise<void> {
   const [hooks, mcp] = await Promise.all([readSmallFile(hooksPath), readSmallFile(mcpPath)]);
   const hookConfigured = hooks !== undefined
     && (hooks.includes("codex:hook") || hooks.includes("/providers/codex/lifecycle"));
-  const mcpConfigured = mcp !== undefined
-    && mcp.split(/\r?\n/u).some((line) => (
+  const mcpConfigured = mcp?.split(/\r?\n/u).some((line) => (
       !line.trimStart().startsWith("#") && line.includes("memory_space")
-    ));
+    )) ?? false;
   if (hookConfigured || mcpConfigured) {
     throw new CliError(
       "PROVIDER_CONFIG_CONFLICT",
@@ -236,7 +235,8 @@ function planMcp(path: string, before: ConfigFile, mcpUrl: string): PlannedFile 
     });
   }
   if (sectionIndexes.length === 1) {
-    const start = sectionIndexes[0]!;
+    const [start] = sectionIndexes;
+    if (start === undefined) throw new Error("Expected one memory_space MCP section");
     const section = activeLines.slice(start + 1).findIndex((line) => /^\[/u.test(line));
     const end = section < 0 ? activeLines.length : start + 1 + section;
     const urlLines = activeLines.slice(start + 1, end)

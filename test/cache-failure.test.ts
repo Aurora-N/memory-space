@@ -5,14 +5,20 @@ import { createDefaultMemorySpace } from "../src/index.ts";
 
 class ThrowingDeleteCache implements CachePort {
   async get<T>(_key: string): Promise<T | undefined> { return undefined; }
-  async set<T>(_key: string, _value: T, _ttlSeconds?: number): Promise<void> {}
+  async set<T>(_key: string, _value: T, _ttlSeconds?: number): Promise<void> {
+    // This test double only exercises delete failure.
+  }
   async delete(_key: string): Promise<void> { throw new Error("cache unavailable"); }
 }
 
 class ThrowingGetCache implements CachePort {
   async get<T>(_key: string): Promise<T | undefined> { throw new Error("cache get unavailable"); }
-  async set<T>(_key: string, _value: T, _ttlSeconds?: number): Promise<void> {}
-  async delete(_key: string): Promise<void> {}
+  async set<T>(_key: string, _value: T, _ttlSeconds?: number): Promise<void> {
+    // This test double only exercises get failure.
+  }
+  async delete(_key: string): Promise<void> {
+    // This test double only exercises get failure.
+  }
 }
 
 class ThrowingSetCache implements CachePort {
@@ -20,7 +26,9 @@ class ThrowingSetCache implements CachePort {
   async set<T>(_key: string, _value: T, _ttlSeconds?: number): Promise<void> {
     throw new Error("cache set unavailable");
   }
-  async delete(_key: string): Promise<void> {}
+  async delete(_key: string): Promise<void> {
+    // This test double only exercises set failure.
+  }
 }
 
 test("cache invalidation failure cannot turn a committed checkpoint into failure", async () => {

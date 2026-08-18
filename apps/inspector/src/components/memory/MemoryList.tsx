@@ -20,7 +20,7 @@ export function MemoryList({
     return <EmptyState icon="search" title={emptyTitle} description={emptyDescription} />;
   }
   return (
-    <div className="memory-table" aria-label="Memory 列表">
+    <div className="memory-table">
       <div className="memory-table__header" aria-hidden="true">
         <span>Memory</span>
         <span>Type</span>

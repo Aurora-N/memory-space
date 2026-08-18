@@ -8,3 +8,6 @@ coverage/
 *.db-wal
 .DS_Store
 apps/*/dist/
+
+# Test Local Memory Space Files
+.memory-space/

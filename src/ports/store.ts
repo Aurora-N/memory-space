@@ -9,6 +9,7 @@ import type {
   Space
 } from "../domain/types.ts";
 
+/** Immutable audit record for a memory state transition. */
 export interface MemoryHistoryRecord {
   id: number;
   memoryId: string;
@@ -21,6 +22,7 @@ export interface MemoryHistoryRecord {
   createdAt: string;
 }
 
+/** Source-of-truth query filters shared by storage adapters. */
 export interface MemoryFilters {
   spaceId: string;
   families?: string[];

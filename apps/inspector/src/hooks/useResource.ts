@@ -17,7 +17,9 @@ export function useResource<T>(loader: () => Promise<T>, dependencies: Dependenc
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, dependencies);
+  },
+  // biome-ignore lint/correctness/useExhaustiveDependencies: This reusable hook deliberately delegates dependency ownership to its caller.
+  dependencies);
 
   return { data, error, loading };
 }

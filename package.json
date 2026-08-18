@@ -26,12 +26,17 @@
     "smoke:p7": "node scripts/p7-real-smoke.mjs",
     "mcp:standalone": "node --experimental-strip-types src/mcp/standalone-stdio.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts",
-    "lint": "node scripts/lint.mjs",
+    "lint:source": "node scripts/lint.mjs",
+    "lint:biome": "biome lint .",
+    "lint:architecture": "node scripts/architecture-lint.mjs",
+    "lint:comments": "node scripts/comment-lint.mjs",
+    "lint": "pnpm run lint:source && pnpm run lint:biome && pnpm run lint:architecture && pnpm run lint:comments",
     "typecheck": "tsc --noEmit",
-    "check": "node scripts/lint.mjs && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test && node scripts/p7-provider-capability-spike.mjs --self-test && node scripts/p7-real-smoke.mjs --self-test",
+    "check": "pnpm run lint && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test && node scripts/p7-provider-capability-spike.mjs --self-test && node scripts/p7-real-smoke.mjs --self-test",
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {
+    "@biomejs/biome": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
   },

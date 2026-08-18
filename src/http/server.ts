@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import {
+import type {
   MemorySpace,
-  type AppendEventInput,
-  type BrowseMemoriesInput,
-  type CreateSessionInput,
-  type CreateSpaceInput,
-  type RememberInput
+  AppendEventInput,
+  BrowseMemoriesInput,
+  CreateSessionInput,
+  CreateSpaceInput,
+  RememberInput
 } from "../application/memory-space.ts";
 import { MemorySpaceError, NotFoundError, ValidationError } from "../domain/errors.ts";
 import type { MemorySearchInput, MemoryStatus } from "../domain/types.ts";

@@ -78,11 +78,11 @@ export function AppShell({
           <span><strong>Local · Read only</strong><small>不会修改 Memory state</small></span>
         </div>
       </aside>
-      {menuOpen && <button className="mobile-scrim" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <button className="mobile-scrim" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} type="button" />}
 
       <div className="workspace">
         <header className="topbar">
-          <button className="icon-button topbar__menu" aria-label="打开菜单" onClick={() => setMenuOpen(true)}>
+          <button className="icon-button topbar__menu" aria-label="打开菜单" onClick={() => setMenuOpen(true)} type="button">
             <Icon name="menu" />
           </button>
           <div className="topbar__space">

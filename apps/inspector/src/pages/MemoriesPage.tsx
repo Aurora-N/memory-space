@@ -47,6 +47,8 @@ export function MemoriesPage({
   }), [filters]);
 
   useEffect(() => {
+    // refreshKey is an explicit reload signal; it is not part of the HTTP request.
+    void refreshKey;
     let active = true;
     setLoading(true);
     setError(undefined);
@@ -98,7 +100,7 @@ export function MemoriesPage({
             type="search"
             value={query}
           />
-          {query && <button aria-label="清除搜索" className="icon-button" onClick={() => setQuery("")}><Icon name="close" size={15} /></button>}
+          {query && <button aria-label="清除搜索" className="icon-button" onClick={() => setQuery("")} type="button"><Icon name="close" size={15} /></button>}
         </div>
         <div className="filter-row">
           <label>Tier<select value={filters.tier} onChange={(event) => setFilter("tier", event.target.value as Filters["tier"])}><option value="">全部</option><option value="core">Core</option><option value="indexed">Indexed</option></select></label>

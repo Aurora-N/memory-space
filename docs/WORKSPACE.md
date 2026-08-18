@@ -14,14 +14,20 @@ memory-space/
 
 ```bash
 pnpm install
+pnpm run lint
 pnpm run check
 pnpm run check:workspace
 ```
 
+- `lint` composes the legacy source checks, Biome, architecture boundaries, and comment-policy checks.
 - `check` validates the current root package.
 - `check:workspace` runs the `check` script in the root and every future workspace package that defines one.
 - A single root `pnpm-lock.yaml` records dependency resolution for the entire workspace.
 - Shared toolchain versions live in the root `catalog`; packages reference them with `catalog:` to prevent version drift.
+
+Biome is the shared TypeScript/JavaScript linter. Architecture and comment rules that are specific to
+Memory Space remain small repository scripts instead of being hidden in a general lint configuration.
+See `AGENTS.md` for the enforced dependency direction, trust boundaries, and documentation expectations.
 
 CI should install with `pnpm install --frozen-lockfile` so dependency drift fails the build instead of rewriting the shared lockfile.
 

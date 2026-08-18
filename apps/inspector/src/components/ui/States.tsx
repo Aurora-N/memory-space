@@ -37,7 +37,7 @@ export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => v
       <span className="state__eyebrow">READ ERROR</span>
       <strong>暂时无法读取 Memory Space</strong>
       <p>{error.message}</p>
-      {onRetry && <button className="button button--secondary" onClick={onRetry}>重新读取</button>}
+      {onRetry && <button className="button button--secondary" onClick={onRetry} type="button">重新读取</button>}
     </div>
   );
 }

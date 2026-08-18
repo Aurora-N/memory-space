@@ -846,11 +846,11 @@ async function preflight() {
   const projectHookPath = join(projectCodexDirectory, "hooks.json");
   const facts = validatePrerequisites(projectCodexDirectory, projectHookPath);
   const hookState = existsSync(projectHookPath) ? "recoverable runner artifact" : "absent";
-  process.stdout.write([
+  process.stdout.write(`${[
     "Codex P2 smoke preflight: PASS",
     `Codex CLI: ${facts.codexVersion}`,
     `Project hooks: ${hookState}`
-  ].join("\n") + "\n");
+  ].join("\n")}\n`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {

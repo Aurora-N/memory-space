@@ -49,6 +49,8 @@ export function App() {
   const [selectedMemoryId, setSelectedMemoryId] = useState<string>();
 
   useEffect(() => {
+    // bindingKey is an explicit reload signal; the request itself has no key parameter.
+    void bindingKey;
     let active = true;
     setBindingError(undefined);
     void inspectorApi.binding().then((result) => {
@@ -90,7 +92,6 @@ export function App() {
       case "disclosure": return <DisclosurePage {...props} onSelectMemory={setSelectedMemoryId} />;
       case "handoff": return <HandoffPage {...props} />;
       case "validation": return <ValidationPage {...props} onSelectMemory={setSelectedMemoryId} />;
-      case "overview":
       default: return <OverviewPage {...props} onSelectMemory={setSelectedMemoryId} />;
     }
   })();

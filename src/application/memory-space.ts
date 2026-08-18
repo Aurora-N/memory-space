@@ -303,14 +303,17 @@ export class MemorySpace {
       session = await this.getSession(input.sourceSessionId);
       if (session.spaceId !== space.id) throw new ValidationError("sourceSessionId must belong to memory.spaceId");
     }
-    if ((input.sourceEventIds?.length ?? 0) > 0 && !session) {
-      throw new ValidationError("sourceEventIds require sourceSessionId for provenance validation");
+    const sourceEventIds = input.sourceEventIds ?? [];
+    if (sourceEventIds.length > 0) {
+      if (!session) {
+        throw new ValidationError("sourceEventIds require sourceSessionId for provenance validation");
+      }
+      for (const eventId of sourceEventIds) await this.#sessionEvent(session.id, eventId);
     }
-    for (const eventId of input.sourceEventIds ?? []) await this.#sessionEvent(session!.id, eventId);
     const memory = await this.store.transaction(() => this.#commitMemory({
       ...validated, spaceId: space.id, sourceSessionId: session?.id,
       sourceAgentId: input.sourceAgentId ?? session?.agentId,
-      sourceEventIds: input.sourceEventIds ?? [], operation: validated.key ? "update" : "create",
+      sourceEventIds, operation: validated.key ? "update" : "create",
       reason: "explicit remember"
     }, "explicit"));
     await this.#safeInvalidate(space.id);
@@ -347,10 +350,11 @@ export class MemorySpace {
     const start = pageStart < 0 ? memories.length : pageStart;
     const items = memories.slice(start, start + limit);
     const hasMore = start + items.length < memories.length;
+    const lastItem = items.at(-1);
     return {
       items,
       total: memories.length,
-      nextCursor: hasMore && items.length > 0 ? encodeBrowseCursor(items.at(-1)!) : undefined
+      nextCursor: hasMore && lastItem ? encodeBrowseCursor(lastItem) : undefined
     };
   }
 
@@ -629,13 +633,14 @@ export class MemorySpace {
         })));
         const snapshot = await this.#buildSnapshot(session, checkpoint.id);
         await this.store.insertHandoff(snapshot);
+        const completedAt = timestamp();
         const done: Checkpoint = {
-          ...checkpoint, status: "completed", handoffSnapshotId: snapshot.id, completedAt: timestamp()
+          ...checkpoint, status: "completed", handoffSnapshotId: snapshot.id, completedAt
         };
         await this.store.updateCheckpoint(done);
         await this.store.updateSession({
           ...session, lastCheckpointEventId: toEvent.id,
-          latestHandoffSnapshotId: snapshot.id, updatedAt: done.completedAt!
+          latestHandoffSnapshotId: snapshot.id, updatedAt: completedAt
         });
         return done;
       });
@@ -760,21 +765,15 @@ export class MemorySpace {
     equivalent: boolean
   ): Promise<MemoryTier> {
     if (actor === "explicit") return existing.tier;
-    switch (input.admissionReason) {
-      case "eligible":
-        return "core";
-      case "bounded-local":
-        if (equivalent && existing.tier === "core") {
-          const history = await this.store.listMemoryHistory(existing.id);
-          if (hasEffectiveExplicitPromotion(existing, history)) return "core";
-        }
-        return "indexed";
-      case "not-recommended":
-      case "missing-promotion-reason":
-      case "type-ineligible":
-      default:
-        return existing.tier;
+    if (input.admissionReason === "eligible") return "core";
+    if (input.admissionReason === "bounded-local") {
+      if (equivalent && existing.tier === "core") {
+        const history = await this.store.listMemoryHistory(existing.id);
+        if (hasEffectiveExplicitPromotion(existing, history)) return "core";
+      }
+      return "indexed";
     }
+    return existing.tier;
   }
 
   async #commitMemory(input: CommitInput, actor: "explicit" | "extractor"): Promise<Memory> {
