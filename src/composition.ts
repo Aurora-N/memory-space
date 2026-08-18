@@ -4,6 +4,7 @@ import { MemorySpace } from "./application/memory-space.ts";
 import { NoopCache, type CachePort } from "./ports/cache.ts";
 import type { MemoryExtractor } from "./ports/extractor.ts";
 
+/** Infrastructure options owned by the default Memory Space composition root. */
 export interface DefaultMemorySpaceOptions {
   databasePath?: string;
   extractor?: MemoryExtractor;
@@ -11,6 +12,7 @@ export interface DefaultMemorySpaceOptions {
   coreLimit?: number;
 }
 
+/** Creates one MemorySpace owner backed by SQLite and provider-neutral adapters. */
 export function createDefaultMemorySpace(options: DefaultMemorySpaceOptions = {}): MemorySpace {
   return new MemorySpace({
     store: new SqliteMemoryStore(options.databasePath),

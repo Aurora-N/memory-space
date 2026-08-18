@@ -89,6 +89,20 @@ test("comment lint rejects undocumented contracts and unexplained suppressions",
         ""
       ].join("\n")
     );
+    write(
+      root,
+      "src/index.ts",
+      'export { createService } from "./application/service.ts";\n'
+    );
+    write(
+      root,
+      "src/application/service.ts",
+      [
+        "export function createService() { return {}; }",
+        "// 中文注释",
+        ""
+      ].join("\n")
+    );
 
     const result = runGate("scripts/comment-lint.mjs", root);
     assert.notEqual(result.status, 0);
@@ -97,6 +111,8 @@ test("comment lint rejects undocumented contracts and unexplained suppressions",
     assert.match(result.stderr, /TypeScript suppression requires a useful reason/);
     assert.match(result.stderr, /Biome suppression requires a reason/);
     assert.match(result.stderr, /TODO must use/);
+    assert.match(result.stderr, /public API 'createService' requires JSDoc/);
+    assert.match(result.stderr, /code comments must use English/);
   });
 });
 

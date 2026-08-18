@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 
 const repositoryRoot = resolve(process.cwd(), readOption("--root") ?? ".");
@@ -8,6 +8,7 @@ const scanRoots = ["src", "scripts", "test", "eval", "apps/inspector/src"]
   .filter(existsSync);
 const files = scanRoots.flatMap(collectSourceFiles).sort();
 const violations = [];
+const publicEntry = resolve(repositoryRoot, "src/index.ts");
 
 for (const file of files) {
   const sourceText = readFileSync(file, "utf8");
@@ -26,6 +27,10 @@ for (const file of files) {
   if (displayPath.startsWith("src/ports/")) {
     checkPortDocumentation(source, displayPath, violations);
   }
+}
+
+if (existsSync(publicEntry)) {
+  checkPublicApiDocumentation(publicEntry, violations);
 }
 
 if (violations.length > 0) fail(violations);
@@ -56,6 +61,9 @@ function checkDirectiveComments(text, file, errors) {
       && token !== ts.SyntaxKind.MultiLineCommentTrivia) continue;
     const comment = scanner.getTokenText();
     const lineNumber = text.slice(0, scanner.getTokenPos()).split(/\r?\n/).length;
+    if (/[\u3400-\u9fff]/u.test(comment)) {
+      errors.push(`${file}:${lineNumber}: code comments must use English`);
+    }
     if (/@ts-(?:expect-error|ignore)\b(?!\s+(?:--\s*)?\S.{7,})/.test(comment)) {
       errors.push(`${file}:${lineNumber}: TypeScript suppression requires a useful reason`);
     }
@@ -69,6 +77,60 @@ function checkDirectiveComments(text, file, errors) {
       );
     }
   }
+}
+
+function checkPublicApiDocumentation(entryPath, errors) {
+  const entry = createSourceFile(entryPath);
+  for (const statement of entry.statements) {
+    if (!ts.isExportDeclaration(statement)
+      || !statement.moduleSpecifier
+      || !ts.isStringLiteral(statement.moduleSpecifier)
+      || !statement.moduleSpecifier.text.startsWith(".")) continue;
+    const targetPath = resolve(dirname(entryPath), statement.moduleSpecifier.text);
+    if (!existsSync(targetPath)) continue;
+    const target = createSourceFile(targetPath);
+    const declarations = exportedDeclarations(target);
+    const names = statement.exportClause && ts.isNamedExports(statement.exportClause)
+      ? statement.exportClause.elements.map((element) => element.propertyName?.text ?? element.name.text)
+      : [...declarations.keys()];
+    for (const name of names) {
+      const declaration = declarations.get(name);
+      if (!declaration || ts.getJSDocCommentsAndTags(declaration).length > 0) continue;
+      const line = target.getLineAndCharacterOfPosition(declaration.getStart(target)).line + 1;
+      const file = relative(repositoryRoot, targetPath).split(sep).join("/");
+      errors.push(`${file}:${line}: public API '${name}' requires JSDoc`);
+    }
+  }
+}
+
+function createSourceFile(path) {
+  const sourceText = readFileSync(path, "utf8");
+  return ts.createSourceFile(
+    path,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  );
+}
+
+function exportedDeclarations(source) {
+  const declarations = new Map();
+  for (const statement of source.statements) {
+    if (!isExported(statement)) continue;
+    if (statement.name && isPublicContract(statement)) {
+      declarations.set(statement.name.getText(source), statement);
+      continue;
+    }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          declarations.set(declaration.name.text, statement);
+        }
+      }
+    }
+  }
+  return declarations;
 }
 
 function checkEmptyCatchClauses(source, file, errors) {
@@ -104,6 +166,14 @@ function isPortContract(node) {
     ts.isInterfaceDeclaration(node) ||
     ts.isClassDeclaration(node) ||
     ts.isTypeAliasDeclaration(node)
+  );
+}
+
+function isPublicContract(node) {
+  return (
+    isPortContract(node)
+    || ts.isFunctionDeclaration(node)
+    || ts.isEnumDeclaration(node)
   );
 }
 

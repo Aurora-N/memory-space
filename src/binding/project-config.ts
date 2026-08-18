@@ -1,6 +1,9 @@
+/** Effective implicit-recall strategy for one project binding. */
 export type ImplicitRecallMode = "off" | "exact" | "lexical";
+/** Origin of the effective recall configuration. */
 export type ImplicitRecallConfigSource = "explicit" | "default" | "invalid";
 
+/** Validated recall configuration; invalid input always resolves fail-closed to off. */
 export interface ImplicitRecallConfiguration {
   configuredMode?: ImplicitRecallMode;
   effectiveMode: ImplicitRecallMode;
@@ -10,6 +13,7 @@ export interface ImplicitRecallConfiguration {
 
 const modes = new Set<ImplicitRecallMode>(["off", "exact", "lexical"]);
 
+/** Resolves untrusted binding configuration into a safe effective recall mode. */
 export function resolveImplicitRecallConfiguration(
   config: Record<string, unknown>
 ): ImplicitRecallConfiguration {

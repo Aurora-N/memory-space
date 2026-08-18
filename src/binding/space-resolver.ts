@@ -7,11 +7,13 @@ import {
   type ImplicitRecallConfiguration
 } from "./project-config.ts";
 
+/** Inputs for explicit or nearest-ancestor Space binding resolution. */
 export interface SpaceResolutionInput {
   cwd?: string;
   explicitSpaceId?: string;
 }
 
+/** Exact binding selected by explicit ID or nearest ancestor precedence. */
 export interface SpaceBinding {
   spaceId: string;
   source: "explicit" | "config";
@@ -26,6 +28,7 @@ function requiredString(value: unknown, label: string): string {
   return value.trim();
 }
 
+/** Resolves Space bindings using cwd-to-ancestor precedence without inferring Git identity. */
 export class SpaceResolver {
   async resolve(input: SpaceResolutionInput): Promise<SpaceBinding> {
     if (input.explicitSpaceId !== undefined) {

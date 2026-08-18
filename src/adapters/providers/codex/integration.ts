@@ -12,11 +12,13 @@ import {
   type CodexHookOutput
 } from "./bootstrap-renderer.ts";
 
+/** Trusted project context supplied by the Codex hook runtime. */
 export interface CodexLifecycleRuntimeContext {
   cwd?: string;
   explicitSpaceId?: string;
 }
 
+/** Native Codex lifecycle response with sanitized fail-open warnings. */
 export type CodexLifecycleResponse =
   | { status: "ignored" }
   | {
@@ -32,6 +34,7 @@ export type CodexLifecycleResponse =
     output: CodexHookOutput;
   };
 
+/** Dependencies and optional diagnostics for Codex lifecycle orchestration. */
 export interface CodexLifecycleIntegrationOptions {
   lifecycleHandler: LifecycleHandler;
   adapter?: CodexAdapter;
@@ -112,6 +115,7 @@ function successfulResponse(
   return { status: "ok", type: result.type, sessionId: result.session.id };
 }
 
+/** Translates native Codex payloads at the provider boundary and delegates lifecycle policy. */
 export class CodexLifecycleIntegration {
   readonly lifecycleHandler: LifecycleHandler;
   readonly adapter: CodexAdapter;
@@ -130,6 +134,7 @@ export class CodexLifecycleIntegration {
     try {
       event = this.adapter.normalizeEvent(payload);
     } catch (error) {
+      // Invalid provider payloads become non-blocking warnings at this boundary.
       const warning = warningFor(error);
       this.#report(warning, error);
       return warningResponse(warning);

@@ -209,6 +209,7 @@ function structuredCandidates(event: SessionEvent): MemoryCandidate[] {
   });
 }
 
+/** Deterministic provider-neutral extractor for supported durable-memory patterns. */
 export class RuleBasedExtractor implements MemoryExtractor {
   async extract(events: SessionEvent[], _context: ExtractionContext): Promise<MemoryCandidate[]> {
     const candidates: MemoryCandidate[] = [];
@@ -260,6 +261,7 @@ export class RuleBasedExtractor implements MemoryExtractor {
   }
 }
 
+/** Extractor implementation that deliberately produces no candidates. */
 export class NoopExtractor implements MemoryExtractor {
   async extract(_events: SessionEvent[], _context: ExtractionContext): Promise<MemoryCandidate[]> {
     return [];

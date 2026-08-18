@@ -6,8 +6,11 @@ import { CheckpointPolicy, type CheckpointCoordinator } from "../integration/che
 import { commandError } from "./errors.ts";
 import { MCPRequestContextResolver } from "./request-context.ts";
 
+/** Input for deterministic Core and Handoff bootstrap. */
 export interface MemoryBootstrapToolInput { sessionId?: string }
+/** Input for rendered active-memory context recall. */
 export interface MemoryContextToolInput { query: string; sessionId?: string; maxItems?: number }
+/** Input for structured active-memory search. */
 export interface MemorySearchToolInput {
   query: string;
   sessionId?: string;
@@ -15,6 +18,7 @@ export interface MemorySearchToolInput {
   types?: string[];
   limit?: number;
 }
+/** Input for a Session-scoped explicit Indexed-memory write. */
 export interface MemoryRememberToolInput {
   sessionId: string;
   family: MemoryFamily;
@@ -23,7 +27,9 @@ export interface MemoryRememberToolInput {
   content: string;
   data?: Record<string, unknown>;
 }
+/** Input for an agent-attributed policy-controlled Core promotion. */
 export interface MemoryPromoteToolInput { sessionId: string; memoryId: string; reason: string }
+/** Input for an idempotent checkpoint through the latest Session event. */
 export interface MemoryCheckpointToolInput { sessionId: string }
 
 interface MemorySummary {
@@ -50,6 +56,7 @@ function memorySummary(memory: Memory): MemorySummary {
   };
 }
 
+/** Application-facing implementation of the exact six MCP tool operations. */
 export class MemoryMcpGateway {
   readonly memorySpace: MemorySpace;
   readonly checkpointPolicy: CheckpointCoordinator;

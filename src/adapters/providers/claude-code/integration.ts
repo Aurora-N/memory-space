@@ -12,11 +12,13 @@ import {
   type ClaudeCodeHookOutput
 } from "./bootstrap-renderer.ts";
 
+/** Trusted project context supplied by the Claude Code hook runtime. */
 export interface ClaudeCodeLifecycleRuntimeContext {
   cwd?: string;
   explicitSpaceId?: string;
 }
 
+/** Native Claude Code lifecycle response with sanitized fail-open warnings. */
 export type ClaudeCodeLifecycleResponse =
   | { status: "ignored" }
   | {
@@ -32,6 +34,7 @@ export type ClaudeCodeLifecycleResponse =
     output: ClaudeCodeHookOutput;
   };
 
+/** Dependencies and optional diagnostics for Claude Code lifecycle orchestration. */
 export interface ClaudeCodeLifecycleIntegrationOptions {
   lifecycleHandler: LifecycleHandler;
   adapter?: ClaudeAdapter;
@@ -129,6 +132,7 @@ function successfulResponse(
   return { status: "ok", type: result.type, sessionId: result.session.id };
 }
 
+/** Translates native Claude Code payloads at the provider boundary and delegates lifecycle policy. */
 export class ClaudeCodeLifecycleIntegration {
   readonly lifecycleHandler: LifecycleHandler;
   readonly adapter: ClaudeAdapter;
@@ -147,6 +151,7 @@ export class ClaudeCodeLifecycleIntegration {
     try {
       event = this.adapter.normalizeEvent(payload);
     } catch (error) {
+      // Invalid provider payloads become non-blocking warnings at this boundary.
       const warning = warningFor(error);
       this.#report(warning, error);
       return warningResponse(warning);

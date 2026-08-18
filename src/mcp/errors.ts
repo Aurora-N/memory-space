@@ -1,5 +1,6 @@
 import { MemorySpaceError } from "../domain/errors.ts";
 
+/** Stable error codes exposed by the MCP tool contract. */
 export type MemoryMcpErrorCode =
   | "SESSION_NOT_FOUND"
   | "SPACE_NOT_BOUND"
@@ -10,12 +11,14 @@ export type MemoryMcpErrorCode =
   | "CORE_CAPACITY_REACHED"
   | "MEMORY_SERVICE_UNAVAILABLE";
 
+/** Structured error envelope returned by the MCP tool boundary. */
 export interface MemoryMcpError {
   code: MemoryMcpErrorCode;
   message: string;
   retryable: boolean;
 }
 
+/** Internal exception carrying a stable MCP error envelope. */
 export class MemoryMcpCommandError extends Error {
   readonly error: MemoryMcpError;
 
@@ -26,6 +29,7 @@ export class MemoryMcpCommandError extends Error {
   }
 }
 
+/** Creates an actionable MCP command error with optional causal provenance. */
 export function commandError(
   code: MemoryMcpErrorCode,
   message: string,
@@ -35,6 +39,7 @@ export function commandError(
   return new MemoryMcpCommandError({ code, message, retryable }, { cause });
 }
 
+/** Maps domain and unexpected failures to the stable MCP error contract. */
 export function toMemoryMcpError(error: unknown): MemoryMcpError {
   if (error instanceof MemoryMcpCommandError) return error.error;
   if (error instanceof MemorySpaceError) {

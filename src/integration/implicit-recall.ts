@@ -3,8 +3,10 @@ import type { ImplicitRecallMode } from "../binding/project-config.ts";
 import { ValidationError } from "../domain/errors.ts";
 import type { Memory, MemorySearchInput, MemorySearchResult, Session } from "../domain/types.ts";
 
+/** Evidence class that made an Indexed memory eligible for implicit disclosure. */
 export type ImplicitRecallReason = "exact_key" | "lexical";
 
+/** Sanitized diagnostic for one selected implicit-recall result. */
 export interface ImplicitRecallDebugItem {
   memoryId: string;
   key?: string;
@@ -14,6 +16,7 @@ export interface ImplicitRecallDebugItem {
   score?: number;
 }
 
+/** Bounded untrusted context rendered for provider prompt injection. */
 export interface ImplicitRecallResult {
   query: string;
   configuredMode?: ImplicitRecallMode;
@@ -30,12 +33,14 @@ interface RecallMemorySpace {
   search(input: MemorySearchInput): Promise<MemorySearchResult[]>;
 }
 
+/** Limits and text budget applied to one implicit-recall request. */
 export interface ImplicitRecallOptions {
   maxItems?: number;
   maxRenderedChars?: number;
   maxExactKeyCandidates?: number;
 }
 
+/** Session handle and untrusted prompt used for one disclosure decision. */
 export interface ImplicitRecallInput {
   sessionId: string;
   prompt: string;
@@ -43,16 +48,19 @@ export interface ImplicitRecallInput {
   configuredMode?: ImplicitRecallMode;
 }
 
+/** Integration boundary for bounded implicit recall. */
 export interface ImplicitRecallServicePort {
   recall(input: ImplicitRecallInput): Promise<ImplicitRecallResult>;
 }
 
+/** Frozen default limits for provider-neutral implicit recall. */
 export const implicitRecallDefaults = Object.freeze({
   maxItems: 5,
   maxRenderedChars: 2400,
   maxExactKeyCandidates: 8
 });
 
+/** Provider instruction used when the complete prompt matches one exact memory key. */
 export const exactPromptControl = "The complete user prompt matched a durable Memory key. Answer using the recalled content. Do not call Memory tools unless the recalled information is incomplete.";
 
 const allowedCandidateRunPattern = /[A-Za-z0-9._:/-]+/gu;
@@ -81,6 +89,7 @@ function distinctiveCandidate(value: string): boolean {
     || (value.length >= 3 && /[A-Z]/u.test(value) && !/[a-z]/u.test(value));
 }
 
+/** Extracts a deterministic bounded set of complete exact-key candidates. */
 export function extractExactKeyCandidates(prompt: string, limit = 8): string[] {
   positiveInteger(limit, implicitRecallDefaults.maxExactKeyCandidates,
     "maxExactKeyCandidates");
@@ -113,6 +122,7 @@ function renderContext(blocks: string[], bareExact: boolean): string {
   return bareExact ? `${exactPromptControl}\n\n${recall}` : recall;
 }
 
+/** Renders selected memories as escaped, length-bounded untrusted context. */
 export function renderImplicitRecallContext(
   memories: readonly Memory[],
   options: { maxRenderedChars?: number; bareExact?: boolean } = {}
@@ -154,6 +164,7 @@ export function renderImplicitRecallContext(
   return { context: renderContext(blocks, bareExact), truncated };
 }
 
+/** Implements active Indexed-memory recall without bypassing Space isolation. */
 export class ImplicitRecallService implements ImplicitRecallServicePort {
   readonly memorySpace: RecallMemorySpace;
   readonly maxItems: number;

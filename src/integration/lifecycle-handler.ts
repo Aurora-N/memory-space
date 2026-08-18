@@ -39,6 +39,7 @@ interface LifecycleSessionResolver {
   find(provider: string, externalSessionId: string): Promise<Session>;
 }
 
+/** Runtime resolution context supplied alongside normalized provider events. */
 export interface LifecycleContext {
   sessionId?: string;
   cwd?: string;
@@ -46,6 +47,7 @@ export interface LifecycleContext {
   agentId?: string;
 }
 
+/** Successful normalized lifecycle outcome returned to provider integrations. */
 export type LifecycleResult =
   | { status: "ok"; type: "session_start"; session: Session; bootstrap: BootstrapResult }
   | {
@@ -58,6 +60,7 @@ export type LifecycleResult =
   | { status: "ok"; type: "assistant_turn"; session: Session; event: SessionEvent }
   | { status: "ok"; type: "pre_compact" | "session_end"; session: Session; checkpoint: CheckpointPolicyResult };
 
+/** Stable non-blocking lifecycle failure envelope. */
 export interface LifecycleWarning {
   status: "warning";
   nonBlocking: true;
@@ -66,12 +69,14 @@ export interface LifecycleWarning {
   error: { code: string; message: string };
 }
 
+/** Internal diagnostic carrying the original event and error to a non-authoritative sink. */
 export interface LifecycleDiagnostic {
   event?: ProviderLifecycleEvent;
   error: unknown;
   warning: LifecycleWarning;
 }
 
+/** Orchestrates normalized lifecycle events with fail-open provider behavior. */
 export class LifecycleHandler {
   readonly memorySpace: LifecycleMemorySpace;
   readonly spaceResolver: LifecycleSpaceResolver;
@@ -233,6 +238,7 @@ export class LifecycleHandler {
     try {
       binding = await this.spaceResolver.resolve({ cwd: event.cwd ?? context.cwd });
     } catch (error) {
+      // Recall is derived context and must not block persistence of the provider prompt.
       this.#reportRecallDiagnostic(event, session.id, error);
       return unavailable();
     }
@@ -272,6 +278,7 @@ export class LifecycleHandler {
         configuredMode: configuration.configuredMode
       });
     } catch (error) {
+      // Recall failures fail closed without blocking the provider prompt.
       this.#reportRecallDiagnostic(event, session.id, error);
       return unavailable(configuration.configuredMode);
     }

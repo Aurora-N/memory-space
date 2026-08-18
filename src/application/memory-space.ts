@@ -44,29 +44,38 @@ const sections = [
 ] as const;
 type Section = typeof sections[number];
 
+/** Input for creating an isolated Space; omitted IDs are generated. */
 export interface CreateSpaceInput { id?: string; name: string; description?: string }
+/** Input for creating a Session permanently bound to an existing Space. */
 export interface CreateSessionInput {
   id?: string; spaceId: string; agentId?: string; provider?: string;
   externalSessionId?: string; summary?: string;
 }
+/** Idempotent provider identity used to get or create one durable Session. */
 export interface ProviderSessionInput {
   id?: string; spaceId: string; provider: string; externalSessionId: string; agentId?: string;
 }
+/** Input for appending one immutable event to a Session. */
 export interface AppendEventInput {
   id?: string; sessionId: string; type: SessionEventType;
   payload: Record<string, unknown>; createdAt?: string;
 }
+/** Explicit memory write that cannot request a tier, with optional validated Session provenance. */
 export interface RememberInput {
   spaceId: string; family: MemoryFamily; type: string; key?: string; content: string;
   data?: Record<string, unknown>; status?: MemoryStatus;
   importance?: number; confidence?: number; sourceSessionId?: string;
   sourceAgentId?: string; sourceEventIds?: string[];
 }
+/** Idempotent checkpoint request through an optional explicit event boundary. */
 export interface CheckpointInput { sessionId: string; toEventId?: string; idempotencyKey: string }
+/** Deterministic startup context assembled from Core Memory and the latest Handoff. */
 export interface BootstrapResult {
   space: Space; coreMemories: Memory[]; handoffSnapshot?: HandoffSnapshot; context: string;
 }
+/** Ranked recall results plus their provider-neutral rendered context. */
 export interface ContextResult { query: string; results: MemorySearchResult[]; rendered: string }
+/** Deterministic cursor-based browse query over one Space. */
 export interface BrowseMemoriesInput {
   spaceId: string;
   families?: MemoryFamily[];
@@ -76,11 +85,13 @@ export interface BrowseMemoriesInput {
   limit?: number;
   cursor?: string;
 }
+/** Browse page sorted by recency, with an opaque continuation cursor when available. */
 export interface BrowseMemoriesResult {
   items: Memory[];
   total: number;
   nextCursor?: string;
 }
+/** Read-only aggregate summary for the local Inspector. */
 export interface MemoryOverviewResult {
   space: Space;
   totalMemories: number;
@@ -174,6 +185,10 @@ function sectionFor(memory: Memory): Section {
       : memory.family === "procedure" ? "Constraints / Conventions" : "Current Progress");
 }
 
+/**
+ * Application facade for all Memory Space operations.
+ * Delivery layers share one instance; durable writes complete before methods return.
+ */
 export class MemorySpace {
   readonly store: MemoryStore;
   readonly extractor: MemoryExtractor;
@@ -924,6 +939,7 @@ export class MemorySpace {
     try {
       return await this.cache.get<T>(key);
     } catch {
+      // Cache reads are best-effort; callers rebuild authoritative results from Store.
       return undefined;
     }
   }

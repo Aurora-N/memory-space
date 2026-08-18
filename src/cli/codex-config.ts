@@ -102,6 +102,7 @@ async function readSmallFile(path: string): Promise<string | undefined> {
     }
     return await readFile(path, "utf8");
   } catch {
+    // User-scope discovery is read-only and treats inaccessible candidates as inactive.
     return undefined;
   }
 }

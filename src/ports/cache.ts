@@ -1,7 +1,10 @@
 /** Best-effort derived-state cache boundary. Cache failures must not affect source-of-truth data. */
 export interface CachePort {
+  /** Returns derived state or undefined on a cache miss. */
   get<T>(key: string): Promise<T | undefined>;
+  /** Stores derived state with an optional time-to-live measured in seconds. */
   set<T>(key: string, value: T, ttlSeconds?: number): Promise<void>;
+  /** Invalidates derived state; callers treat failures as best effort. */
   delete(key: string): Promise<void>;
 }
 

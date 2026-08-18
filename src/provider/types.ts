@@ -1,5 +1,6 @@
 import { ValidationError } from "../domain/errors.ts";
 
+/** Provider lifecycle and integration features advertised by an adapter. */
 export type ProviderCapability =
   | "session_identity"
   | "session_start"
@@ -10,8 +11,10 @@ export type ProviderCapability =
   | "bootstrap_injection"
   | "mcp";
 
+/** Lifecycle cause used to select checkpoint policy. */
 export type CheckpointTrigger = "explicit" | "pre_compact" | "session_end" | "task_completed";
 
+/** Opaque provider transcript locator preserved without provider-specific interpretation. */
 export interface TranscriptRef {
   provider: string;
   locator: string;
@@ -20,6 +23,7 @@ export interface TranscriptRef {
   updatedAt?: string;
 }
 
+/** Provider-neutral fields shared by every normalized lifecycle event. */
 export interface ProviderEventBase {
   provider: string;
   externalSessionId?: string;
@@ -28,12 +32,18 @@ export interface ProviderEventBase {
   transcriptRef?: TranscriptRef;
 }
 
+/** Normalized provider event indicating Session startup or resume. */
 export interface ProviderSessionStartEvent extends ProviderEventBase { type: "session_start" }
+/** Normalized user prompt whose content may participate in recall. */
 export interface ProviderUserPromptEvent extends ProviderEventBase { type: "user_prompt"; content: string }
+/** Normalized assistant turn carrying content that can be persisted as Session evidence. */
 export interface ProviderAssistantTurnEvent extends ProviderEventBase { type: "assistant_turn"; content: string }
+/** Normalized provider signal emitted before context compaction. */
 export interface ProviderPreCompactEvent extends ProviderEventBase { type: "pre_compact" }
+/** Normalized provider signal emitted when a Session ends. */
 export interface ProviderSessionEndEvent extends ProviderEventBase { type: "session_end" }
 
+/** Closed provider-neutral lifecycle event union accepted by integrations. */
 export type ProviderLifecycleEvent =
   | ProviderSessionStartEvent
   | ProviderUserPromptEvent
@@ -41,17 +51,20 @@ export type ProviderLifecycleEvent =
   | ProviderPreCompactEvent
   | ProviderSessionEndEvent;
 
+/** Provider-neutral bootstrap data supplied to a provider-specific renderer. */
 export interface ProviderBootstrapRenderInput {
   sessionId: string;
   provider: string;
   context: string;
 }
 
+/** Provider-rendered bootstrap content plus optional transport metadata. */
 export interface ProviderBootstrapOutput {
   content: string;
   metadata?: Record<string, unknown>;
 }
 
+/** Boundary that normalizes provider payloads before application code sees them. */
 export interface ProviderAdapter {
   readonly name: string;
   readonly capabilities: ReadonlySet<ProviderCapability>;
@@ -92,6 +105,7 @@ function transcriptRef(value: unknown): TranscriptRef | undefined {
   };
 }
 
+/** Validates an unknown normalized event and rejects provider-shape leakage. */
 export function validateProviderLifecycleEvent(value: unknown): ProviderLifecycleEvent {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ValidationError("Provider lifecycle event must be an object");

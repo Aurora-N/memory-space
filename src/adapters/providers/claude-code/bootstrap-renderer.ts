@@ -3,6 +3,7 @@ import type {
   ProviderBootstrapRenderInput
 } from "../../../provider/types.ts";
 
+/** Native Claude Code hook output emitted back to the provider process. */
 export interface ClaudeCodeHookOutput {
   continue: true;
   systemMessage?: string;
@@ -12,6 +13,7 @@ export interface ClaudeCodeHookOutput {
   };
 }
 
+/** Renders untrusted recalled context for a Claude Code user-prompt hook. */
 export function claudeCodePromptContextOutput(content: string): ClaudeCodeHookOutput {
   return {
     continue: true,
@@ -22,6 +24,7 @@ export function claudeCodePromptContextOutput(content: string): ClaudeCodeHookOu
   };
 }
 
+/** Claude Code SessionStart output carrying the opaque Memory Space Session handle. */
 export interface ClaudeCodeBootstrapOutput extends ProviderBootstrapOutput {
   metadata: {
     hookSpecificOutput: {
@@ -31,6 +34,7 @@ export interface ClaudeCodeBootstrapOutput extends ProviderBootstrapOutput {
   };
 }
 
+/** Renders provider-neutral bootstrap data into native Claude Code hook output. */
 export function renderClaudeCodeBootstrap(
   input: ProviderBootstrapRenderInput
 ): ClaudeCodeBootstrapOutput {
@@ -58,6 +62,7 @@ export function renderClaudeCodeBootstrap(
   };
 }
 
+/** Renders the supplied Claude Code lifecycle warning as non-blocking provider output. */
 export function claudeCodeWarningOutput(
   code: string,
   message: string
@@ -68,6 +73,7 @@ export function claudeCodeWarningOutput(
   };
 }
 
+/** Renders the stable fail-open output used when the local daemon is unavailable. */
 export function claudeCodeUnavailableOutput(): ClaudeCodeHookOutput {
   return claudeCodeWarningOutput(
     "MEMORY_SERVICE_UNAVAILABLE",

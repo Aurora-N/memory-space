@@ -1,10 +1,17 @@
+/** Top-level semantic family used to organize durable memories. */
 export type MemoryFamily = "knowledge" | "state" | "episode" | "procedure";
+/** Persistence tier controlling automatic bootstrap visibility. */
 export type MemoryTier = "core" | "indexed";
+/** Lifecycle state used to include or exclude a memory from active recall. */
 export type MemoryStatus = "active" | "resolved" | "superseded" | "archived";
+/** Provider-neutral kind assigned to an ordered Session event. */
 export type SessionEventType = "message" | "tool_call" | "artifact" | "memory" | "custom";
+/** Durable processing state of an idempotent checkpoint. */
 export type CheckpointStatus = "processing" | "completed" | "failed";
+/** Mutation requested by an extracted memory candidate. */
 export type CandidateOperation = "create" | "update" | "supersede" | "ignore";
 
+/** Isolated persistence namespace. Timestamps are ISO 8601 strings. */
 export interface Space {
   id: string;
   name: string;
@@ -13,6 +20,7 @@ export interface Space {
   updatedAt: string;
 }
 
+/** Durable agent or provider session bound permanently to one Space. */
 export interface Session {
   id: string;
   spaceId: string;
@@ -26,6 +34,7 @@ export interface Session {
   updatedAt: string;
 }
 
+/** Immutable event ordered by its monotonically increasing Session sequence. */
 export interface SessionEvent {
   id: string;
   sessionId: string;
@@ -35,6 +44,7 @@ export interface SessionEvent {
   sequence: number;
 }
 
+/** Versioned durable memory record scoped to exactly one Space. */
 export interface Memory {
   id: string;
   spaceId: string;
@@ -54,6 +64,7 @@ export interface Memory {
   updatedAt: string;
 }
 
+/** Provider-neutral extraction proposal validated before persistence. */
 export interface MemoryCandidate {
   family: MemoryFamily;
   type: string;
@@ -69,6 +80,7 @@ export interface MemoryCandidate {
   targetMemoryId?: string;
 }
 
+/** Idempotent durable boundary covering a contiguous range of Session events. */
 export interface Checkpoint {
   id: string;
   spaceId: string;
@@ -83,6 +95,7 @@ export interface Checkpoint {
   completedAt?: string;
 }
 
+/** Deterministic continuation projection produced by a completed checkpoint. */
 export interface HandoffSnapshot {
   id: string;
   spaceId: string;
@@ -98,6 +111,7 @@ export interface HandoffSnapshot {
   createdAt: string;
 }
 
+/** Space-scoped memory query with optional filters and a bounded result limit. */
 export interface MemorySearchInput {
   spaceId: string;
   query: string;
@@ -108,6 +122,7 @@ export interface MemorySearchInput {
   limit?: number;
 }
 
+/** Ranked memory result; higher scores sort before lower scores. */
 export interface MemorySearchResult {
   memory: Memory;
   score: number;

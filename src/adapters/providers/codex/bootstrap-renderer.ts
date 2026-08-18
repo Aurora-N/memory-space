@@ -3,6 +3,7 @@ import type {
   ProviderBootstrapRenderInput
 } from "../../../provider/types.ts";
 
+/** Native Codex hook output emitted back to the provider process. */
 export interface CodexHookOutput {
   continue: true;
   systemMessage?: string;
@@ -12,6 +13,7 @@ export interface CodexHookOutput {
   };
 }
 
+/** Renders untrusted recalled context for a Codex user-prompt hook. */
 export function codexPromptContextOutput(content: string): CodexHookOutput {
   return {
     continue: true,
@@ -22,6 +24,7 @@ export function codexPromptContextOutput(content: string): CodexHookOutput {
   };
 }
 
+/** Codex SessionStart output carrying the opaque Memory Space Session handle. */
 export interface CodexBootstrapOutput extends ProviderBootstrapOutput {
   metadata: {
     hookSpecificOutput: {
@@ -31,6 +34,7 @@ export interface CodexBootstrapOutput extends ProviderBootstrapOutput {
   };
 }
 
+/** Renders provider-neutral bootstrap data into native Codex hook output. */
 export function renderCodexBootstrap(
   input: ProviderBootstrapRenderInput
 ): CodexBootstrapOutput {
@@ -58,6 +62,7 @@ export function renderCodexBootstrap(
   };
 }
 
+/** Renders the supplied Codex lifecycle warning as non-blocking provider output. */
 export function codexWarningOutput(code: string, message: string): CodexHookOutput {
   return {
     continue: true,
@@ -65,6 +70,7 @@ export function codexWarningOutput(code: string, message: string): CodexHookOutp
   };
 }
 
+/** Renders the stable fail-open output used when the local daemon is unavailable. */
 export function codexUnavailableOutput(): CodexHookOutput {
   return codexWarningOutput("MEMORY_SERVICE_UNAVAILABLE", "Memory service unavailable");
 }

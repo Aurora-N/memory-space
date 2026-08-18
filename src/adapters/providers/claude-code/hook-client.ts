@@ -6,6 +6,7 @@ import {
 const defaultEndpoint = "http://127.0.0.1:4310/providers/claude-code/lifecycle";
 const defaultTimeoutMs = 2_500;
 
+/** Endpoint, timeout in milliseconds, and transport override for one Claude Code hook call. */
 export interface InvokeClaudeCodeLifecycleHookOptions {
   endpoint?: string;
   timeoutMs?: number;
@@ -52,6 +53,7 @@ function hookOutput(
   return result;
 }
 
+/** Invokes the local lifecycle endpoint and always fails open with provider-safe output. */
 export async function invokeClaudeCodeLifecycleHook(
   payload: unknown,
   options: InvokeClaudeCodeLifecycleHookOptions = {}
@@ -84,6 +86,7 @@ export async function invokeClaudeCodeLifecycleHook(
     if (result.output !== undefined && !output) return claudeCodeUnavailableOutput();
     return output;
   } catch {
+    // Provider hooks must remain non-blocking when the daemon or transport is unavailable.
     return claudeCodeUnavailableOutput();
   } finally {
     clearTimeout(timer);

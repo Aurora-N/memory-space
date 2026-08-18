@@ -80,6 +80,7 @@ function base(input: Record<string, unknown>): ProviderEventBase {
   };
 }
 
+/** Normalizes supported native Claude Code hook payloads into provider-neutral events. */
 export class ClaudeAdapter implements ProviderAdapter {
   readonly name = "claude-code";
   readonly capabilities = capabilities;

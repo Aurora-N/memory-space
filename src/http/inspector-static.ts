@@ -35,6 +35,7 @@ async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
   } catch {
+    // Missing or unreadable optional assets are handled by the normal 404 path.
     return false;
   }
 }

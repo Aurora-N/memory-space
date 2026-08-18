@@ -7,14 +7,17 @@ const checkpointTriggers = new Set<CheckpointTrigger>([
   "explicit", "pre_compact", "session_end", "task_completed"
 ]);
 
+/** Result of policy evaluation, distinguishing a durable checkpoint from a no-op. */
 export type CheckpointPolicyResult =
   | { status: "noop"; reason: "no_uncommitted_events"; sessionId: string; trigger: CheckpointTrigger }
   | { status: "completed"; checkpoint: Checkpoint; trigger: CheckpointTrigger };
 
+/** Application-facing checkpoint coordination boundary. */
 export interface CheckpointCoordinator {
   checkpointIfNeeded(input: { sessionId: string; trigger: CheckpointTrigger }): Promise<CheckpointPolicyResult>;
 }
 
+/** Deterministically checkpoints only new Session events through the latest boundary. */
 export class CheckpointPolicy implements CheckpointCoordinator {
   readonly memorySpace: MemorySpace;
 

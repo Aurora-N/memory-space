@@ -92,6 +92,7 @@ function mapHandoff(row?: Row): HandoffSnapshot | undefined {
   };
 }
 
+/** SQLite source-of-truth adapter implementing the full MemoryStore contract. */
 export class SqliteMemoryStore implements MemoryStore {
   readonly database: DatabaseSync;
   readonly #transactionContext = new AsyncLocalStorage<boolean>();

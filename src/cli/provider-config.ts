@@ -15,6 +15,7 @@ async function hasMarker(path: string, markers: readonly string[]): Promise<bool
     return markers.some((marker) => content.includes(marker));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    // Doctor detection is read-only; unreadable candidates are reported as not detected.
     return false;
   }
 }
@@ -35,6 +36,7 @@ async function readJsonObject(path: string): Promise<Record<string, unknown> | u
     const value: unknown = JSON.parse(await readFile(path, "utf8"));
     return isRecord(value) ? value : undefined;
   } catch {
+    // Malformed or unreadable optional provider files are not active configurations.
     return undefined;
   }
 }

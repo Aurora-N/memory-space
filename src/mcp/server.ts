@@ -125,6 +125,7 @@ const writeAnnotations = {
   openWorldHint: false
 } as const;
 
+/** Dependencies and trusted runtime defaults for the exact-six MCP server. */
 export interface CreateMemoryMcpServerOptions {
   memorySpace: MemorySpace;
   spaceResolver?: SpaceResolver;
@@ -133,6 +134,7 @@ export interface CreateMemoryMcpServerOptions {
   explicitSpaceId?: string;
 }
 
+/** Registers exactly the six approved Memory Space tools around an existing gateway. */
 export function createMemoryMcpServerForGateway(gateway: MemoryMcpGateway): McpServer {
   const server = new McpServer(
     { name: "memory-space-mcp-server", version: "0.1.0" },
@@ -196,6 +198,7 @@ export function createMemoryMcpServerForGateway(gateway: MemoryMcpGateway): McpS
   return server;
 }
 
+/** Creates the exact-six MCP server around the provided MemorySpace instance. */
 export function createMemoryMcpServer(options: CreateMemoryMcpServerOptions): McpServer {
   return createMemoryMcpServerForGateway(new MemoryMcpGateway(options));
 }

@@ -3,6 +3,7 @@ import { ValidationError } from "../domain/errors.ts";
 import type { Session } from "../domain/types.ts";
 import { ProviderSessionNotFoundError } from "./errors.ts";
 
+/** Provider identity and Space data used for Session resolution. */
 export interface ProviderSessionResolutionInput {
   provider: string;
   externalSessionId?: string;
@@ -21,6 +22,7 @@ function optionalString(value: unknown, label: string): string | undefined {
   return value === undefined ? undefined : requiredString(value, label);
 }
 
+/** Resolves durable provider Sessions while freezing their original Space identity. */
 export class ProviderSessionResolver {
   readonly memorySpace: MemorySpace;
 

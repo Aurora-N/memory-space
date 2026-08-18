@@ -24,10 +24,12 @@ function writeOutput(output: ClaudeCodeHookOutput | undefined): void {
   if (output) process.stdout.write(JSON.stringify(output));
 }
 
+/** Runs the size-bounded Claude Code stdin/stdout hook and emits fail-open output on failure. */
 export async function runClaudeCodeHook(): Promise<void> {
   try {
     writeOutput(await invokeClaudeCodeLifecycleHook(await readStdin()));
   } catch {
+    // Malformed input and local service failures must not block the Claude Code lifecycle.
     writeOutput(claudeCodeUnavailableOutput());
   }
 }

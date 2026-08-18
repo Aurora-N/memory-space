@@ -6,6 +6,7 @@ import {
 const defaultEndpoint = "http://127.0.0.1:4310/providers/codex/lifecycle";
 const defaultTimeoutMs = 2_500;
 
+/** Endpoint, timeout in milliseconds, and transport override for one Codex hook call. */
 export interface InvokeCodexLifecycleHookOptions {
   endpoint?: string;
   timeoutMs?: number;
@@ -47,6 +48,7 @@ function hookOutput(value: unknown, expectedEventName: string | undefined): Code
   return result;
 }
 
+/** Invokes the local lifecycle endpoint and always fails open with provider-safe output. */
 export async function invokeCodexLifecycleHook(
   payload: unknown,
   options: InvokeCodexLifecycleHookOptions = {}
@@ -79,6 +81,7 @@ export async function invokeCodexLifecycleHook(
     if (result.output !== undefined && !output) return codexUnavailableOutput();
     return output;
   } catch {
+    // Provider hooks must remain non-blocking when the daemon or transport is unavailable.
     return codexUnavailableOutput();
   } finally {
     clearTimeout(timer);

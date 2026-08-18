@@ -32,6 +32,7 @@ import { createMemoryMcpServerForGateway } from "./mcp/server.ts";
 import { MemoryMcpGateway } from "./mcp/tools.ts";
 import type { MCPRuntimeContext } from "./mcp/request-context.ts";
 
+/** Runtime configuration for the loopback-only daemon composition root. */
 export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   host?: string;
   port?: number;
@@ -44,6 +45,7 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   inspectorDirectory?: string | false;
 }
 
+/** Owned daemon resources; close releases HTTP and MemorySpace exactly once. */
 export interface MemorySpaceDaemon {
   readonly server: Server;
   readonly memorySpace: MemorySpace;
@@ -64,6 +66,7 @@ function logLifecycleDiagnostic(diagnostic: LifecycleDiagnostic): void {
   );
 }
 
+/** Returns whether a host is one of the explicitly supported loopback names. */
 export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(host.trim().toLowerCase());
 }
@@ -83,6 +86,7 @@ function internalError(response: ServerResponse, error: unknown): void {
   });
 }
 
+/** Composes HTTP, MCP, lifecycle integrations, and Inspector around one MemorySpace. */
 export function createMemorySpaceDaemon(
   options: MemorySpaceDaemonOptions = {}
 ): MemorySpaceDaemon {
@@ -246,6 +250,7 @@ export function createMemorySpaceDaemon(
   };
 }
 
+/** Creates and begins listening with process signal cleanup attached. */
 export function startServer(options: MemorySpaceDaemonOptions = {}): MemorySpaceDaemon {
   const daemon = createMemorySpaceDaemon(options);
   const detachSignals = (): void => {

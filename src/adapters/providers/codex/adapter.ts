@@ -81,6 +81,7 @@ function base(input: Record<string, unknown>): ProviderEventBase {
   };
 }
 
+/** Normalizes supported native Codex hook payloads into provider-neutral events. */
 export class CodexAdapter implements ProviderAdapter {
   readonly name = "codex";
   readonly capabilities = capabilities;
@@ -130,4 +131,3 @@ export class CodexAdapter implements ProviderAdapter {
     return renderCodexBootstrap(input);
   }
 }
-
