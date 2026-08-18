@@ -25,6 +25,10 @@ the rule file beside that selected binding and applies it only when its
 `spaceId` matches the checkpoint Session. A nested directory inheriting an
 ancestor binding therefore inherits the ancestor rule file.
 
+For provider Sessions, the binding source selected at first Session creation is
+stored with the Session. Daemon restarts and later provider `cwd` changes do not
+silently switch that Session to another project's rule file.
+
 Rules are read at each checkpoint, so a valid change applies to the next
 `PreCompact`, `SessionEnd`, or explicit `memory_checkpoint`. Prompt and final
 response hooks only append evidence; they do not evaluate rules immediately.

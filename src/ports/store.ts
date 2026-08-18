@@ -8,6 +8,7 @@ import type {
   SessionEvent,
   Space
 } from "../domain/types.ts";
+import type { SessionProjectBinding } from "./session-binding.ts";
 
 /** Immutable audit record for a memory state transition. */
 export interface MemoryHistoryRecord {
@@ -49,6 +50,9 @@ export interface MemoryStore {
   getOrCreateProviderSession(session: Session): Promise<{ session: Session; created: boolean }>;
   findSession(id: string): Promise<Session | undefined>;
   findSessionByProviderIdentity(provider: string, externalSessionId: string): Promise<Session | undefined>;
+  /** Preserves the first trusted project binding recorded for a Session. */
+  insertSessionProjectBinding(binding: SessionProjectBinding): Promise<void>;
+  findSessionProjectBinding(sessionId: string): Promise<SessionProjectBinding | undefined>;
   updateSession(session: Session): Promise<void>;
 
   insertEvent(event: Omit<SessionEvent, "sequence">): Promise<SessionEvent>;

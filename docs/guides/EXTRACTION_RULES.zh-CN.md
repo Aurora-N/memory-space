@@ -22,6 +22,9 @@ Provider 私有 payload，也不能绕过 Memory 准入策略。
 并且仅在其 `spaceId` 与当前 checkpoint Session 一致时应用。因此，继承祖先绑定的
 子目录也会继承祖先规则文件。
 
+Provider Session 首次创建时选中的绑定来源会随 Session 持久化。daemon 重启或
+Provider 后续改变 `cwd`，都不会静默切换到另一个项目的规则文件。
+
 规则会在每次 checkpoint 时重新读取。有效修改会在下一个 `PreCompact`、
 `SessionEnd` 或显式 `memory_checkpoint` 生效，不需要重启 daemon。prompt 和最终
 回复 hook 只追加证据，不会立即执行规则。

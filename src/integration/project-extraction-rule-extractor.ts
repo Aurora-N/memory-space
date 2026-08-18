@@ -36,13 +36,28 @@ export class ProjectExtractionRuleExtractor implements MemoryExtractor {
   }
 
   async extract(events: SessionEvent[], context: ExtractionContext): Promise<MemoryCandidate[]> {
-    if (this.explicitSpaceId !== undefined) return [];
     let binding: SpaceBinding;
-    try {
-      binding = await this.spaceResolver.resolve({ cwd: this.cwd });
-    } catch (error) {
-      if (error instanceof SpaceNotBoundError) return [];
-      throw error;
+    if (context.projectBinding) {
+      if (
+        context.projectBinding.source === "explicit" ||
+        context.projectBinding.spaceId !== context.session.spaceId ||
+        !context.projectBinding.configPath
+      ) {
+        return [];
+      }
+      binding = {
+        spaceId: context.projectBinding.spaceId,
+        source: "config",
+        configPath: context.projectBinding.configPath,
+      };
+    } else {
+      if (this.explicitSpaceId !== undefined) return [];
+      try {
+        binding = await this.spaceResolver.resolve({ cwd: this.cwd });
+      } catch (error) {
+        if (error instanceof SpaceNotBoundError) return [];
+        throw error;
+      }
     }
     if (binding.spaceId !== context.session.spaceId) return [];
     const configured = await this.loadRules(binding);

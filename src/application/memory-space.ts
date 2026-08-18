@@ -18,6 +18,7 @@ import type {
 } from "../domain/types.ts";
 import type { CachePort } from "../ports/cache.ts";
 import type { MemoryExtractor } from "../ports/extractor.ts";
+import type { SessionProjectBindingSource } from "../ports/session-binding.ts";
 import type { MemoryHistoryRecord, MemoryStore } from "../ports/store.ts";
 import {
   PROMOTION_OPERATION,
@@ -54,6 +55,11 @@ export interface CreateSessionInput {
 /** Idempotent provider identity used to get or create one durable Session. */
 export interface ProviderSessionInput {
   id?: string; spaceId: string; provider: string; externalSessionId: string; agentId?: string;
+}
+/** Trusted binding provenance supplied only by lifecycle integration. */
+export interface SessionProjectBindingInput {
+  source: SessionProjectBindingSource;
+  configPath?: string;
 }
 /** Input for appending one immutable event to a Session. */
 export interface AppendEventInput {
@@ -167,6 +173,33 @@ function score(value: unknown, fallback: number, label: string): number {
   return result;
 }
 
+function optionalIsoDateTime(value: unknown, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  const input = requiredString(value, label);
+  const parsed = Date.parse(input);
+  if (Number.isNaN(parsed)) throw new ValidationError(`${label} must be a valid date-time`);
+  return new Date(parsed).toISOString();
+}
+
+function validateSessionProjectBinding(
+  value: SessionProjectBindingInput | undefined
+): SessionProjectBindingInput | undefined {
+  if (value === undefined) return undefined;
+  if (value.source === "config") {
+    return {
+      source: value.source,
+      configPath: requiredString(value.configPath, "projectBinding.configPath")
+    };
+  }
+  if (value.source === "explicit") {
+    if (value.configPath !== undefined) {
+      throw new ValidationError("Explicit project binding cannot include configPath");
+    }
+    return { source: value.source };
+  }
+  throw new ValidationError("projectBinding.source must be config or explicit");
+}
+
 function list(values: string[]): string { return values.length ? values.map((value) => `- ${value}`).join("\n") : "(none)"; }
 function summary(memory: Memory): string {
   return memory.key ? `[${memory.id}] (${memory.key}) ${memory.content}` : `[${memory.id}] ${memory.content}`;
@@ -231,8 +264,12 @@ export class MemorySpace {
     return value;
   }
 
-  async createSession(input: CreateSessionInput): Promise<Session> {
+  async createSession(
+    input: CreateSessionInput,
+    projectBindingInput?: SessionProjectBindingInput
+  ): Promise<Session> {
     const space = await this.getSpace(input.spaceId);
+    const projectBinding = validateSessionProjectBinding(projectBindingInput);
     const now = timestamp();
     const session: Session = {
       id: optionalString(input.id, "session.id") ?? randomUUID(), spaceId: space.id,
@@ -241,7 +278,16 @@ export class MemorySpace {
       externalSessionId: optionalString(input.externalSessionId, "session.externalSessionId"),
       summary: optionalString(input.summary, "session.summary"), createdAt: now, updatedAt: now
     };
-    await this.store.insertSession(session);
+    await this.store.transaction(async () => {
+      await this.store.insertSession(session);
+      if (projectBinding) {
+        await this.store.insertSessionProjectBinding({
+          sessionId: session.id,
+          spaceId: session.spaceId,
+          ...projectBinding
+        });
+      }
+    });
     return session;
   }
 
@@ -251,8 +297,12 @@ export class MemorySpace {
     return value;
   }
 
-  async getOrCreateProviderSession(input: ProviderSessionInput): Promise<Session> {
+  async getOrCreateProviderSession(
+    input: ProviderSessionInput,
+    projectBindingInput?: SessionProjectBindingInput
+  ): Promise<Session> {
     const space = await this.getSpace(input.spaceId);
+    const projectBinding = validateSessionProjectBinding(projectBindingInput);
     const provider = requiredString(input.provider, "provider");
     const externalSessionId = requiredString(input.externalSessionId, "externalSessionId");
     const now = timestamp();
@@ -265,14 +315,23 @@ export class MemorySpace {
       createdAt: now,
       updatedAt: now
     };
-    const session = (await this.store.getOrCreateProviderSession(candidate)).session;
-    if (session.spaceId !== space.id) {
-      throw new ConflictError(
-        `Provider Session ${provider}:${externalSessionId} is bound to Space ${session.spaceId}, not ${space.id}`,
-        "PROVIDER_SESSION_SPACE_CONFLICT"
-      );
-    }
-    return session;
+    return this.store.transaction(async () => {
+      const session = (await this.store.getOrCreateProviderSession(candidate)).session;
+      if (session.spaceId !== space.id) {
+        throw new ConflictError(
+          `Provider Session ${provider}:${externalSessionId} is bound to Space ${session.spaceId}, not ${space.id}`,
+          "PROVIDER_SESSION_SPACE_CONFLICT"
+        );
+      }
+      if (projectBinding) {
+        await this.store.insertSessionProjectBinding({
+          sessionId: session.id,
+          spaceId: session.spaceId,
+          ...projectBinding
+        });
+      }
+      return session;
+    });
   }
 
   async findProviderSession(provider: string, externalSessionId: string): Promise<Session | undefined> {
@@ -291,7 +350,7 @@ export class MemorySpace {
     const event = await this.store.insertEvent({
       id: optionalString(input.id, "event.id") ?? randomUUID(), sessionId: session.id,
       type: input.type, payload: input.payload,
-      createdAt: input.createdAt ? new Date(input.createdAt).toISOString() : timestamp()
+      createdAt: optionalIsoDateTime(input.createdAt, "event.createdAt") ?? timestamp()
     });
     await this.store.updateSession({ ...session, updatedAt: timestamp() });
     return event;
@@ -622,7 +681,12 @@ export class MemorySpace {
     let candidates: unknown[] = [];
     let completed: Checkpoint;
     try {
-      candidates = await this.extractor.extract(events, { session, checkpointId: checkpoint.id });
+      const projectBinding = await this.store.findSessionProjectBinding(session.id);
+      candidates = await this.extractor.extract(events, {
+        session,
+        checkpointId: checkpoint.id,
+        projectBinding
+      });
       if (!Array.isArray(candidates)) throw new ValidationError("Extractor must return a MemoryCandidate array");
       const eventIds = new Set(events.map((event) => event.id));
       const normalized = candidates.map((candidate, index) => this.#validateCandidate(candidate, index, eventIds));

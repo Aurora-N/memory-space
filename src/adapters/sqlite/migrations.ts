@@ -85,7 +85,7 @@ export const migrations: Migration[] = [
         created_at TEXT NOT NULL
       );
       CREATE INDEX handoff_space_created_idx ON handoff_snapshots(space_id, created_at);
-    `
+    `,
   },
   {
     version: 2,
@@ -94,6 +94,22 @@ export const migrations: Migration[] = [
       CREATE UNIQUE INDEX sessions_provider_external_idx
         ON sessions(provider, external_session_id)
         WHERE provider IS NOT NULL AND external_session_id IS NOT NULL;
-    `
-  }
+    `,
+  },
+  {
+    version: 3,
+    name: "session-project-binding-provenance",
+    sql: `
+      CREATE TABLE session_project_bindings (
+        session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+        space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        source TEXT NOT NULL CHECK (source IN ('config', 'explicit')),
+        config_path TEXT,
+        CHECK (
+          (source = 'config' AND config_path IS NOT NULL)
+          OR (source = 'explicit' AND config_path IS NULL)
+        )
+      );
+    `,
+  },
 ];

@@ -1,6 +1,7 @@
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
 import { builtInExtractionRules, DeclarativeRuleExtractor } from "./declarative-rule-extractor.ts";
+import { builtInMemoryKeys } from "./extraction-contract.ts";
 import { isTransientExtractionEvidence } from "./extraction-policy.ts";
 
 interface TypeDefinition {
@@ -21,21 +22,21 @@ const definitions: TypeDefinition[] = [
     type: "goal",
     family: "state",
     pattern: /^(?:goal|目标)\s*[:：]\s*(.+)$/iu,
-    key: "project.goal.primary",
+    key: builtInMemoryKeys.primaryGoal,
     core: true,
   },
   {
     type: "roadmap",
     family: "state",
     pattern: /^(?:roadmap|路线图|计划)\s*[:：]\s*(.+)$/iu,
-    key: "project.roadmap.current",
+    key: builtInMemoryKeys.currentRoadmap,
     core: true,
   },
   {
     type: "progress",
     family: "state",
     pattern: /^(?:progress|进度|已完成)\s*[:：]\s*(.+)$/iu,
-    key: "project.progress.current",
+    key: builtInMemoryKeys.currentProgress,
     core: true,
   },
   {
@@ -217,7 +218,12 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
     (chineseProgress && hasDurableProjectSubject(chineseProgress[1]))
   ) {
     return candidateFromDefinition(
-      { family: "state", type: "progress", key: "project.progress.current", core: true },
+      {
+        family: "state",
+        type: "progress",
+        key: builtInMemoryKeys.currentProgress,
+        core: true,
+      },
       line,
       sourceEventId,
       0.86

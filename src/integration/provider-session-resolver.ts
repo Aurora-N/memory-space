@@ -1,6 +1,7 @@
 import type { MemorySpace } from "../application/memory-space.ts";
 import { ValidationError } from "../domain/errors.ts";
 import type { Session } from "../domain/types.ts";
+import type { SessionProjectBindingInput } from "../application/memory-space.ts";
 import { ProviderSessionNotFoundError } from "./errors.ts";
 
 /** Provider identity and Space data used for Session resolution. */
@@ -9,6 +10,7 @@ export interface ProviderSessionResolutionInput {
   externalSessionId?: string;
   spaceId: string;
   agentId?: string;
+  projectBinding?: SessionProjectBindingInput;
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -37,12 +39,13 @@ export class ProviderSessionResolver {
     const agentId = optionalString(input.agentId, "agentId");
     await this.memorySpace.getSpace(spaceId);
     if (!externalSessionId) {
-      return this.memorySpace.createSession({ spaceId, provider, agentId });
+      return this.memorySpace.createSession({ spaceId, provider, agentId }, input.projectBinding);
     }
 
-    return this.memorySpace.getOrCreateProviderSession({
-      spaceId, provider, externalSessionId, agentId
-    });
+    return this.memorySpace.getOrCreateProviderSession(
+      { spaceId, provider, externalSessionId, agentId },
+      input.projectBinding
+    );
   }
 
   async find(providerInput: string, externalSessionIdInput: string): Promise<Session> {
@@ -53,7 +56,10 @@ export class ProviderSessionResolver {
     return session;
   }
 
-  async findOptional(providerInput: string, externalSessionIdInput: string): Promise<Session | undefined> {
+  async findOptional(
+    providerInput: string,
+    externalSessionIdInput: string
+  ): Promise<Session | undefined> {
     const provider = requiredString(providerInput, "provider");
     const externalSessionId = requiredString(externalSessionIdInput, "externalSessionId");
     return this.memorySpace.findProviderSession(provider, externalSessionId);

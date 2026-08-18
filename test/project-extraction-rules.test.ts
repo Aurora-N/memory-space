@@ -69,7 +69,7 @@ function ruleDocument(overrides: Record<string, unknown> = {}): Record<string, u
 test("project extraction rules parse a bounded prefix DSL and produce candidates", async () => {
   const parsed = parseProjectExtractionRules(ruleDocument());
   const candidates = await new DeclarativeRuleExtractor(parsed.rules).extract(
-    [event("前端框架使用 React。\nFrontend framework: Vue")],
+    [event("前端框架使用 React。\nFrontend framework: Vue.\nFrontend framework: C++.")],
     context
   );
 
@@ -99,8 +99,40 @@ test("project extraction rules parse a bounded prefix DSL and produce candidates
         recommendedTier: "core",
         operation: "update",
       },
+      {
+        family: "knowledge",
+        type: "decision",
+        key: "project.frontend.framework",
+        content: "前端框架使用 C++",
+        recommendedTier: "core",
+        operation: "update",
+      },
     ]
   );
+});
+
+test("project extraction rules reject every conflicting built-in key schema", () => {
+  for (const key of [
+    "project.goal.primary",
+    "project.roadmap.current",
+    "project.progress.current",
+    "project.task.current",
+  ]) {
+    assert.throws(
+      () =>
+        parseProjectExtractionRules(
+          ruleDocument({
+            id: `conflict.${key}`,
+            family: "knowledge",
+            type: "decision",
+            key,
+          })
+        ),
+      (error: unknown) =>
+        error instanceof ValidationError &&
+        /key conflicts with the built-in key schema/u.test(error.message)
+    );
+  }
 });
 
 test("domain-specific database extraction requires explicit project configuration", async () => {
@@ -360,6 +392,97 @@ test("default daemon composition applies matching project rules at checkpoint", 
     );
   } finally {
     await daemon.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("provider Session keeps its project rule binding across daemon restart and cwd changes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "memory-space-rules-multi-project-"));
+  const projectA = join(directory, "project-a");
+  const projectB = join(directory, "project-b");
+  const databasePath = join(directory, "memory.db");
+  await mkdir(join(projectA, ".memory-space"), { recursive: true });
+  await mkdir(join(projectB, ".memory-space"), { recursive: true });
+  await writeFile(
+    join(projectA, ".memory-space", "config.json"),
+    JSON.stringify({ version: 1, spaceId: "space-a" })
+  );
+  await writeFile(
+    join(projectB, ".memory-space", "config.json"),
+    JSON.stringify({ version: 1, spaceId: "space-b" })
+  );
+  await writeFile(
+    join(projectB, ".memory-space", "extraction-rules.json"),
+    JSON.stringify(ruleDocument())
+  );
+
+  const first = createMemorySpaceDaemon({
+    host: "127.0.0.1",
+    port: 0,
+    databasePath,
+    mcpRuntime: { cwd: projectA },
+  });
+  try {
+    await first.memorySpace.createSpace({ id: "space-a", name: "Project A" });
+    await first.memorySpace.createSpace({ id: "space-b", name: "Project B" });
+    const common = {
+      session_id: "multi-project-native-session",
+      transcript_path: join(directory, "opaque-transcript.jsonl"),
+      cwd: projectB,
+    };
+    assert.equal(
+      (
+        await first.codexIntegration.handleNative({
+          ...common,
+          hook_event_name: "SessionStart",
+          source: "startup",
+        })
+      ).status,
+      "ok"
+    );
+    assert.equal(
+      (
+        await first.codexIntegration.handleNative({
+          ...common,
+          hook_event_name: "UserPromptSubmit",
+          turn_id: "multi-project-turn",
+          prompt: "前端框架使用 React。",
+        })
+      ).status,
+      "ok"
+    );
+  } finally {
+    await first.close();
+  }
+
+  const reopened = createMemorySpaceDaemon({
+    host: "127.0.0.1",
+    port: 0,
+    databasePath,
+    mcpRuntime: { cwd: projectA },
+  });
+  try {
+    const checkpointed = await reopened.codexIntegration.handleNative({
+      session_id: "multi-project-native-session",
+      transcript_path: join(directory, "opaque-transcript.jsonl"),
+      cwd: projectA,
+      hook_event_name: "PreCompact",
+      turn_id: "multi-project-turn",
+      trigger: "manual",
+    });
+    assert.equal(checkpointed.status, "ok");
+    const memories = await reopened.memorySpace.browseMemories({ spaceId: "space-b" });
+    assert.deepEqual(
+      memories.items.map(({ key, content }) => ({ key, content })),
+      [
+        {
+          key: "project.frontend.framework",
+          content: "前端框架使用 React",
+        },
+      ]
+    );
+  } finally {
+    await reopened.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

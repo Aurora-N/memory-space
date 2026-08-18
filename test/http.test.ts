@@ -151,6 +151,27 @@ test("HTTP rejects missing or wrong JSON media types before mutation", async () 
   }
 });
 
+test("HTTP rejects invalid event timestamps without persisting an event", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const request = createClient(memorySpace);
+  try {
+    const space = (await request("POST", "/spaces", { name: "Timestamp validation" })).body;
+    const session = (await request("POST", `/spaces/${space.id}/sessions`, {
+      agentId: "http-agent"
+    })).body;
+    const rejected = await request("POST", `/sessions/${session.id}/events`, {
+      type: "message",
+      payload: { content: "must not persist" },
+      createdAt: "not-a-date"
+    });
+    assert.equal(rejected.status, 422);
+    assert.equal(rejected.body.error.code, "VALIDATION_ERROR");
+    assert.deepEqual((await request("GET", `/sessions/${session.id}/events`)).body, []);
+  } finally {
+    await memorySpace.close();
+  }
+});
+
 test("HTTP adapter completes the cross-Agent Handoff flow idempotently", async () => {
   const memorySpace = createDefaultMemorySpace();
   const request = createClient(memorySpace);

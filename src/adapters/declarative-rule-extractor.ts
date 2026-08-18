@@ -1,6 +1,7 @@
 import { ValidationError } from "../domain/errors.ts";
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
+import { builtInKeySchemas, builtInMemoryKeys } from "./extraction-contract.ts";
 import { isTransientExtractionEvidence } from "./extraction-policy.ts";
 
 const families = new Set<MemoryFamily>(["knowledge", "state", "episode", "procedure"]);
@@ -16,7 +17,6 @@ const ruleFields = new Set([
 ]);
 const matchFields = new Set(["kind", "prefixes", "value", "caseSensitive"]);
 const reservedRuleIds = new Set(["builtin.project.current-task"]);
-const builtInKeyTypes = new Map<string, string>([["project.task.current", "state:task"]]);
 
 const MAX_RULES = 64;
 const MAX_PREFIXES = 16;
@@ -57,7 +57,7 @@ export const builtInExtractionRules: readonly DeclarativeExtractionRule[] = [
     id: "builtin.project.current-task",
     family: "state",
     type: "task",
-    key: "project.task.current",
+    key: builtInMemoryKeys.currentTask,
     match: {
       kind: "prefix",
       prefixes: ["先完成", "先实现"],
@@ -164,7 +164,7 @@ function parseRule(value: unknown, index: number): DeclarativeExtractionRule | u
     input.key === undefined
       ? undefined
       : string(input.key, `${label}.key`, 128, /^[a-z0-9][a-z0-9._:-]*$/iu);
-  const builtInType = key ? builtInKeyTypes.get(key) : undefined;
+  const builtInType = key ? builtInKeySchemas.get(key) : undefined;
   if (builtInType !== undefined && builtInType !== `${family}:${type}`) {
     throw new ValidationError(`${label}.key conflicts with the built-in key schema`);
   }
@@ -218,7 +218,7 @@ function capturedValue(line: string, rule: DeclarativeExtractionRule): string | 
     const remainder = line.slice(prefix.length).trim();
     if (remainder === "" || remainder.length > MAX_CAPTURE_LENGTH) return undefined;
     if (rule.match.value === "text") return remainder;
-    return remainder.match(/^[A-Za-z][\w.+-]*/u)?.[0];
+    return remainder.match(/^[A-Za-z](?:[\w.+-]*[\w+])?/u)?.[0];
   }
   return undefined;
 }

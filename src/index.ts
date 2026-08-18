@@ -12,7 +12,8 @@ export type {
   CreateSpaceInput,
   MemoryOverviewResult,
   ProviderSessionInput,
-  RememberInput
+  RememberInput,
+  SessionProjectBindingInput
 } from "./application/memory-space.ts";
 export { RuleBasedExtractor, NoopExtractor } from "./adapters/rule-based-extractor.ts";
 export { ClaudeAdapter } from "./adapters/providers/claude-code/adapter.ts";
@@ -59,6 +60,10 @@ export { SqliteMemoryStore } from "./adapters/sqlite/sqlite-store.ts";
 export { NoopCache } from "./ports/cache.ts";
 export type { CachePort } from "./ports/cache.ts";
 export type { MemoryExtractor, ExtractionContext } from "./ports/extractor.ts";
+export type {
+  SessionProjectBinding,
+  SessionProjectBindingSource
+} from "./ports/session-binding.ts";
 export type { MemoryStore, MemoryFilters, MemoryHistoryRecord } from "./ports/store.ts";
 export type { TranscriptReader, TranscriptReadOptions, TranscriptChunk } from "./ports/transcript-reader.ts";
 export { SpaceResolver } from "./binding/space-resolver.ts";

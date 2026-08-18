@@ -185,7 +185,11 @@ export class LifecycleHandler {
       provider: event.provider,
       externalSessionId: event.externalSessionId,
       spaceId: binding.spaceId,
-      agentId: context.agentId
+      agentId: context.agentId,
+      projectBinding: {
+        source: binding.source,
+        configPath: binding.configPath
+      }
     });
     const bootstrap = await this.memorySpace.bootstrap(session.spaceId);
     return { status: "ok", type: "session_start", session, bootstrap };

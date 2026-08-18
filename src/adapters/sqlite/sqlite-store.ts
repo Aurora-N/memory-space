@@ -14,11 +14,27 @@ import type {
   SessionEventType,
   Space
 } from "../../domain/types.ts";
+import type { SessionProjectBinding } from "../../ports/session-binding.ts";
 import type { MemoryFilters, MemoryHistoryRecord, MemoryStore } from "../../ports/store.ts";
 import { migrations } from "./migrations.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: node:sqlite returns dynamically typed row columns at this adapter boundary.
 type Row = Record<string, any>;
+
+interface TransactionBarrier {
+  current: Promise<void>;
+}
+
+const fileTransactionBarriers = new Map<string, TransactionBarrier>();
+
+function transactionBarrier(path: string): TransactionBarrier {
+  if (path === ":memory:") return { current: Promise.resolve() };
+  const existing = fileTransactionBarriers.get(path);
+  if (existing) return existing;
+  const created = { current: Promise.resolve() };
+  fileTransactionBarriers.set(path, created);
+  return created;
+}
 
 function parseJson<T>(value: unknown, fallback?: T): T | undefined {
   return value === null || value === undefined ? fallback : JSON.parse(String(value)) as T;
@@ -96,13 +112,14 @@ function mapHandoff(row?: Row): HandoffSnapshot | undefined {
 export class SqliteMemoryStore implements MemoryStore {
   readonly database: DatabaseSync;
   readonly #transactionContext = new AsyncLocalStorage<boolean>();
-  #barrier: Promise<void> = Promise.resolve();
+  readonly #barrier: TransactionBarrier;
 
   constructor(path = ":memory:") {
     if (path !== ":memory:") {
       path = resolve(path);
       mkdirSync(dirname(path), { recursive: true });
     }
+    this.#barrier = transactionBarrier(path);
     this.database = new DatabaseSync(path);
     this.database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
     this.#migrate();
@@ -115,9 +132,9 @@ export class SqliteMemoryStore implements MemoryStore {
 
   async transaction<T>(operation: () => Promise<T>): Promise<T> {
     if (this.#transactionContext.getStore()) return operation();
-    const previous = this.#barrier;
+    const previous = this.#barrier.current;
     let release!: () => void;
-    this.#barrier = new Promise((resolveBarrier) => { release = resolveBarrier; });
+    this.#barrier.current = new Promise((resolveBarrier) => { release = resolveBarrier; });
     await previous;
     let began = false;
     try {
@@ -202,6 +219,29 @@ export class SqliteMemoryStore implements MemoryStore {
     return mapSession(this.database.prepare(
       "SELECT * FROM sessions WHERE provider = ? AND external_session_id = ?"
     ).get(provider, externalSessionId) as Row | undefined);
+  }
+
+  async insertSessionProjectBinding(binding: SessionProjectBinding): Promise<void> {
+    await this.#ready();
+    this.database.prepare(`
+      INSERT OR IGNORE INTO session_project_bindings (
+        session_id, space_id, source, config_path
+      ) VALUES (?, ?, ?, ?)
+    `).run(binding.sessionId, binding.spaceId, binding.source, binding.configPath ?? null);
+  }
+
+  async findSessionProjectBinding(sessionId: string): Promise<SessionProjectBinding | undefined> {
+    await this.#ready();
+    const row = this.database.prepare(
+      "SELECT * FROM session_project_bindings WHERE session_id = ?"
+    ).get(sessionId) as Row | undefined;
+    if (!row) return undefined;
+    return {
+      sessionId: row.session_id,
+      spaceId: row.space_id,
+      source: row.source,
+      configPath: row.config_path ?? undefined
+    } as SessionProjectBinding;
   }
 
   async updateSession(session: Session): Promise<void> {
@@ -456,7 +496,7 @@ export class SqliteMemoryStore implements MemoryStore {
   }
 
   async #ready(): Promise<void> {
-    if (!this.#transactionContext.getStore()) await this.#barrier;
+    if (!this.#transactionContext.getStore()) await this.#barrier.current;
   }
 
   #migrate(): void {
