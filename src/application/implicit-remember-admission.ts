@@ -7,12 +7,42 @@ export type ImplicitRememberRejectionReason =
   | "missing_user_evidence"
   | "transient_evidence"
   | "operation_not_allowed"
-  | "existing_core_memory";
+  | "existing_core_memory"
+  | "secret_like_evidence";
 
 /** Pure conservative P8 admission decision. */
 export type ImplicitRememberAdmissionDecision =
   | { accepted: true }
   | { accepted: false; reason: ImplicitRememberRejectionReason };
+
+const secretKeyConcepts = new Set([
+  "PASSWORD",
+  "PASSWD",
+  "API_KEY",
+  "ACCESS_TOKEN",
+  "REFRESH_TOKEN",
+  "PRIVATE_KEY",
+  "CLIENT_SECRET",
+  "AUTH_SECRET",
+  "CREDENTIAL",
+  "CREDENTIALS",
+]);
+
+function isSecretLikeKey(key: string | undefined): boolean {
+  if (!key) return false;
+  const tokens = key
+    .toUpperCase()
+    .split(/[_\-./:]+/u)
+    .filter(Boolean);
+  for (const concept of secretKeyConcepts) {
+    const conceptTokens = concept.split("_");
+    if (conceptTokens.length === 1 && tokens.includes(conceptTokens[0] ?? "")) return true;
+    for (let index = 0; index <= tokens.length - conceptTokens.length; index += 1) {
+      if (conceptTokens.every((token, offset) => tokens[index + offset] === token)) return true;
+    }
+  }
+  return false;
+}
 
 /** Enforces P8 user evidence, durability, operation, confidence, and Core protection. */
 export function decideImplicitRememberAdmission(input: {
@@ -29,6 +59,9 @@ export function decideImplicitRememberAdmission(input: {
     input.candidate.operation !== "ignore"
   ) {
     return { accepted: false, reason: "operation_not_allowed" };
+  }
+  if (isSecretLikeKey(input.candidate.key)) {
+    return { accepted: false, reason: "secret_like_evidence" };
   }
   const evidence = input.candidate.sourceEventIds
     .map((id) => input.eventsById.get(id))

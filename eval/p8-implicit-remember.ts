@@ -25,7 +25,10 @@ export type P8ScenarioCategory =
   | "replay"
   | "stop-checkpoint"
   | "core-collision"
-  | "space-mismatch";
+  | "space-mismatch"
+  | "long-assistant"
+  | "checkpoint-replay"
+  | "secret-like";
 
 export interface P8ImplicitRememberScenario {
   scenarioId: string;
@@ -49,6 +52,10 @@ export interface P8ImplicitRememberScenarioResult {
   blockedLifecycle: boolean;
   replayDuplicateSideEffects: number;
   sameEvidenceDuplicateRows: number;
+  optOutViolations: number;
+  userEvidenceRetained: boolean;
+  checkpointHistoricalReplayCount: number;
+  secretLikeAutoPersistence: number;
   passed: boolean;
 }
 
@@ -62,6 +69,10 @@ export interface P8ImplicitRememberReport {
     replayDuplicateRate: number;
     assistantOnlyPersistenceRate: number;
     lifecycleBlockingFailureRate: number;
+    explicitOptOutViolationRate: number;
+    longAssistantUserEvidenceRetention: "pass" | "fail";
+    checkpointHistoricalReplayCount: number;
+    secretLikeAutoPersistenceRate: number;
   };
   scenarios: P8ImplicitRememberScenarioResult[];
   hardCorrectness: "pass" | "fail";
@@ -80,6 +91,9 @@ const categories = new Set<P8ScenarioCategory>([
   "stop-checkpoint",
   "core-collision",
   "space-mismatch",
+  "long-assistant",
+  "checkpoint-replay",
+  "secret-like",
 ]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -180,6 +194,10 @@ async function runScenario(
   let blockedLifecycle = false;
   let replayDuplicateSideEffects = 0;
   let sameEvidenceDuplicateRows = 0;
+  let optOutViolations = 0;
+  let userEvidenceRetained = true;
+  let checkpointHistoricalReplayCount = 0;
+  let secretLikeAutoPersistence = 0;
   try {
     await memorySpace.createSpace({ id: "p8-primary", name: "P8 Primary" });
     await memorySpace.createSpace({ id: "p8-other", name: "P8 Other" });
@@ -229,12 +247,19 @@ async function runScenario(
         "natural-decision": "项目已经决定使用 pnpm 作为包管理器。",
         transient: "Task: I am currently checking this file.",
         "recalled-repetition": "RECALLED_TEST_1",
-        "opt-out": "Do not remember this turn\nOPT_OUT_TEST_1 = private",
+        "opt-out": [
+          "Do not remember this turn",
+          "x".repeat(30_000),
+          "OPT_OUT_TEST_1 = private",
+        ].join("\n"),
         "invalid-config": "INVALID_CONFIG_TEST_1 = durable",
         replay: "REPLAY_TEST_1 = durable",
         "stop-checkpoint": "CHECKPOINT_TEST_1 = durable",
         "core-collision": "CORE_COLLISION_1 = changed",
         "space-mismatch": "SPACE_MISMATCH_1 = durable",
+        "long-assistant": "LONG_ASSISTANT_TEST_1 = durable",
+        "checkpoint-replay": "CHECKPOINT_REPLAY_TEST_1 = v1",
+        "secret-like": "OPENAI_API_KEY = secret-eval-value",
       };
       await handler.handle({
         type: "user_prompt",
@@ -250,7 +275,11 @@ async function runScenario(
         externalSessionId,
         cwd: scenario.category === "space-mismatch" ? other : primary,
         content:
-          scenario.category === "recalled-repetition" ? "RECALLED_TEST_1 = historical" : "done",
+          scenario.category === "recalled-repetition"
+            ? "RECALLED_TEST_1 = historical"
+            : scenario.category === "long-assistant"
+              ? "a".repeat(30_000)
+              : "done",
       });
       blockedLifecycle = response.status !== "ok" || response.type !== "assistant_turn";
       if (response.status === "ok" && response.type === "assistant_turn") {
@@ -283,9 +312,46 @@ async function runScenario(
         const memories = await activeMemories(memorySpace, "p8-primary");
         sameEvidenceDuplicateRows = Math.max(0, memories.length - before.length - 1);
       }
+      if (scenario.category === "checkpoint-replay") {
+        await handler.handle({
+          type: "user_prompt",
+          provider: "eval",
+          externalSessionId,
+          cwd: primary,
+          content: "CHECKPOINT_REPLAY_TEST_1 = v2",
+        });
+        await handler.handle({
+          type: "assistant_turn",
+          provider: "eval",
+          externalSessionId,
+          cwd: primary,
+          content: "done",
+        });
+        const beforeCheckpoint = (await activeMemories(memorySpace, "p8-primary"))[0];
+        const beforeVersion = beforeCheckpoint?.version ?? 0;
+        const ended = await handler.handle({
+          type: "session_end",
+          provider: "eval",
+          externalSessionId,
+          cwd: primary,
+        });
+        if (ended.type !== "session_end" || ended.checkpoint.status !== "completed") {
+          throw new Error("Expected completed convergence checkpoint");
+        }
+        const afterCheckpoint = (await activeMemories(memorySpace, "p8-primary"))[0];
+        checkpointHistoricalReplayCount = Math.max(
+          0,
+          (afterCheckpoint?.version ?? 0) - beforeVersion
+        );
+      }
     }
 
     const memories = await activeMemories(memorySpace, "p8-primary");
+    if (scenario.category === "opt-out") optOutViolations = memories.length;
+    if (scenario.category === "long-assistant") {
+      userEvidenceRetained = memories.length === 1 && memories[0]?.key === "LONG_ASSISTANT_TEST_1";
+    }
+    if (scenario.category === "secret-like") secretLikeAutoPersistence = memories.length;
     const coreRows = memories.filter((memory) => memory.tier === "core").length;
     const expectedCoreRows = scenario.category === "core-collision" ? 1 : 0;
     const passed =
@@ -293,7 +359,11 @@ async function runScenario(
       coreRows === expectedCoreRows &&
       !blockedLifecycle &&
       replayDuplicateSideEffects === 0 &&
-      sameEvidenceDuplicateRows === 0;
+      sameEvidenceDuplicateRows === 0 &&
+      optOutViolations === 0 &&
+      userEvidenceRetained &&
+      checkpointHistoricalReplayCount === 0 &&
+      secretLikeAutoPersistence === 0;
     return {
       scenarioId: scenario.scenarioId,
       category: scenario.category,
@@ -304,6 +374,10 @@ async function runScenario(
       blockedLifecycle,
       replayDuplicateSideEffects,
       sameEvidenceDuplicateRows,
+      optOutViolations,
+      userEvidenceRetained,
+      checkpointHistoricalReplayCount,
+      secretLikeAutoPersistence,
       passed,
     };
   } finally {
@@ -331,6 +405,9 @@ export async function runP8ImplicitRememberEval(
   const lifecycleFailureCases = scenarios.filter(
     (scenario) => scenario.category === "invalid-config" || scenario.category === "space-mismatch"
   );
+  const optOutCases = scenarios.filter((scenario) => scenario.category === "opt-out");
+  const longAssistantCases = scenarios.filter((scenario) => scenario.category === "long-assistant");
+  const secretLikeCases = scenarios.filter((scenario) => scenario.category === "secret-like");
   return {
     version: 1,
     fixtureVersion: fixture.version,
@@ -358,6 +435,23 @@ export async function runP8ImplicitRememberEval(
       lifecycleBlockingFailureRate: ratio(
         lifecycleFailureCases.filter((scenario) => scenario.blockedLifecycle).length,
         lifecycleFailureCases.length
+      ),
+      explicitOptOutViolationRate: ratio(
+        optOutCases.reduce((total, scenario) => total + scenario.optOutViolations, 0),
+        optOutCases.length
+      ),
+      longAssistantUserEvidenceRetention: longAssistantCases.every(
+        (scenario) => scenario.userEvidenceRetained
+      )
+        ? "pass"
+        : "fail",
+      checkpointHistoricalReplayCount: scenarios.reduce(
+        (total, scenario) => total + scenario.checkpointHistoricalReplayCount,
+        0
+      ),
+      secretLikeAutoPersistenceRate: ratio(
+        secretLikeCases.reduce((total, scenario) => total + scenario.secretLikeAutoPersistence, 0),
+        secretLikeCases.length
       ),
     },
     scenarios,

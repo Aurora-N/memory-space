@@ -24,7 +24,8 @@ export interface ImplicitRememberRejectedItem {
     | "missing_user_evidence"
     | "transient_evidence"
     | "operation_not_allowed"
-    | "existing_core_memory";
+    | "existing_core_memory"
+    | "secret_like_evidence";
 }
 
 /** Sanitized result of one bounded turn-time implicit ingestion attempt. */
@@ -51,9 +52,14 @@ export interface ImplicitRememberServicePort {
 }
 
 interface ImplicitRememberMemorySpace {
+  getImplicitRememberUserEvidence(input: {
+    sessionId: string;
+    throughEventId: string;
+  }): Promise<{ session: Session; event?: SessionEvent }>;
   getImplicitRememberEventWindow(input: {
     sessionId: string;
     throughEventId: string;
+    requiredUserEventId?: string;
     maxEvents: number;
     maxInputChars: number;
   }): Promise<{ session: Session; events: SessionEvent[] }>;
@@ -94,16 +100,6 @@ function positiveInteger(value: number | undefined, fallback: number, label: str
   return result;
 }
 
-function latestUserContent(events: readonly SessionEvent[]): string | undefined {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.type !== "message" || event.payload.role !== "user") continue;
-    const content = event.payload.content ?? event.payload.text;
-    if (typeof content === "string") return content;
-  }
-  return undefined;
-}
-
 /** Runs deterministic extraction and conservative Indexed-only admission over persisted events. */
 export class ImplicitRememberService implements ImplicitRememberServicePort {
   readonly memorySpace: ImplicitRememberMemorySpace;
@@ -134,17 +130,22 @@ export class ImplicitRememberService implements ImplicitRememberServicePort {
       rejected: [],
     };
     if (input.mode === "off") return base;
+    const userEvidence = await this.memorySpace.getImplicitRememberUserEvidence({
+      sessionId: input.sessionId,
+      throughEventId: input.throughEventId,
+    });
+    const prompt = userEvidence.event?.payload.content ?? userEvidence.event?.payload.text;
+    if (typeof prompt === "string" && promptRememberDirective(prompt) === "disable_for_turn") {
+      return { ...base, bypassed: true };
+    }
     const window = await this.memorySpace.getImplicitRememberEventWindow({
       sessionId: input.sessionId,
       throughEventId: input.throughEventId,
+      requiredUserEventId: userEvidence.event?.id,
       maxEvents: this.maxEvents,
       maxInputChars: this.maxInputChars,
     });
     base.inspectedEventIds = window.events.map((event) => event.id);
-    const prompt = latestUserContent(window.events);
-    if (prompt !== undefined && promptRememberDirective(prompt) === "disable_for_turn") {
-      return { ...base, bypassed: true };
-    }
     const projectBinding = await this.memorySpace.getSessionProjectBinding(window.session.id);
     const candidates = await this.memorySpace.extractMemoryCandidates(window.events, {
       session: window.session,

@@ -1,6 +1,6 @@
 # P8 — Implicit Turn-Time Remember Spec
 
-**Status:** READY FOR IMPLEMENTATION / FROZEN FOR P8 v1  
+**Status:** COMPLETE / REVIEW PASS / FROZEN
 **Phase:** P8  
 **Depends on:** Provider Integration v1, P6 Core/Handoff policy, P7 implicit prompt-time recall  
 **Related:** `./P7_IMPLICIT_RECALL_SPEC.md`, `./PROVIDER_INTEGRATION_SPEC.md`, `./P6_STAGE_B3_CORE_HANDOFF_POLICY_SPEC.md`, `./DOMAIN_MODEL.md`, `./PRODUCT_SPEC.md`

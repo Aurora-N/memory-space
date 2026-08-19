@@ -74,6 +74,13 @@ export interface MemoryStore {
   insertEvent(event: Omit<SessionEvent, "sequence">): Promise<SessionEvent>;
   findEvent(sessionId: string, eventId: string): Promise<SessionEvent | undefined>;
   findLatestEvent(sessionId: string): Promise<SessionEvent | undefined>;
+  /** Returns the latest full message for one role inside an event sequence boundary. */
+  findLatestMessageEvent(
+    sessionId: string,
+    role: "user" | "assistant",
+    afterSequence: number,
+    throughSequence: number
+  ): Promise<SessionEvent | undefined>;
   /** Returns events in ascending sequence order within inclusive upper and exclusive lower bounds. */
   listEvents(
     sessionId: string,

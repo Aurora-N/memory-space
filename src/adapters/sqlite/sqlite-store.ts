@@ -391,6 +391,29 @@ export class SqliteMemoryStore implements MemoryStore {
     );
   }
 
+  async findLatestMessageEvent(
+    sessionId: string,
+    role: "user" | "assistant",
+    afterSequence: number,
+    throughSequence: number
+  ): Promise<SessionEvent | undefined> {
+    await this.#ready();
+    return mapEvent(
+      this.database
+        .prepare(`
+          SELECT * FROM session_events
+          WHERE session_id = ?
+            AND type = 'message'
+            AND json_extract(payload_json, '$.role') = ?
+            AND sequence > ?
+            AND sequence <= ?
+          ORDER BY sequence DESC
+          LIMIT 1
+        `)
+        .get(sessionId, role, afterSequence, throughSequence) as Row | undefined
+    );
+  }
+
   async listEvents(
     sessionId: string,
     afterSequence = 0,

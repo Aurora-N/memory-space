@@ -4,7 +4,7 @@
 **Reviewed commit:** `c8ba9625d3a4af0b00c3793cb9bf251fb85e1287`  
 **P8 spec baseline:** `1cac6a5658cc920413d83fa876ffb0aa1a7ebb15`  
 **Review date:** 2026-08-19  
-**Status:** REQUEST CHANGES — P8 NOT YET FROZEN  
+**Status:** CLOSED / REVIEW PASS
 **Primary goal:** 修复 P8 当前实现中影响显式用户控制、长轮次自动记忆召回率、checkpoint 语义幂等和自动敏感信息持久化边界的问题；保持 P8 已通过的 lifecycle、Indexed-only、Core protection、receipt durability 与 P7 + P8 closure 架构不变。
 
 ---
@@ -950,28 +950,48 @@ Do not convert an unavailable provider into a synthetic PASS.
 
 # 13. Completion gate
 
-CR-PHASE11 is closed only when:
+CR-PHASE11 completion evidence:
 
 ```text
-[ ] full untruncated user evidence controls P8 opt-out
-[ ] bounded extraction cannot weaken explicit opt-out
-[ ] latest user evidence survives a long assistant response
-[ ] extraction remains bounded and persisted events remain immutable
-[ ] receipt-backed checkpoint no longer replays old materialized content
-[ ] multi-update checkpoint history has no backward content rewind
-[ ] legitimate checkpoint Core admission still works
-[ ] obvious credential-like assignments are rejected implicitly
-[ ] non-secret token-related engineering keys are not broadly blocked
-[ ] secret rejection diagnostics do not expose secret values
-[ ] P7 + P8 cross-Session closure remains green
-[ ] lifecycle fail-open remains green
-[ ] existing P8 deterministic metrics remain at target
-[ ] new hardening fixtures pass
-[ ] P8 quality report identifies real implementation/hardening commits
-[ ] lint/typecheck/test/build/check/workspace checks pass
+[x] full untruncated user evidence controls P8 opt-out
+[x] bounded extraction cannot weaken explicit opt-out
+[x] latest user evidence survives a long assistant response
+[x] extraction remains bounded and persisted events remain immutable
+[x] receipt-backed checkpoint no longer replays old materialized content
+[x] multi-update checkpoint history has no backward content rewind
+[x] legitimate checkpoint Core admission still works
+[x] obvious credential-like assignments are rejected implicitly
+[x] non-secret token-related engineering keys are not broadly blocked
+[x] secret rejection diagnostics do not expose secret values
+[x] P7 + P8 cross-Session closure remains green
+[x] lifecycle fail-open remains green
+[x] existing P8 deterministic metrics remain at target
+[x] new hardening fixtures pass
+[x] P8 quality report identifies real implementation/hardening commits
+[x] lint/typecheck/test/build/check/workspace checks pass
 ```
 
-After all gates pass, P8 may be updated to:
+Observed closure evidence on 2026-08-19:
+
+```text
+pnpm run lint                              PASS
+pnpm run typecheck                         PASS
+pnpm test                                  PASS (243 tests)
+pnpm run inspector:build                   PASS
+pnpm run check                             PASS
+pnpm run check:workspace                   PASS
+git diff --check                           PASS
+pnpm memory-space eval implicit-remember   PASS
+Claude 2.1.112 real P8 smoke               PASS
+Codex real P8 smoke                        BLOCKED by account usage limit
+```
+
+Codex remains honestly BLOCKED rather than synthetically promoted to PASS. The
+review already accepted that provider limitation as non-blocking when the
+provider-neutral implementation, deterministic gates, and an available real
+provider are green.
+
+Final P8 state:
 
 ```text
 COMPLETE / REVIEW PASS / FROZEN

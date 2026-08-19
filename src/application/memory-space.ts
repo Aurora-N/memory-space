@@ -123,6 +123,11 @@ export interface ImplicitRememberEventWindow {
   session: Session;
   events: SessionEvent[];
 }
+/** Full authoritative user control evidence for one implicit-remember boundary. */
+export interface ImplicitRememberUserEvidence {
+  session: Session;
+  event?: SessionEvent;
+}
 /** One extractor candidate admitted for an Indexed-only implicit commit. */
 export interface CommitImplicitCandidateInput {
   sessionId: string;
@@ -198,6 +203,13 @@ interface CommitInput extends ValidatedMemory {
   targetMemoryId?: string;
   reason?: string;
   admissionReason?: CoreAdmissionReason;
+}
+
+interface CheckpointCandidatePlan {
+  candidate: CommitInput;
+  fingerprint: string;
+  receiptMemoryId?: string;
+  convergenceKey?: string;
 }
 
 function timestamp(): string {
@@ -522,9 +534,31 @@ export class MemorySpace {
     return this.store.findSessionProjectBinding(session.id);
   }
 
+  async getImplicitRememberUserEvidence(input: {
+    sessionId: string;
+    throughEventId: string;
+  }): Promise<ImplicitRememberUserEvidence> {
+    const session = await this.getSession(input.sessionId);
+    const throughEvent = await this.#sessionEvent(session.id, input.throughEventId);
+    const fromEvent = session.lastCheckpointEventId
+      ? await this.#sessionEvent(session.id, session.lastCheckpointEventId)
+      : undefined;
+    if (throughEvent.sequence <= (fromEvent?.sequence ?? 0)) {
+      throw new ValidationError("throughEventId must be after the checkpoint boundary");
+    }
+    const event = await this.store.findLatestMessageEvent(
+      session.id,
+      "user",
+      fromEvent?.sequence ?? 0,
+      throughEvent.sequence
+    );
+    return { session, event };
+  }
+
   async getImplicitRememberEventWindow(input: {
     sessionId: string;
     throughEventId: string;
+    requiredUserEventId?: string;
     maxEvents: number;
     maxInputChars: number;
   }): Promise<ImplicitRememberEventWindow> {
@@ -548,21 +582,36 @@ export class MemorySpace {
       throughEvent.sequence,
       input.maxEvents
     );
-    const selected: SessionEvent[] = [];
+    const requiredUserEvent = input.requiredUserEventId
+      ? await this.#sessionEvent(session.id, input.requiredUserEventId)
+      : undefined;
+    if (
+      requiredUserEvent &&
+      (requiredUserEvent.sequence <= (fromEvent?.sequence ?? 0) ||
+        requiredUserEvent.sequence > throughEvent.sequence ||
+        requiredUserEvent.type !== "message" ||
+        requiredUserEvent.payload.role !== "user")
+    ) {
+      throw new ValidationError("requiredUserEventId must identify user evidence in the range");
+    }
+    const priority = [requiredUserEvent, throughEvent, ...[...recent].reverse()].filter(
+      (event): event is SessionEvent => event !== undefined
+    );
+    const selected = new Map<string, SessionEvent>();
     let chars = 0;
-    for (let index = recent.length - 1; index >= 0; index -= 1) {
-      const event = recent[index];
-      if (!event) continue;
+    for (const event of priority) {
+      if (selected.has(event.id) || selected.size >= input.maxEvents) continue;
       const content = event.payload.content ?? event.payload.text;
       const eventChars = typeof content === "string" ? content.length : 0;
       const remaining = input.maxInputChars - chars;
       if (remaining <= 0) break;
-      selected.push(boundEventContent(event, remaining));
+      selected.set(event.id, boundEventContent(event, remaining));
       chars += Math.min(eventChars, remaining);
-      if (chars >= input.maxInputChars) break;
     }
-    selected.reverse();
-    return { session, events: selected };
+    return {
+      session,
+      events: [...selected.values()].sort((left, right) => left.sequence - right.sequence),
+    };
   }
 
   async extractMemoryCandidates(
@@ -1071,38 +1120,63 @@ export class MemorySpace {
             "STALE_CHECKPOINT_BOUNDARY"
           );
         }
+        const plans: CheckpointCandidatePlan[] = [];
         for (const candidate of normalized) {
-          if (candidate.operation !== "ignore") {
-            const admission = decideCoreAdmission(candidate);
-            const fingerprint = memoryCandidateFingerprint(session.id, candidate);
-            const receipt = await this.store.findMemoryCandidateCommitReceipt(
-              session.id,
-              fingerprint
-            );
-            const memory = await this.#commitMemory(
-              {
-                ...candidate,
-                targetMemoryId: receipt?.memoryId ?? candidate.targetMemoryId,
-                spaceId: session.spaceId,
-                sourceSessionId: session.id,
-                sourceAgentId: session.agentId,
-                tier: admission.tier,
-                admissionReason: admission.reason,
-                reason: candidate.promoteReason ?? "checkpoint extraction",
-              },
-              "extractor"
-            );
-            if (!receipt) {
-              await this.store.insertMemoryCandidateCommitReceipt({
-                id: randomUUID(),
-                sessionId: session.id,
-                fingerprint,
-                memoryId: memory.id,
-                firstCommitSource: "checkpoint",
-                sourceEventIds: [...new Set(candidate.sourceEventIds)].sort(),
-                createdAt: timestamp(),
-              });
+          if (candidate.operation === "ignore") continue;
+          const admission = decideCoreAdmission(candidate);
+          const fingerprint = memoryCandidateFingerprint(session.id, candidate);
+          const receipt = await this.store.findMemoryCandidateCommitReceipt(
+            session.id,
+            fingerprint
+          );
+          const resolvedMemoryId =
+            receipt?.memoryId ??
+            candidate.targetMemoryId ??
+            (candidate.key
+              ? (await this.findActiveMemoryByNormalizedKey(session.spaceId, candidate.key))?.id
+              : undefined);
+          plans.push({
+            candidate: {
+              ...candidate,
+              spaceId: session.spaceId,
+              sourceSessionId: session.id,
+              sourceAgentId: session.agentId,
+              tier: admission.tier,
+              admissionReason: admission.reason,
+              reason: candidate.promoteReason ?? "checkpoint extraction",
+            },
+            fingerprint,
+            receiptMemoryId: receipt?.memoryId,
+            convergenceKey: this.#checkpointConvergenceKey(candidate, resolvedMemoryId),
+          });
+        }
+        const finalPlanIndexes = new Map<string, number>();
+        for (const [index, plan] of plans.entries()) {
+          if (plan.convergenceKey) finalPlanIndexes.set(plan.convergenceKey, index);
+        }
+        for (const [index, plan] of plans.entries()) {
+          if (plan.convergenceKey && finalPlanIndexes.get(plan.convergenceKey) !== index) {
+            continue;
+          }
+          const { candidate, fingerprint, receiptMemoryId } = plan;
+          if (receiptMemoryId) {
+            const materialized = await this.getMemory(receiptMemoryId);
+            if (
+              normalizeLexicalText(materialized.content) === normalizeLexicalText(candidate.content)
+            ) {
+              await this.#applyMaterializedCheckpointAdmission(materialized, candidate);
             }
+          } else {
+            const memory = await this.#commitMemory(candidate, "extractor");
+            await this.store.insertMemoryCandidateCommitReceipt({
+              id: randomUUID(),
+              sessionId: session.id,
+              fingerprint,
+              memoryId: memory.id,
+              firstCommitSource: "checkpoint",
+              sourceEventIds: [...new Set(candidate.sourceEventIds)].sort(),
+              createdAt: timestamp(),
+            });
           }
         }
         await this.store.replaceCandidates(
@@ -1296,6 +1370,36 @@ export class MemorySpace {
       return "indexed";
     }
     return existing.tier;
+  }
+
+  #checkpointConvergenceKey(
+    candidate: ValidatedMemory & {
+      operation: CandidateOperation;
+      targetMemoryId?: string;
+    },
+    resolvedMemoryId?: string
+  ): string | undefined {
+    if (candidate.operation !== "create" && candidate.operation !== "update") return undefined;
+    if (resolvedMemoryId) return `memory:${resolvedMemoryId}`;
+    if (!candidate.key) return undefined;
+    return ["key", candidate.family, candidate.type, normalizeLexicalText(candidate.key)].join(":");
+  }
+
+  async #applyMaterializedCheckpointAdmission(
+    memory: Memory,
+    candidate: CommitInput
+  ): Promise<Memory> {
+    const nextTier =
+      candidate.status === "active"
+        ? await this.#existingTierForAdmission(memory, candidate, "extractor", true)
+        : "indexed";
+    if (nextTier === memory.tier) return memory;
+    return this.#changeTier(
+      memory,
+      nextTier,
+      candidate.reason,
+      nextTier === "core" ? PROMOTION_OPERATION.automatic : "demote:automatic-bounded"
+    );
   }
 
   async #commitMemory(

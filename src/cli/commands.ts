@@ -690,6 +690,16 @@ export async function runP8ImplicitRememberEvalCommand(
     write(
       `Lifecycle Blocking Failure Rate  ${report.metrics.lifecycleBlockingFailureRate.toFixed(6)}`
     );
+    write(
+      `Explicit Opt-Out Violation Rate  ${report.metrics.explicitOptOutViolationRate.toFixed(6)}`
+    );
+    write(
+      `Long-Assistant User Evidence     ${report.metrics.longAssistantUserEvidenceRetention.toUpperCase()}`
+    );
+    write(`Checkpoint Historical Replay     ${report.metrics.checkpointHistoricalReplayCount}`);
+    write(
+      `Secret-Like Persistence Rate     ${report.metrics.secretLikeAutoPersistenceRate.toFixed(6)}`
+    );
     write(`Hard correctness                 ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;

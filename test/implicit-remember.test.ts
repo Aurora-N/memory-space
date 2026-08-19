@@ -232,7 +232,7 @@ test("mode off and per-turn opt-out persist events with zero implicit Memory wri
   }
 });
 
-test("implicit remember inspects only the newest event and character-bounded suffix", async () => {
+test("implicit remember prioritizes latest user evidence within bounded extraction input", async () => {
   let inspected: SessionEvent[] = [];
   const extractor: MemoryExtractor = {
     async extract(events) {
@@ -268,11 +268,11 @@ test("implicit remember inspects only the newest event and character-bounded suf
   });
   assert.deepEqual(
     inspected.map((event) => event.id),
-    [events[2]?.id, events[3]?.id]
+    [events[2]?.id]
   );
   assert.deepEqual(
     inspected.map((event) => event.payload.content),
-    ["CDEFGHIJ", "done"]
+    ["89ABCDEFGHIJ"]
   );
   assert.equal(
     inspected.reduce(
@@ -286,6 +286,93 @@ test("implicit remember inspects only the newest event and character-bounded suf
     (await memorySpace.listEvents(session.id))[2]?.payload.content,
     "0123456789ABCDEFGHIJ"
   );
+  await memorySpace.close();
+});
+
+test("full authoritative user evidence enforces opt-out before bounded extraction", async () => {
+  class CountingReceiptStore extends SqliteMemoryStore {
+    receiptWrites = 0;
+
+    override async insertMemoryCandidateCommitReceipt(
+      receipt: MemoryCandidateCommitReceipt
+    ): Promise<void> {
+      this.receiptWrites += 1;
+      await super.insertMemoryCandidateCommitReceipt(receipt);
+    }
+  }
+
+  for (const assistantContent of ["done", "a".repeat(30_000)]) {
+    const store = new CountingReceiptStore();
+    const memorySpace = new MemorySpace({
+      store,
+      extractor: new RuleBasedExtractor(),
+      cache: new NoopCache(),
+    });
+    const space = await memorySpace.createSpace({ name: "authoritative opt-out" });
+    const session = await memorySpace.createSession({ spaceId: space.id });
+    const prompt = [
+      "不要记住这次内容",
+      "x".repeat(30_000),
+      "LONG_OPT_OUT_1 = should-not-persist",
+    ].join("\n");
+    await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "user", content: prompt },
+    });
+    const assistant = await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "assistant", content: assistantContent },
+    });
+
+    const result = await new ImplicitRememberService(memorySpace).rememberTurn({
+      sessionId: session.id,
+      throughEventId: assistant.id,
+      mode: "conservative",
+    });
+
+    assert.equal(result.bypassed, true);
+    assert.deepEqual(result.inspectedEventIds, []);
+    assert.equal((await memorySpace.search({ spaceId: space.id, query: "" })).length, 0);
+    assert.equal(store.receiptWrites, 0);
+    const persisted = await memorySpace.listEvents(session.id);
+    assert.equal(persisted.length, 2);
+    assert.equal(persisted[0]?.payload.content, prompt);
+    assert.equal(persisted[1]?.payload.content, assistantContent);
+    await memorySpace.close();
+  }
+});
+
+test("long assistant response cannot displace latest user assignment evidence", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const space = await memorySpace.createSpace({ name: "long assistant retention" });
+  const session = await memorySpace.createSession({ spaceId: space.id });
+  const user = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "user", content: "LONG_ASSISTANT_TEST_1 = durable" },
+  });
+  const assistantContent = `${"😀".repeat(15_000)}tail`;
+  const assistant = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "assistant", content: assistantContent },
+  });
+
+  const result = await new ImplicitRememberService(memorySpace).rememberTurn({
+    sessionId: session.id,
+    throughEventId: assistant.id,
+    mode: "conservative",
+  });
+
+  assert.equal(result.committed.length, 1);
+  const memory = await memorySpace.getMemory(result.committed[0]?.memoryId ?? "");
+  assert.equal(memory.key, "LONG_ASSISTANT_TEST_1");
+  assert.equal(memory.tier, "indexed");
+  const persisted = await memorySpace.listEvents(session.id);
+  assert.equal(persisted[0]?.id, user.id);
+  assert.equal(persisted[1]?.payload.content, assistantContent);
   await memorySpace.close();
 });
 
@@ -404,6 +491,51 @@ test("strict admission rejects assistant-only, low-confidence, transient, and ex
   await defaultMemorySpace.close();
 });
 
+test("conservative implicit remember rejects credential-shaped keys without broad token false positives", async () => {
+  const rejectedKeys = [
+    "OPENAI_API_KEY",
+    "DATABASE_PASSWORD",
+    "prod.access-token",
+    "service/private_key",
+    "OAUTH_CLIENT_SECRET",
+    "LEGACY_PASSWD",
+    "AUTH:CREDENTIALS",
+  ];
+  const allowedKeys = ["DESIGN_TOKEN_VERSION", "TOKEN_BUDGET_LIMIT", "CROSS_AGENT_TEST_20260817"];
+  for (const [key, shouldReject] of [
+    ...rejectedKeys.map((key) => [key, true] as const),
+    ...allowedKeys.map((key) => [key, false] as const),
+  ]) {
+    const memorySpace = createDefaultMemorySpace();
+    const space = await memorySpace.createSpace({ name: `secret guard ${key}` });
+    const session = await memorySpace.createSession({ spaceId: space.id });
+    await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "user", content: `${key} = value-must-not-appear-in-result` },
+    });
+    const assistant = await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "assistant", content: "done" },
+    });
+    const result = await new ImplicitRememberService(memorySpace).rememberTurn({
+      sessionId: session.id,
+      throughEventId: assistant.id,
+      mode: "conservative",
+    });
+    if (shouldReject) {
+      assert.deepEqual(result.rejected, [{ type: "fact", reason: "secret_like_evidence" }]);
+      assert.equal(result.committed.length, 0);
+      assert.doesNotMatch(JSON.stringify(result), /value-must-not-appear-in-result/u);
+    } else {
+      assert.equal(result.rejected.length, 0);
+      assert.equal(result.committed.length, 1);
+    }
+    await memorySpace.close();
+  }
+});
+
 test("recommended Core candidate is always committed as Indexed by implicit remember", async () => {
   const memorySpace = createDefaultMemorySpace();
   const space = await memorySpace.createSpace({ name: "indexed only" });
@@ -509,6 +641,7 @@ test("later checkpoint reuses implicit Memory identity and preserves checkpoint 
     const memories = await memorySpace.search({ spaceId: session.spaceId, query: "" });
     assert.equal(memories.length, 1);
     assert.equal(memories[0]?.memory.id, implicitMemoryId);
+    assert.equal(memories[0]?.memory.version, 1);
     const afterCheckpoint = await memorySpace.getSession(session.id);
     assert.ok(afterCheckpoint.lastCheckpointEventId);
     assert.ok(afterCheckpoint.latestHandoffSnapshotId);
@@ -520,6 +653,130 @@ test("later checkpoint reuses implicit Memory identity and preserves checkpoint 
     await memorySpace.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("checkpoint does not replay historical implicit updates for one stable key", async () => {
+  for (const values of [
+    ["v1", "v2"],
+    ["v1", "v2", "v3"],
+  ]) {
+    const directory = mkdtempSync(join(tmpdir(), "memory-space-p8-convergence-"));
+    bind(directory);
+    const { memorySpace, handler, session } = await configuredLifecycle(directory);
+    try {
+      for (const value of values) {
+        await handler.handle({
+          type: "user_prompt",
+          provider: "fake",
+          externalSessionId: "native-p8",
+          cwd: directory,
+          content: `CHECKPOINT_REPLAY_TEST_1 = ${value}`,
+        });
+        await handler.handle({
+          type: "assistant_turn",
+          provider: "fake",
+          externalSessionId: "native-p8",
+          cwd: directory,
+          content: "done",
+        });
+      }
+      const before = (
+        await memorySpace.search({ spaceId: session.spaceId, query: "CHECKPOINT_REPLAY_TEST_1" })
+      )[0]?.memory;
+      assert.ok(before);
+      assert.equal(before.content, `CHECKPOINT_REPLAY_TEST_1 = ${values.at(-1)}`);
+      assert.equal(before.version, values.length);
+      const historyBefore = await memorySpace.getMemoryHistory(before.id);
+
+      const ended = await handler.handle({
+        type: "session_end",
+        provider: "fake",
+        externalSessionId: "native-p8",
+        cwd: directory,
+      });
+      if (ended.type !== "session_end") throw new Error("Expected session_end");
+
+      const after = await memorySpace.getMemory(before.id);
+      assert.equal(after.content, before.content);
+      assert.equal(after.version, before.version);
+      assert.deepEqual(await memorySpace.getMemoryHistory(before.id), historyBefore);
+    } finally {
+      await memorySpace.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+});
+
+test("materialized implicit content still receives checkpoint-only Core admission", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const space = await memorySpace.createSpace({ name: "checkpoint admission after implicit" });
+  const session = await memorySpace.createSession({ spaceId: space.id });
+  await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "user", content: "项目已经决定使用 pnpm 作为包管理器。" },
+  });
+  const assistant = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "assistant", content: "done" },
+  });
+  const implicit = await new ImplicitRememberService(memorySpace).rememberTurn({
+    sessionId: session.id,
+    throughEventId: assistant.id,
+    mode: "conservative",
+  });
+  const memoryId = implicit.committed[0]?.memoryId ?? "";
+  const before = await memorySpace.getMemory(memoryId);
+  assert.equal(before.tier, "indexed");
+  assert.equal(before.version, 1);
+
+  await memorySpace.checkpoint({
+    sessionId: session.id,
+    toEventId: assistant.id,
+    idempotencyKey: "checkpoint-admission-after-implicit",
+  });
+
+  const after = await memorySpace.getMemory(memoryId);
+  assert.equal(after.content, before.content);
+  assert.equal(after.tier, "core");
+  assert.equal(after.version, 2);
+  assert.deepEqual(
+    (await memorySpace.getMemoryHistory(memoryId)).map((record) => record.operation),
+    ["create", "promote:automatic"]
+  );
+  await memorySpace.close();
+});
+
+test("checkpoint-first candidate creates a durable receipt and remains retry-safe", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const space = await memorySpace.createSpace({ name: "checkpoint-first receipt" });
+  const session = await memorySpace.createSession({ spaceId: space.id });
+  const user = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "user", content: "CHECKPOINT_FIRST_TEST_1 = durable" },
+  });
+  const input = {
+    sessionId: session.id,
+    toEventId: user.id,
+    idempotencyKey: "checkpoint-first-receipt",
+  };
+  const first = await memorySpace.checkpoint(input);
+  const before = (
+    await memorySpace.search({ spaceId: space.id, query: "CHECKPOINT_FIRST_TEST_1" })
+  )[0]?.memory;
+  assert.ok(before);
+  assert.equal(before.version, 1);
+
+  const retry = await memorySpace.checkpoint(input);
+  const after = await memorySpace.getMemory(before.id);
+  assert.equal(retry.id, first.id);
+  assert.equal(after.version, 1);
+  const history = await memorySpace.getMemoryHistory(before.id);
+  assert.equal(history.length, 1);
+  assert.equal(history[0]?.operation, "create");
+  await memorySpace.close();
 });
 
 test("new evidence for the same stable key updates the same Memory identity", async () => {

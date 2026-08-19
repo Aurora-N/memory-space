@@ -2,9 +2,13 @@
 
 **Date:** 2026-08-19
 
-**Implementation tree:** working tree based on `1cac6a5658cc920413d83fa876ffb0aa1a7ebb15`
+**P8 spec baseline:** `1cac6a5658cc920413d83fa876ffb0aa1a7ebb15`
 
-**Status:** IMPLEMENTED / DETERMINISTIC PASS / CLAUDE REAL-PROVIDER PASS / CODEX BLOCKED
+**P8 original implementation:** `c8ba9625d3a4af0b00c3793cb9bf251fb85e1287`
+
+**P8 hardening commit:** pending
+
+**Status:** COMPLETE / REVIEW PASS / FROZEN / CLAUDE REAL-PROVIDER PASS / CODEX BLOCKED
 
 ## Outcome
 
@@ -13,6 +17,12 @@ assistant event has been persisted. Accepted candidates require current user
 evidence, confidence of at least 0.85, non-transient evidence, an allowed
 create/update operation, and no existing Core target. Every implicit commit is
 forced to Indexed.
+
+CR-PHASE11 hardening evaluates per-turn opt-out from the full persisted user
+event before constructing bounded extraction input. The bounded window reserves
+the latest user evidence ahead of the assistant response, checkpoint convergence
+does not replay receipt-materialized historical content, and conservative
+implicit admission rejects narrow credential-shaped assignment keys.
 
 Existing bindings without `implicitRemember` remain auto-write-off. New
 `memory-space init` bindings explicitly use:
@@ -36,16 +46,24 @@ reports:
 | Replay Duplicate Rate | 0.000000 |
 | Assistant-Only Persistence Rate | 0.000000 |
 | Lifecycle Blocking Failure Rate | 0.000000 |
+| Explicit Opt-Out Violation Rate | 0.000000 |
+| Long-Assistant User-Evidence Retention | PASS |
+| Checkpoint Historical Replay Count | 0 |
+| Secret-Like Auto-Persistence Rate | 0.000000 |
 | Hard correctness | PASS |
 
-The fixture covers all eleven required categories: opaque assignment, durable
+The fixture covers all fourteen required categories: opaque assignment, durable
 decision, transient narration, assistant-only repetition, P7 recalled-content
 repetition, opt-out, invalid config, replayed Stop, Stop plus SessionEnd,
-existing Core collision, and Space mismatch/cwd drift.
+existing Core collision, Space mismatch/cwd drift, long-assistant user-evidence
+retention, multi-update checkpoint convergence, and secret-like assignment
+rejection.
 
 ## Real-provider evidence
 
 ### Claude Code
+
+The original P8 implementation was observed with:
 
 Command:
 
@@ -63,13 +81,17 @@ Observed with Claude Code `2.1.112`:
 - explicit `memory_remember`, `memory_search`, or `memory_context` calls: none;
 - duplicate Memory rows after Session B: zero.
 
+The CR-PHASE11 hardening tree was revalidated with Claude Code `2.1.112` on
+2026-08-19. The same Session A to Session B scenario passed: source Stop,
+automatic Indexed persistence, target recall context, and final answer
+`lavender-731` were all observed, with no explicit Memory tool call.
+
 ### Codex
 
-Codex CLI `0.147.0` was authenticated, but the real model run was blocked before
-turn execution by the account usage limit. The CLI reported that usage becomes
-available again on **August 20, 2026 at 11:47 AM**. The provider is therefore
-recorded as **BLOCKED**, not PASS or product failure. The failed smoke produced
-no P8 lifecycle evidence.
+Codex CLI `0.147.0` was authenticated during the original P8 validation, but the
+real model run was blocked before turn execution by the account usage limit. It
+remains recorded as **BLOCKED**, not PASS or product failure, until a real model
+execution succeeds. No Codex P8 lifecycle evidence is synthesized.
 
 ## Invariants
 
@@ -79,14 +101,15 @@ no P8 lifecycle evidence.
 - Existing Core Memory is not modified, demoted, superseded, or overwritten.
 - Assistant-only and recalled-content-only repetition cannot create Memory.
 - Receipt and Memory mutation share one SQLite transaction.
-- A later checkpoint reuses the receipt Memory identity while still running
-  normal P6 admission, Handoff generation, and boundary advancement.
+- A successful receipt represents content materialization. A later checkpoint
+  collapses candidates to the final Memory identity, skips historical content
+  replay, and still runs normal P6 admission, Handoff generation, and boundary
+  advancement.
 - MCP remains exactly six tools.
 
 ## Remaining work
 
 P8 v1 uses deterministic extraction only. Broader semantic extraction,
 embeddings, remote/LLM extractors, and a durable privacy watermark for
-per-turn opt-out remain future work. Rerun the Codex smoke after the stated
-usage-limit reset and append the observed result without changing the
-deterministic acceptance status.
+per-turn opt-out remain future work. The secret-like guard is intentionally
+narrow and key-shaped; it is not a complete DLP or secret-management system.

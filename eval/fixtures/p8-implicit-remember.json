@@ -66,6 +66,24 @@
       "category": "space-mismatch",
       "durable": false,
       "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "long-assistant-user-evidence-retention",
+      "category": "long-assistant",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "checkpoint-historical-content-replay",
+      "category": "checkpoint-replay",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "secret-like-assignment",
+      "category": "secret-like",
+      "durable": false,
+      "expectedMemoryRows": 0
     }
   ]
 }
