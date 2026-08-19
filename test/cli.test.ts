@@ -1581,6 +1581,7 @@ function p8EvalReport(status: "pass" | "fail"): P8ImplicitRememberReport {
       longAssistantUserEvidenceRetention: "pass",
       checkpointHistoricalReplayCount: 0,
       secretLikeAutoPersistenceRate: 0,
+      crossTurnOptOutViolationRate: 0,
     },
     scenarios: [],
     hardCorrectness: status,

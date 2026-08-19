@@ -25,7 +25,8 @@ export interface ImplicitRememberRejectedItem {
     | "transient_evidence"
     | "operation_not_allowed"
     | "existing_core_memory"
-    | "secret_like_evidence";
+    | "secret_like_evidence"
+    | "opted_out_evidence";
 }
 
 /** Sanitized result of one bounded turn-time implicit ingestion attempt. */
@@ -63,6 +64,10 @@ interface ImplicitRememberMemorySpace {
     maxEvents: number;
     maxInputChars: number;
   }): Promise<{ session: Session; events: SessionEvent[] }>;
+  getImplicitRememberSourceEvidence(input: {
+    sessionId: string;
+    eventIds: string[];
+  }): Promise<SessionEvent[]>;
   extractMemoryCandidates(
     events: SessionEvent[],
     context: ExtractionContext
@@ -153,7 +158,12 @@ export class ImplicitRememberService implements ImplicitRememberServicePort {
       operationId: `implicit:${window.session.id}:${input.throughEventId}`,
       projectBinding,
     });
+    const sourceEvents = await this.memorySpace.getImplicitRememberSourceEvidence({
+      sessionId: window.session.id,
+      eventIds: window.events.map((event) => event.id),
+    });
     const eventsById = new Map(window.events.map((event) => [event.id, event]));
+    const sourceEventsById = new Map(sourceEvents.map((event) => [event.id, event]));
     for (const candidate of candidates) {
       const existing = candidate.targetMemoryId
         ? await this.memorySpace.getMemory(candidate.targetMemoryId)
@@ -166,6 +176,7 @@ export class ImplicitRememberService implements ImplicitRememberServicePort {
       const decision = decideImplicitRememberAdmission({
         candidate,
         eventsById,
+        sourceEventsById,
         existing,
       });
       if (!decision.accepted) {

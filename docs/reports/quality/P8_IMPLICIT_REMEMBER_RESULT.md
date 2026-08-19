@@ -8,6 +8,8 @@
 
 **P8 hardening commit:** `600e585224db93ae38c7a62c836e23c7953300ed`
 
+**P8 cross-turn opt-out hardening:** pending
+
 **Status:** COMPLETE / REVIEW PASS / FROZEN / CLAUDE REAL-PROVIDER PASS / CODEX BLOCKED
 
 ## Outcome
@@ -23,6 +25,13 @@ event before constructing bounded extraction input. The bounded window reserves
 the latest user evidence ahead of the assistant response, checkpoint convergence
 does not replay receipt-materialized historical content, and conservative
 implicit admission rejects narrow credential-shaped assignment keys.
+
+The final targeted hardening resolves every extracted candidate's source event
+identity back to the full persisted SessionEvent before evaluating opt-out.
+Evidence from an opted-out user turn remains permanently ineligible for P8
+implicit materialization, even when a later turn's bounded extraction window
+includes it. This does not create a durable privacy watermark and does not
+change checkpoint extraction.
 
 Existing bindings without `implicitRemember` remain auto-write-off. New
 `memory-space init` bindings explicitly use:
@@ -50,14 +59,15 @@ reports:
 | Long-Assistant User-Evidence Retention | PASS |
 | Checkpoint Historical Replay Count | 0 |
 | Secret-Like Auto-Persistence Rate | 0.000000 |
+| Cross-Turn Opt-Out Violation Rate | 0.000000 |
 | Hard correctness | PASS |
 
-The fixture covers all fourteen required categories: opaque assignment, durable
+The fixture covers all fifteen required categories: opaque assignment, durable
 decision, transient narration, assistant-only repetition, P7 recalled-content
 repetition, opt-out, invalid config, replayed Stop, Stop plus SessionEnd,
 existing Core collision, Space mismatch/cwd drift, long-assistant user-evidence
 retention, multi-update checkpoint convergence, and secret-like assignment
-rejection.
+rejection, plus cross-turn opt-out carry-over.
 
 ## Real-provider evidence
 
@@ -81,10 +91,10 @@ Observed with Claude Code `2.1.112`:
 - explicit `memory_remember`, `memory_search`, or `memory_context` calls: none;
 - duplicate Memory rows after Session B: zero.
 
-The CR-PHASE11 hardening tree was revalidated with Claude Code `2.1.112` on
-2026-08-19. The same Session A to Session B scenario passed: source Stop,
-automatic Indexed persistence, target recall context, and final answer
-`lavender-731` were all observed, with no explicit Memory tool call.
+The cross-turn opt-out hardening working tree was revalidated with Claude Code
+`2.1.112` on 2026-08-19. The same Session A to Session B scenario passed:
+source Stop, automatic Indexed persistence, target recall context, and final
+answer `lavender-731` were all observed, with no explicit Memory tool call.
 
 ### Codex
 
@@ -100,6 +110,8 @@ execution succeeds. No Codex P8 lifecycle evidence is synthesized.
   boundary.
 - Existing Core Memory is not modified, demoted, superseded, or overwritten.
 - Assistant-only and recalled-content-only repetition cannot create Memory.
+- Full persisted source evidence carrying an explicit opt-out cannot be
+  materialized by a later implicit-remember attempt.
 - Receipt and Memory mutation share one SQLite transaction.
 - A successful receipt represents content materialization. A later checkpoint
   collapses candidates to the final Memory identity, skips historical content
@@ -113,3 +125,5 @@ P8 v1 uses deterministic extraction only. Broader semantic extraction,
 embeddings, remote/LLM extractors, and a durable privacy watermark for
 per-turn opt-out remain future work. The secret-like guard is intentionally
 narrow and key-shaped; it is not a complete DLP or secret-management system.
+Checkpoint may still process an opted-out SessionEvent under the existing P8 v1
+contract; durable never-persist semantics remain future work.

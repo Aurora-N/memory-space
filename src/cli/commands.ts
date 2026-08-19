@@ -700,6 +700,9 @@ export async function runP8ImplicitRememberEvalCommand(
     write(
       `Secret-Like Persistence Rate     ${report.metrics.secretLikeAutoPersistenceRate.toFixed(6)}`
     );
+    write(
+      `Cross-Turn Opt-Out Violation     ${report.metrics.crossTurnOptOutViolationRate.toFixed(6)}`
+    );
     write(`Hard correctness                 ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;

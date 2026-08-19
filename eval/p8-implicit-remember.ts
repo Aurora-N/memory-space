@@ -28,7 +28,8 @@ export type P8ScenarioCategory =
   | "space-mismatch"
   | "long-assistant"
   | "checkpoint-replay"
-  | "secret-like";
+  | "secret-like"
+  | "cross-turn-opt-out";
 
 export interface P8ImplicitRememberScenario {
   scenarioId: string;
@@ -56,6 +57,8 @@ export interface P8ImplicitRememberScenarioResult {
   userEvidenceRetained: boolean;
   checkpointHistoricalReplayCount: number;
   secretLikeAutoPersistence: number;
+  crossTurnOptOutViolations: number;
+  optedOutEvidenceRejected: boolean;
   passed: boolean;
 }
 
@@ -73,6 +76,7 @@ export interface P8ImplicitRememberReport {
     longAssistantUserEvidenceRetention: "pass" | "fail";
     checkpointHistoricalReplayCount: number;
     secretLikeAutoPersistenceRate: number;
+    crossTurnOptOutViolationRate: number;
   };
   scenarios: P8ImplicitRememberScenarioResult[];
   hardCorrectness: "pass" | "fail";
@@ -94,6 +98,7 @@ const categories = new Set<P8ScenarioCategory>([
   "long-assistant",
   "checkpoint-replay",
   "secret-like",
+  "cross-turn-opt-out",
 ]);
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -198,6 +203,8 @@ async function runScenario(
   let userEvidenceRetained = true;
   let checkpointHistoricalReplayCount = 0;
   let secretLikeAutoPersistence = 0;
+  let crossTurnOptOutViolations = 0;
+  let optedOutEvidenceRejected = true;
   try {
     await memorySpace.createSpace({ id: "p8-primary", name: "P8 Primary" });
     await memorySpace.createSpace({ id: "p8-other", name: "P8 Other" });
@@ -260,6 +267,8 @@ async function runScenario(
         "long-assistant": "LONG_ASSISTANT_TEST_1 = durable",
         "checkpoint-replay": "CHECKPOINT_REPLAY_TEST_1 = v1",
         "secret-like": "OPENAI_API_KEY = secret-eval-value",
+        "cross-turn-opt-out":
+          "Do not remember this turn\nCROSS_TURN_OPT_OUT_1 = should-not-persist",
       };
       await handler.handle({
         type: "user_prompt",
@@ -344,6 +353,26 @@ async function runScenario(
           (afterCheckpoint?.version ?? 0) - beforeVersion
         );
       }
+      if (scenario.category === "cross-turn-opt-out") {
+        await handler.handle({
+          type: "user_prompt",
+          provider: "eval",
+          externalSessionId,
+          cwd: primary,
+          content: "continue",
+        });
+        const later = await handler.handle({
+          type: "assistant_turn",
+          provider: "eval",
+          externalSessionId,
+          cwd: primary,
+          content: "done",
+        });
+        if (later.type !== "assistant_turn") throw new Error("Expected later assistant_turn");
+        optedOutEvidenceRejected =
+          later.implicitRemember?.rejected.some((item) => item.reason === "opted_out_evidence") ??
+          false;
+      }
     }
 
     const memories = await activeMemories(memorySpace, "p8-primary");
@@ -352,6 +381,9 @@ async function runScenario(
       userEvidenceRetained = memories.length === 1 && memories[0]?.key === "LONG_ASSISTANT_TEST_1";
     }
     if (scenario.category === "secret-like") secretLikeAutoPersistence = memories.length;
+    if (scenario.category === "cross-turn-opt-out") {
+      crossTurnOptOutViolations = memories.length;
+    }
     const coreRows = memories.filter((memory) => memory.tier === "core").length;
     const expectedCoreRows = scenario.category === "core-collision" ? 1 : 0;
     const passed =
@@ -363,7 +395,9 @@ async function runScenario(
       optOutViolations === 0 &&
       userEvidenceRetained &&
       checkpointHistoricalReplayCount === 0 &&
-      secretLikeAutoPersistence === 0;
+      secretLikeAutoPersistence === 0 &&
+      crossTurnOptOutViolations === 0 &&
+      optedOutEvidenceRejected;
     return {
       scenarioId: scenario.scenarioId,
       category: scenario.category,
@@ -378,6 +412,8 @@ async function runScenario(
       userEvidenceRetained,
       checkpointHistoricalReplayCount,
       secretLikeAutoPersistence,
+      crossTurnOptOutViolations,
+      optedOutEvidenceRejected,
       passed,
     };
   } finally {
@@ -408,6 +444,9 @@ export async function runP8ImplicitRememberEval(
   const optOutCases = scenarios.filter((scenario) => scenario.category === "opt-out");
   const longAssistantCases = scenarios.filter((scenario) => scenario.category === "long-assistant");
   const secretLikeCases = scenarios.filter((scenario) => scenario.category === "secret-like");
+  const crossTurnOptOutCases = scenarios.filter(
+    (scenario) => scenario.category === "cross-turn-opt-out"
+  );
   return {
     version: 1,
     fixtureVersion: fixture.version,
@@ -452,6 +491,13 @@ export async function runP8ImplicitRememberEval(
       secretLikeAutoPersistenceRate: ratio(
         secretLikeCases.reduce((total, scenario) => total + scenario.secretLikeAutoPersistence, 0),
         secretLikeCases.length
+      ),
+      crossTurnOptOutViolationRate: ratio(
+        crossTurnOptOutCases.reduce(
+          (total, scenario) => total + scenario.crossTurnOptOutViolations,
+          0
+        ),
+        crossTurnOptOutCases.length
       ),
     },
     scenarios,

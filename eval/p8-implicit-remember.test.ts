@@ -21,7 +21,8 @@ test("P8 deterministic implicit remember eval passes all frozen metrics", async 
   assert.equal(first.metrics.longAssistantUserEvidenceRetention, "pass");
   assert.equal(first.metrics.checkpointHistoricalReplayCount, 0);
   assert.equal(first.metrics.secretLikeAutoPersistenceRate, 0);
-  assert.equal(first.scenarios.length, 14);
+  assert.equal(first.metrics.crossTurnOptOutViolationRate, 0);
+  assert.equal(first.scenarios.length, 15);
 });
 
 test("P8 fixture requires exactly one scenario for every required category", async () => {

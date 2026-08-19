@@ -1,5 +1,6 @@
 import { isTransientExtractionEvidence } from "./extraction-policy.ts";
 import type { Memory, MemoryCandidate, SessionEvent } from "../domain/types.ts";
+import { promptRememberDirective } from "./prompt-remember-directive.ts";
 
 /** Stable reasons a P8 candidate cannot be written implicitly. */
 export type ImplicitRememberRejectionReason =
@@ -8,7 +9,8 @@ export type ImplicitRememberRejectionReason =
   | "transient_evidence"
   | "operation_not_allowed"
   | "existing_core_memory"
-  | "secret_like_evidence";
+  | "secret_like_evidence"
+  | "opted_out_evidence";
 
 /** Pure conservative P8 admission decision. */
 export type ImplicitRememberAdmissionDecision =
@@ -48,8 +50,23 @@ function isSecretLikeKey(key: string | undefined): boolean {
 export function decideImplicitRememberAdmission(input: {
   candidate: MemoryCandidate;
   eventsById: ReadonlyMap<string, SessionEvent>;
+  sourceEventsById: ReadonlyMap<string, SessionEvent>;
   existing?: Memory;
 }): ImplicitRememberAdmissionDecision {
+  const sourceEvidence = input.candidate.sourceEventIds
+    .map((id) => input.sourceEventsById.get(id))
+    .filter((event): event is SessionEvent => event !== undefined);
+  const sourceUserEvidence = sourceEvidence.filter(
+    (event) => event.type === "message" && event.payload.role === "user"
+  );
+  if (
+    sourceUserEvidence.some((event) => {
+      const content = event.payload.content ?? event.payload.text;
+      return typeof content === "string" && promptRememberDirective(content) === "disable_for_turn";
+    })
+  ) {
+    return { accepted: false, reason: "opted_out_evidence" };
+  }
   if (input.candidate.confidence < 0.85) {
     return { accepted: false, reason: "low_confidence" };
   }

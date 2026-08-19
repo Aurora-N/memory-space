@@ -34,7 +34,7 @@ Claude real-provider smoke                                PASS
 Codex smoke honestly recorded as BLOCKED                   PASS
 ```
 
-However, P8 must not be marked `FROZEN / COMPLETE` yet.
+Initial review findings:
 
 Required review findings:
 
@@ -46,7 +46,7 @@ FIX-04  Conservative implicit remember must reject secret-like assignments   P1 
 FIX-05  Quality report must point to the actual implementation commit         P2 REQUIRED DOC FIX
 ```
 
-P8 freeze is authorized only after FIX-01 through FIX-05 and their regression tests pass.
+All required CR-PHASE11 findings below were subsequently closed.
 
 ---
 
@@ -998,3 +998,21 @@ COMPLETE / REVIEW PASS / FROZEN
 ```
 
 with the remaining deferred work explicitly limited to future semantic/LLM extraction, embeddings, durable privacy watermark semantics, and any broader secret-management product design.
+
+## Follow-up hardening
+
+The closed review later received one targeted control-semantics follow-up:
+opted-out user evidence could remain in the uncheckpointed range and be
+materialized by a later implicit-remember turn. The follow-up preserves the
+original findings and closure while adding this invariant:
+
+```text
+candidate source user event explicitly opted out
+  -> reject every current or later P8 implicit admission
+  -> reason = opted_out_evidence
+  -> checkpoint behavior remains unchanged
+```
+
+The implementation resolves full persisted source events for the control
+decision. Bounded extraction copies remain evidence for extraction and the
+existing admission checks, but are not trusted for opt-out evaluation.

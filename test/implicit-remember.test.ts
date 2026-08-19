@@ -56,6 +56,17 @@ async function configuredLifecycle(directory: string, extractor?: MemoryExtracto
   return { memorySpace, handler, session: started.session };
 }
 
+class CountingReceiptStore extends SqliteMemoryStore {
+  receiptWrites = 0;
+
+  override async insertMemoryCandidateCommitReceipt(
+    receipt: MemoryCandidateCommitReceipt
+  ): Promise<void> {
+    this.receiptWrites += 1;
+    await super.insertMemoryCandidateCommitReceipt(receipt);
+  }
+}
+
 test("opaque stable assignment is deterministic and ordinary equality prose is ignored", async () => {
   const memorySpace = createDefaultMemorySpace();
   const space = await memorySpace.createSpace({ name: "assignment extraction" });
@@ -290,17 +301,6 @@ test("implicit remember prioritizes latest user evidence within bounded extracti
 });
 
 test("full authoritative user evidence enforces opt-out before bounded extraction", async () => {
-  class CountingReceiptStore extends SqliteMemoryStore {
-    receiptWrites = 0;
-
-    override async insertMemoryCandidateCommitReceipt(
-      receipt: MemoryCandidateCommitReceipt
-    ): Promise<void> {
-      this.receiptWrites += 1;
-      await super.insertMemoryCandidateCommitReceipt(receipt);
-    }
-  }
-
   for (const assistantContent of ["done", "a".repeat(30_000)]) {
     const store = new CountingReceiptStore();
     const memorySpace = new MemorySpace({
@@ -342,6 +342,149 @@ test("full authoritative user evidence enforces opt-out before bounded extractio
     assert.equal(persisted[1]?.payload.content, assistantContent);
     await memorySpace.close();
   }
+});
+
+test("opted-out evidence remains ineligible for later implicit remember attempts", async () => {
+  for (const prompt of [
+    "Do not remember this turn\nOPT_OUT_CARRYOVER_1 = should-not-persist",
+    ["Do not remember this turn", "x".repeat(30_000), "LONG_CARRYOVER_1 = should-not-persist"].join(
+      "\n"
+    ),
+  ]) {
+    const store = new CountingReceiptStore();
+    const memorySpace = new MemorySpace({
+      store,
+      extractor: new RuleBasedExtractor(),
+      cache: new NoopCache(),
+    });
+    const space = await memorySpace.createSpace({ name: "cross-turn opt-out" });
+    const session = await memorySpace.createSession({ spaceId: space.id });
+    await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "user", content: prompt },
+    });
+    const firstAssistant = await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "assistant", content: "done" },
+    });
+    const service = new ImplicitRememberService(memorySpace);
+    const first = await service.rememberTurn({
+      sessionId: session.id,
+      throughEventId: firstAssistant.id,
+      mode: "conservative",
+    });
+    assert.equal(first.bypassed, true);
+    assert.equal(store.receiptWrites, 0);
+
+    await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "user", content: "continue" },
+    });
+    const secondAssistant = await memorySpace.appendEvent({
+      sessionId: session.id,
+      type: "message",
+      payload: { role: "assistant", content: "done" },
+    });
+    const second = await service.rememberTurn({
+      sessionId: session.id,
+      throughEventId: secondAssistant.id,
+      mode: "conservative",
+    });
+
+    assert.equal(second.committed.length, 0);
+    assert.ok(second.rejected.some((item) => item.reason === "opted_out_evidence"));
+    assert.equal((await memorySpace.search({ spaceId: space.id, query: "" })).length, 0);
+    assert.equal(store.receiptWrites, 0);
+    assert.equal((await memorySpace.listEvents(session.id)).length, 4);
+    await memorySpace.close();
+  }
+});
+
+test("ordinary older user evidence remains eligible for a later implicit retry", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const space = await memorySpace.createSpace({ name: "ordinary carry-over" });
+  const session = await memorySpace.createSession({ spaceId: space.id });
+  await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "user", content: "NORMAL_CARRYOVER_1 = durable" },
+  });
+  const firstAssistant = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "assistant", content: "done" },
+  });
+  const service = new ImplicitRememberService(memorySpace);
+  const skipped = await service.rememberTurn({
+    sessionId: session.id,
+    throughEventId: firstAssistant.id,
+    mode: "off",
+  });
+  assert.equal(skipped.committed.length, 0);
+
+  await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "user", content: "continue" },
+  });
+  const secondAssistant = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "assistant", content: "done" },
+  });
+  const retried = await service.rememberTurn({
+    sessionId: session.id,
+    throughEventId: secondAssistant.id,
+    mode: "conservative",
+  });
+
+  assert.equal(retried.committed.length, 1);
+  const memory = await memorySpace.getMemory(retried.committed[0]?.memoryId ?? "");
+  assert.equal(memory.key, "NORMAL_CARRYOVER_1");
+  await memorySpace.close();
+});
+
+test("implicit opt-out does not change later checkpoint extraction semantics", async () => {
+  const memorySpace = createDefaultMemorySpace();
+  const space = await memorySpace.createSpace({ name: "checkpoint opt-out boundary" });
+  const session = await memorySpace.createSession({ spaceId: space.id });
+  await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: {
+      role: "user",
+      content: "Do not remember this turn\nCHECKPOINT_OPT_OUT_1 = value",
+    },
+  });
+  const assistant = await memorySpace.appendEvent({
+    sessionId: session.id,
+    type: "message",
+    payload: { role: "assistant", content: "done" },
+  });
+  const implicit = await new ImplicitRememberService(memorySpace).rememberTurn({
+    sessionId: session.id,
+    throughEventId: assistant.id,
+    mode: "conservative",
+  });
+  assert.equal(implicit.bypassed, true);
+  assert.equal((await memorySpace.search({ spaceId: space.id, query: "" })).length, 0);
+
+  await memorySpace.checkpoint({
+    sessionId: session.id,
+    toEventId: assistant.id,
+    idempotencyKey: "checkpoint-opt-out-unchanged",
+  });
+
+  const memories = await memorySpace.search({
+    spaceId: space.id,
+    query: "CHECKPOINT_OPT_OUT_1",
+  });
+  assert.equal(memories.length, 1);
+  assert.equal(memories[0]?.memory.key, "CHECKPOINT_OPT_OUT_1");
+  await memorySpace.close();
 });
 
 test("long assistant response cannot displace latest user assignment evidence", async () => {

@@ -555,6 +555,18 @@ export class MemorySpace {
     return { session, event };
   }
 
+  async getImplicitRememberSourceEvidence(input: {
+    sessionId: string;
+    eventIds: string[];
+  }): Promise<SessionEvent[]> {
+    const session = await this.getSession(input.sessionId);
+    const events: SessionEvent[] = [];
+    for (const eventId of [...new Set(input.eventIds)]) {
+      events.push(await this.#sessionEvent(session.id, eventId));
+    }
+    return events;
+  }
+
   async getImplicitRememberEventWindow(input: {
     sessionId: string;
     throughEventId: string;

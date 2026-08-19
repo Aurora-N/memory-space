@@ -84,6 +84,12 @@
       "category": "secret-like",
       "durable": false,
       "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "cross-turn-opt-out-carry-over",
+      "category": "cross-turn-opt-out",
+      "durable": false,
+      "expectedMemoryRows": 0
     }
   ]
 }
