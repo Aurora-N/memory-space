@@ -52,8 +52,16 @@ this release.
 - **Memories** — browse, lexical search, tier/status/family/type filters, and a
   detail drawer with persisted fields, provenance, structured data, and history.
 - **Events** — list Sessions in the daemon's trusted Space, inspect ordered
-  Session events, and reveal full captured user or assistant message content
-  only after selecting an event.
+  Session events, navigate through a compact sequence overview grouped by
+  Input/Model/Tools/Other, and reveal full captured user or assistant message
+  content only after selecting an event. The overview and event list remain
+  synchronized without implying unavailable duration, turn, or call telemetry.
+  Empty event lanes are omitted, the overview height follows its visible lanes,
+  and the overview may be collapsed to its header. Node summaries use a
+  viewport-level hover/focus overlay so horizontal trace scrolling cannot clip
+  them.
+  Message content uses GitHub-flavored Markdown presentation without raw HTML
+  execution or remote image loading.
 - **Disclosure** — stored state next to the exact production `bootstrap()`
   context and its Core/Handoff pipeline.
 - **Handoff** — latest immutable Handoff goal, tasks, decisions, blockers,
@@ -93,8 +101,12 @@ or alter retrieval ranking.
   no-sniff, and frame-denial headers.
 - The UI exposes only refresh, search, filter, inspect, and copy-ID operations.
 - Captured prompts and replies may contain source code, paths, or other
-  sensitive project content. Event text is rendered as inert text and remains
-  available only through the loopback Inspector for the daemon's trusted Space.
+  sensitive project content. Event Markdown is rendered without executable
+  content and remains available only through the loopback Inspector for the
+  daemon's trusted Space.
+- Markdown links require an explicit click and open separately. Raw HTML is
+  ignored, and image syntax is represented as text instead of issuing a network
+  request.
 - It has no create, edit, delete, promote, demote, resolve, or Space-management
   control.
 - v1 has no authentication and must not be exposed to LAN or the public
