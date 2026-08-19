@@ -40,6 +40,8 @@ error responses use:
 | Inspector Memory browse | `GET /spaces/:spaceId/memories` |
 | Inspector overview | `GET /spaces/:spaceId/overview` |
 | Inspector trusted binding | `GET /inspector/api/binding` |
+| Inspector trusted Sessions | `GET /inspector/api/sessions` |
+| Inspector trusted Session events | `GET /inspector/api/sessions/:sessionId/events` |
 | `memory.context` | `POST /spaces/:spaceId/memory-context` |
 | `memory.promote` | `POST /memories/:memoryId/promote` |
 | `memory.demote` | `POST /memories/:memoryId/demote` |

@@ -337,7 +337,7 @@ MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 pnpm memory-space inspect "$PROJECT_ROOT"
 ```
 
-打开 <http://127.0.0.1:4310/inspector/>。你可以查看 Overview、搜索和筛选 Memories、打开 provenance/history 详情、核对真实 bootstrap context、查看最新 Handoff，并在 Validation 中比较 Stored 与 Disclosed 状态。界面没有创建、编辑、删除、提升或状态变更操作，不会污染用于验证的 Memory。
+打开 <http://127.0.0.1:4310/inspector/>。你可以查看 Overview、搜索和筛选 Memories、打开 provenance/history 详情、在 Events 中查看当前 Space 捕获的完整用户消息和 Agent 回复、核对真实 bootstrap context、查看最新 Handoff，并在 Validation 中比较 Stored 与 Disclosed 状态。会话正文可能包含敏感项目内容，只通过本机 daemon 的可信 Space 边界提供。界面没有创建、编辑、删除、提升或状态变更操作，不会污染用于验证的 Memory。
 
 开发界面时可保持 daemon 运行，另开终端执行 `pnpm inspector:dev`，再访问 <http://127.0.0.1:5173/inspector/>。
 
@@ -768,7 +768,7 @@ MEMORY_SPACE_CWD="$PROJECT_ROOT" pnpm start
 pnpm memory-space inspect "$PROJECT_ROOT"
 ```
 
-Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search and filters, provenance/history detail, the exact production bootstrap context, the latest Handoff, and Stored-versus-Disclosed validation. It has no create, edit, delete, promote, or status-change controls.
+Open <http://127.0.0.1:4310/inspector/>. The UI provides Overview, Memory search and filters, provenance/history detail, full captured user and agent messages for the trusted Space under Events, the exact production bootstrap context, the latest Handoff, and Stored-versus-Disclosed validation. Session content may contain sensitive project data and remains restricted to the loopback daemon's trusted Space. The UI has no create, edit, delete, promote, or status-change controls.
 
 For frontend development, keep the daemon running, execute `pnpm inspector:dev` in another terminal, and open <http://127.0.0.1:5173/inspector/>.
 

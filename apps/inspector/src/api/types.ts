@@ -21,6 +21,15 @@ export interface Session {
   updatedAt: string;
 }
 
+export interface SessionEvent {
+  id: string;
+  sessionId: string;
+  type: "message" | "tool_call" | "artifact" | "memory" | "custom";
+  payload: Record<string, unknown>;
+  createdAt: string;
+  sequence: number;
+}
+
 export interface Memory {
   id: string;
   spaceId: string;

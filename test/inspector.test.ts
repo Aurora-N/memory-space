@@ -24,6 +24,25 @@ test("daemon serves the local read-only Inspector for its trusted bound Space", 
       id: "trusted-inspector-space", name: "Trusted Inspector Space"
     });
     await daemon.memorySpace.createSpace({ id: "other-space", name: "Unrelated Space" });
+    const trustedSession = await daemon.memorySpace.createSession({
+      id: "trusted-session", spaceId: "trusted-inspector-space",
+      provider: "codex", externalSessionId: "codex-trusted"
+    });
+    await daemon.memorySpace.appendEvent({
+      id: "trusted-prompt", sessionId: trustedSession.id, type: "message",
+      payload: {
+        role: "user", content: "完整的 UserPromptSubmit 消息\n包含第二行。",
+        contentMode: "full"
+      }
+    });
+    const otherSession = await daemon.memorySpace.createSession({
+      id: "other-session", spaceId: "other-space",
+      provider: "claude-code", externalSessionId: "claude-unrelated"
+    });
+    await daemon.memorySpace.appendEvent({
+      id: "other-prompt", sessionId: otherSession.id, type: "message",
+      payload: { role: "user", content: "must remain isolated", contentMode: "full" }
+    });
     const address = await daemon.listen() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
@@ -58,6 +77,41 @@ test("daemon serves the local read-only Inspector for its trusted bound Space", 
       localOnly: true,
       multiSpaceManagement: false
     });
+
+    const sessions = await fetch(`${baseUrl}/inspector/api/sessions?spaceId=other-space`);
+    assert.equal(sessions.status, 200);
+    const sessionBody = await sessions.json() as Array<{ id: string; spaceId: string }>;
+    assert.deepEqual(sessionBody.map((session) => session.id), ["trusted-session"]);
+    assert.ok(sessionBody.every((session) => session.spaceId === "trusted-inspector-space"));
+
+    const events = await fetch(
+      `${baseUrl}/inspector/api/sessions/${trustedSession.id}/events?spaceId=other-space`
+    );
+    assert.equal(events.status, 200);
+    const eventBody = await events.json() as Array<{
+      id: string;
+      sessionId: string;
+      type: string;
+      payload: { role: string; content: string; contentMode: string };
+      sequence: number;
+    }>;
+    assert.equal(eventBody.length, 1);
+    assert.equal(eventBody[0]?.id, "trusted-prompt");
+    assert.equal(eventBody[0]?.sessionId, "trusted-session");
+    assert.equal(eventBody[0]?.type, "message");
+    assert.deepEqual(eventBody[0]?.payload, {
+      role: "user",
+      content: "完整的 UserPromptSubmit 消息\n包含第二行。",
+      contentMode: "full"
+    });
+    assert.equal(eventBody[0]?.sequence, 1);
+
+    const unrelatedEvents = await fetch(
+      `${baseUrl}/inspector/api/sessions/${otherSession.id}/events`
+    );
+    assert.equal(unrelatedEvents.status, 404);
+    const unrelatedBody = await unrelatedEvents.json() as { error: { code: string } };
+    assert.equal(unrelatedBody.error.code, "NOT_FOUND");
 
     const rejectedOrigin = await fetch(`${baseUrl}/inspector/`, {
       headers: { origin: "https://attacker.example" }

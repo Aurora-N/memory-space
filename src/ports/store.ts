@@ -50,6 +50,8 @@ export interface MemoryStore {
   getOrCreateProviderSession(session: Session): Promise<{ session: Session; created: boolean }>;
   findSession(id: string): Promise<Session | undefined>;
   findSessionByProviderIdentity(provider: string, externalSessionId: string): Promise<Session | undefined>;
+  /** Returns Space Sessions ordered by latest update, then stable ID. */
+  listSessions(spaceId: string): Promise<Session[]>;
   /** Preserves the first trusted project binding recorded for a Session. */
   insertSessionProjectBinding(binding: SessionProjectBinding): Promise<void>;
   findSessionProjectBinding(sessionId: string): Promise<SessionProjectBinding | undefined>;

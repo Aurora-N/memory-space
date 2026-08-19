@@ -234,6 +234,225 @@
   border-radius: 0;
 }
 
+.event-explorer {
+  display: grid;
+  min-height: 620px;
+  grid-template-columns: minmax(190px, .65fr) minmax(260px, .9fr) minmax(360px, 1.65fr);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.event-sessions,
+.event-list,
+.event-detail {
+  min-width: 0;
+}
+
+.event-sessions,
+.event-list {
+  border-right: 1px solid var(--line);
+}
+
+.event-column__header {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 17px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.event-column__header strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.event-column__header code {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-column__scroll {
+  max-height: calc(100vh - 260px);
+  min-height: 566px;
+  overflow-y: auto;
+}
+
+.session-item,
+.event-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+  transition: background .15s ease;
+}
+
+.session-item:hover,
+.event-item:hover {
+  background: var(--surface-muted);
+}
+
+.session-item--active,
+.event-item--active {
+  background: var(--green-soft);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.session-item {
+  min-height: 92px;
+  padding: 15px 17px;
+}
+
+.session-item > span,
+.event-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-item strong {
+  font-size: 12px;
+}
+
+.session-item small,
+.session-item code {
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
+.session-item code {
+  display: block;
+  margin-top: 8px;
+}
+
+.session-item p,
+.event-item p {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.event-item {
+  min-height: 112px;
+  padding: 14px 17px;
+}
+
+.event-role {
+  display: inline-flex;
+  min-width: 55px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.event-role--user {
+  border-color: #bed8e5;
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.event-role--assistant {
+  border-color: #c4dbce;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.event-item__meta {
+  margin-top: 9px;
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
+.event-item__meta strong {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+}
+
+.event-content {
+  padding: 25px;
+}
+
+.event-content__meta {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.event-content__meta dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.event-content__meta dl div {
+  text-align: right;
+}
+
+.event-content__meta dt {
+  margin-bottom: 3px;
+  color: var(--ink-faint);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.event-content__meta dd {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.event-content__body {
+  max-height: calc(100vh - 350px);
+  min-height: 420px;
+  margin: 0;
+  padding: 20px;
+  overflow: auto;
+  border: 1px solid #26352d;
+  border-radius: 8px;
+  background: #111915;
+  color: #e9f1ec;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.event-content__empty {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
 .pipeline {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;

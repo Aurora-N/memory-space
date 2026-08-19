@@ -341,6 +341,12 @@ export class MemorySpace {
     );
   }
 
+  /** Lists Sessions for one trusted Space in deterministic recency order. */
+  async listSessions(spaceId: string): Promise<Session[]> {
+    const space = await this.getSpace(spaceId);
+    return this.store.listSessions(space.id);
+  }
+
   async appendEvent(input: AppendEventInput): Promise<SessionEvent> {
     const session = await this.getSession(input.sessionId);
     if (!eventTypes.has(input.type)) throw new ValidationError(`Unsupported event.type: ${input.type}`);

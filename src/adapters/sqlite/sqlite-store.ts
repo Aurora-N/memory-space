@@ -221,6 +221,17 @@ export class SqliteMemoryStore implements MemoryStore {
     ).get(provider, externalSessionId) as Row | undefined);
   }
 
+  async listSessions(spaceId: string): Promise<Session[]> {
+    await this.#ready();
+    return (this.database.prepare(
+      "SELECT * FROM sessions WHERE space_id = ? ORDER BY updated_at DESC, id ASC"
+    ).all(spaceId) as Row[]).map((row) => {
+      const session = mapSession(row);
+      if (!session) throw new Error("SQLite returned an empty Session row");
+      return session;
+    });
+  }
+
   async insertSessionProjectBinding(binding: SessionProjectBinding): Promise<void> {
     await this.#ready();
     this.database.prepare(`

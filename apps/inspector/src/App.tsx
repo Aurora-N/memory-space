@@ -6,12 +6,13 @@ import { MemoryDrawer } from "./components/memory/MemoryDrawer";
 import { Icon } from "./components/ui/Icon";
 import { LoadingState } from "./components/ui/States";
 import { DisclosurePage } from "./pages/DisclosurePage";
+import { EventsPage } from "./pages/EventsPage";
 import { HandoffPage } from "./pages/HandoffPage";
 import { MemoriesPage } from "./pages/MemoriesPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ValidationPage } from "./pages/ValidationPage";
 
-const pages = new Set<PageId>(["overview", "memories", "disclosure", "handoff", "validation"]);
+const pages = new Set<PageId>(["overview", "memories", "events", "disclosure", "handoff", "validation"]);
 
 function pageFromHash(): PageId {
   const value = window.location.hash.slice(1) as PageId;
@@ -89,6 +90,7 @@ export function App() {
     const props = { spaceId: binding.space.id, refreshKey };
     switch (page) {
       case "memories": return <MemoriesPage {...props} onSelectMemory={setSelectedMemoryId} />;
+      case "events": return <EventsPage refreshKey={refreshKey} />;
       case "disclosure": return <DisclosurePage {...props} onSelectMemory={setSelectedMemoryId} />;
       case "handoff": return <HandoffPage {...props} />;
       case "validation": return <ValidationPage {...props} onSelectMemory={setSelectedMemoryId} />;

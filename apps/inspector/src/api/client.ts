@@ -8,7 +8,8 @@ import type {
   MemoryHistoryRecord,
   OverviewResult,
   SearchResult,
-  Session
+  Session,
+  SessionEvent
 } from "./types";
 
 interface ErrorBody {
@@ -98,5 +99,9 @@ export const inspectorApi = {
   history: (memoryId: string): Promise<MemoryHistoryRecord[]> => (
     request(`/memories/${encodeURIComponent(memoryId)}/history`)
   ),
-  session: (sessionId: string): Promise<Session> => request(`/sessions/${encodeURIComponent(sessionId)}`)
+  session: (sessionId: string): Promise<Session> => request(`/sessions/${encodeURIComponent(sessionId)}`),
+  sessions: (): Promise<Session[]> => request("/inspector/api/sessions"),
+  sessionEvents: (sessionId: string): Promise<SessionEvent[]> => (
+    request(`/inspector/api/sessions/${encodeURIComponent(sessionId)}/events`)
+  )
 };

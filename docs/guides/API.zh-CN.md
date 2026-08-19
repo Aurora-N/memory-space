@@ -38,6 +38,8 @@ LAN 部署。daemon 拥有一个 `MemorySpace` 实例，并提供 JSON HTTP API 
 | Inspector Memory 浏览 | `GET /spaces/:spaceId/memories` |
 | Inspector 概览 | `GET /spaces/:spaceId/overview` |
 | Inspector 可信绑定 | `GET /inspector/api/binding` |
+| Inspector 可信 Session | `GET /inspector/api/sessions` |
+| Inspector 可信 Session 事件 | `GET /inspector/api/sessions/:sessionId/events` |
 | `memory.context` | `POST /spaces/:spaceId/memory-context` |
 | `memory.promote` | `POST /memories/:memoryId/promote` |
 | `memory.demote` | `POST /memories/:memoryId/demote` |

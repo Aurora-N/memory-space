@@ -5,13 +5,14 @@ Status: IMPLEMENTED / READ-ONLY
 ## Goal
 
 Expose trusted, local observability over one daemon-bound Space without changing
-Memory semantics. The Inspector answers five questions:
+Memory semantics. The Inspector answers six questions:
 
 1. What has the project remembered?
 2. Which Memory is Core versus Indexed?
 3. What context will the next Agent actually receive?
 4. What is the latest persisted Handoff?
 5. Which stored records were excluded from default disclosure?
+6. Which Session messages were captured as durable provider evidence?
 
 ## Architecture
 
@@ -50,6 +51,9 @@ this release.
   Memory, and latest Handoff summary.
 - **Memories** — browse, lexical search, tier/status/family/type filters, and a
   detail drawer with persisted fields, provenance, structured data, and history.
+- **Events** — list Sessions in the daemon's trusted Space, inspect ordered
+  Session events, and reveal full captured user or assistant message content
+  only after selecting an event.
 - **Disclosure** — stored state next to the exact production `bootstrap()`
   context and its Core/Handoff pipeline.
 - **Handoff** — latest immutable Handoff goal, tasks, decisions, blockers,
@@ -66,6 +70,8 @@ reason from current content.
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /inspector/api/binding` | Resolve the one trusted Space and local binding source. |
+| `GET /inspector/api/sessions` | List Sessions belonging to the trusted Space. |
+| `GET /inspector/api/sessions/:sessionId/events` | List ordered events only after verifying that the Session belongs to the trusted Space. |
 | `GET /spaces/:spaceId/overview` | Counts, recent Memory, and latest Handoff summary. |
 | `GET /spaces/:spaceId/memories` | Deterministic, cursor-paginated database browsing. |
 | `GET /spaces/:spaceId/memories/search` | Existing production lexical search. |
@@ -86,6 +92,9 @@ or alter retrieval ranking.
 - Static responses include a same-origin Content Security Policy, no-referrer,
   no-sniff, and frame-denial headers.
 - The UI exposes only refresh, search, filter, inspect, and copy-ID operations.
+- Captured prompts and replies may contain source code, paths, or other
+  sensitive project content. Event text is rendered as inert text and remains
+  available only through the loopback Inspector for the daemon's trusted Space.
 - It has no create, edit, delete, promote, demote, resolve, or Space-management
   control.
 - v1 has no authentication and must not be exposed to LAN or the public
@@ -131,7 +140,7 @@ Open <http://127.0.0.1:5173/inspector/>.
 - No Memory policy, extraction, retrieval, domain, lifecycle, MCP, checkpoint,
   or Handoff behavior changes.
 - No Memory mutation UI or Memory CMS.
-- No Sessions/checkpoint/event explorer in v0.1.
+- No Session mutation, checkpoint management, or event mutation controls.
 - No list/create/delete Space manager.
 - No raw SQLite access or second database owner.
 - No remote hosting, authentication, knowledge graph, or inferred relationships.

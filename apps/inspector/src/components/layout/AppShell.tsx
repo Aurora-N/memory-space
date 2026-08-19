@@ -4,11 +4,12 @@ import type { BindingResult } from "../../api/types";
 import { compactId } from "../../lib/format";
 import { Icon, type IconName } from "../ui/Icon";
 
-export type PageId = "overview" | "memories" | "disclosure" | "handoff" | "validation";
+export type PageId = "overview" | "memories" | "events" | "disclosure" | "handoff" | "validation";
 
 const navigation: Array<{ id: PageId; label: string; subtitle: string; icon: IconName }> = [
   { id: "overview", label: "Overview", subtitle: "全局概览", icon: "layers" },
   { id: "memories", label: "Memories", subtitle: "浏览与检索", icon: "database" },
+  { id: "events", label: "Events", subtitle: "会话证据", icon: "history" },
   { id: "disclosure", label: "Disclosure", subtitle: "实际注入上下文", icon: "eye" },
   { id: "handoff", label: "Handoff", subtitle: "最新交接快照", icon: "handoff" },
   { id: "validation", label: "Validation", subtitle: "存储与披露验证", icon: "shield" }
