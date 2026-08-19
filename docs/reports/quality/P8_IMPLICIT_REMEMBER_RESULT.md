@@ -6,7 +6,7 @@
 
 **P8 original implementation:** `c8ba9625d3a4af0b00c3793cb9bf251fb85e1287`
 
-**P8 hardening commit:** pending
+**P8 hardening commit:** `600e585224db93ae38c7a62c836e23c7953300ed`
 
 **Status:** COMPLETE / REVIEW PASS / FROZEN / CLAUDE REAL-PROVIDER PASS / CODEX BLOCKED
 
