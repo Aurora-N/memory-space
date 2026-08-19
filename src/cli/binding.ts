@@ -1,21 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { SpaceResolver, type SpaceBinding } from "../binding/space-resolver.ts";
-import { resolveImplicitRecallConfiguration } from "../binding/project-config.ts";
+import {
+  resolveImplicitRecallConfiguration,
+  resolveImplicitRememberConfiguration,
+} from "../binding/project-config.ts";
+import { type SpaceBinding, SpaceResolver } from "../binding/space-resolver.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
 import { CliError } from "./errors.ts";
 
 function invalidBinding(cause?: unknown): CliError {
   return new CliError("BINDING_INVALID", "Project Memory Space binding is invalid.", {
     remediation: "Repair .memory-space/config.json; the existing file was preserved.",
-    cause
+    cause,
   });
 }
 
-export async function readLocalProjectBinding(
-  cwd: string
-): Promise<SpaceBinding | undefined> {
+export async function readLocalProjectBinding(cwd: string): Promise<SpaceBinding | undefined> {
   const configPath = join(resolve(cwd), ".memory-space", "config.json");
   let raw: string;
   try {
@@ -35,15 +36,15 @@ export async function readLocalProjectBinding(
     throw invalidBinding();
   }
   const config = value as Record<string, unknown>;
-  if (config.version !== 1 || typeof config.spaceId !== "string"
-    || config.spaceId.trim() === "") {
+  if (config.version !== 1 || typeof config.spaceId !== "string" || config.spaceId.trim() === "") {
     throw invalidBinding();
   }
   return {
     spaceId: config.spaceId.trim(),
     source: "config",
     configPath,
-    implicitRecall: resolveImplicitRecallConfiguration(config)
+    implicitRecall: resolveImplicitRecallConfiguration(config),
+    implicitRemember: resolveImplicitRememberConfiguration(config),
   };
 }
 
@@ -59,10 +60,7 @@ export async function resolveOptionalBinding(cwd: string): Promise<SpaceBinding 
   }
 }
 
-export async function writeBindingAtomically(
-  cwd: string,
-  spaceId: string
-): Promise<string> {
+export async function writeBindingAtomically(cwd: string, spaceId: string): Promise<string> {
   const bindingDirectory = join(resolve(cwd), ".memory-space");
   const configPath = join(bindingDirectory, "config.json");
   const temporaryPath = join(bindingDirectory, `.config.${process.pid}.${randomUUID()}.tmp`);
@@ -71,11 +69,16 @@ export async function writeBindingAtomically(
     await mkdir(bindingDirectory, { recursive: true });
     await writeFile(
       temporaryPath,
-      `${JSON.stringify({
-        version: 1,
-        spaceId,
-        implicitRecall: { mode: "exact" }
-      }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          version: 1,
+          spaceId,
+          implicitRecall: { mode: "exact" },
+          implicitRemember: { mode: "conservative" },
+        },
+        null,
+        2
+      )}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 }
     );
     linking = true;
@@ -92,7 +95,7 @@ export async function writeBindingAtomically(
         remediation: conflict
           ? "Run memory-space init again to inspect the existing binding."
           : `Preserve the created Space and write ${configPath} after fixing filesystem permissions.`,
-        cause: error
+        cause: error,
       }
     );
   } finally {
@@ -120,7 +123,7 @@ export async function removeLocalProjectBinding(
   if (!local) {
     return {
       removed: false,
-      inherited: await resolveOptionalBinding(resolvedCwd)
+      inherited: await resolveOptionalBinding(resolvedCwd),
     };
   }
   if (expectedSpaceId !== undefined && local.spaceId !== expectedSpaceId) {
@@ -135,12 +138,12 @@ export async function removeLocalProjectBinding(
   } catch (error) {
     throw new CliError("BINDING_REMOVE_FAILED", "Local project binding could not be removed.", {
       remediation: `Check filesystem permissions for ${local.configPath}.`,
-      cause: error
+      cause: error,
     });
   }
   return {
     removed: true,
     local,
-    inherited: await resolveOptionalBinding(resolvedCwd)
+    inherited: await resolveOptionalBinding(resolvedCwd),
   };
 }

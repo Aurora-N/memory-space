@@ -1,10 +1,15 @@
 import type { MemoryCandidate, Session, SessionEvent } from "../domain/types.ts";
 import type { SessionProjectBinding } from "./session-binding.ts";
 
-/** Stable checkpoint context supplied to deterministic memory extractors. */
+/** Provider-neutral reason one persisted event range is being extracted. */
+export type ExtractionTrigger = "checkpoint" | "implicit_remember";
+
+/** Stable operation context supplied to deterministic memory extractors. */
 export interface ExtractionContext {
   session: Session;
-  checkpointId: string;
+  trigger: ExtractionTrigger;
+  operationId: string;
+  checkpointId?: string;
   projectBinding?: SessionProjectBinding;
 }
 

@@ -66,7 +66,9 @@ Add this trusted project-local binding at
 ```json
 {
   "version": 1,
-  "spaceId": "my-project"
+  "spaceId": "my-project",
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -110,13 +112,17 @@ The configured native mapping is:
 |---|---|
 | `SessionStart` | bind/reuse Session, bootstrap, inject additional context |
 | `UserPromptSubmit` | append the full user message, then optionally inject bounded active Indexed Memory according to the trusted project `implicitRecall.mode` |
-| `Stop` | append `last_assistant_message` when present and non-empty |
+| `Stop` | append `last_assistant_message` when present and non-empty, then best-effort implicit remember from persisted user-backed evidence when configured |
 | `PreCompact` | checkpoint only uncommitted events |
 | `SessionEnd` | checkpoint only uncommitted events |
 
 `PreToolUse` and `PostToolUse` are intentionally not captured. Codex supplies
 `transcript_path`; Memory Space stores it only as an opaque `TranscriptRef` on
 captured messages and does not read or copy the transcript automatically.
+
+Implicit remember is not a checkpoint. A successful `Stop` may create or update
+only Indexed Memory; it does not create a Checkpoint/Handoff or advance the
+checkpoint boundary. Missing `implicitRemember` defaults to `off`.
 
 In Codex, open `/hooks`, review the exact command definitions, and trust them.
 Changed hook definitions must be reviewed again. Project-local hooks only load

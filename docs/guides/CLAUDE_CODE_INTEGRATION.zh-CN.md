@@ -64,7 +64,9 @@ curl --fail --silent \
 ```json
 {
   "version": 1,
-  "spaceId": "my-project"
+  "spaceId": "my-project",
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -106,7 +108,7 @@ Claude Code 会合并所有生效 settings scope 中的 hooks。目前会对相�
 |---|---|
 | `SessionStart` | 绑定或复用 Session，执行 bootstrap，注入 `additionalContext` |
 | `UserPromptSubmit` | 追加原始完整用户 prompt，然后根据可信项目的 `implicitRecall.mode`，可选地注入有界的 active Indexed Memory |
-| `Stop` | 当可靠的 `last_assistant_message` 非空时追加该消息 |
+| `Stop` | 当可靠的 `last_assistant_message` 非空时先追加该消息，再按配置对持久化、用户证据支持的内容执行 best-effort implicit remember |
 | `PreCompact` | 仅 checkpoint 尚未提交的事件 |
 | `SessionEnd` | 仅 checkpoint 尚未提交的事件 |
 
@@ -114,6 +116,10 @@ Claude 的 `prompt_id`、`permission_mode`、task hooks、工具轨迹以及任�
 特权形状的自定义字段都不是可信 Memory 命令。默认忽略 `PostToolUse`、
 `TaskCompleted` 和其他 Claude 专属事件。原生 `transcript_path` 只作为不透明的
 `TranscriptRef` 保存；Memory Space 不会解析或复制 transcript。
+
+Implicit remember 不是 checkpoint。成功的 `Stop` 最多创建或更新 Indexed Memory，
+不会创建 Checkpoint/Handoff，也不会推进 checkpoint 边界。缺少
+`implicitRemember` 时默认 `off`。
 
 `SessionEnd` 通常有 1.5 秒的 hook 总预算。示例为每个 hook 设置八秒超时，
 Claude Code 会使用该值提高总预算。

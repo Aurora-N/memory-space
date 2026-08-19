@@ -24,6 +24,7 @@ import { createInspectorStaticHandler } from "./http/inspector-static.ts";
 import { createRequestHandler, readJsonBody, sendJson } from "./http/server.ts";
 import { CheckpointPolicy } from "./integration/checkpoint-policy.ts";
 import { ImplicitRecallService } from "./integration/implicit-recall.ts";
+import { ImplicitRememberService } from "./integration/implicit-remember.ts";
 import { type LifecycleDiagnostic, LifecycleHandler } from "./integration/lifecycle-handler.ts";
 import { ProjectExtractionRuleExtractor } from "./integration/project-extraction-rule-extractor.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
@@ -122,6 +123,7 @@ export function createMemorySpaceDaemon(options: MemorySpaceDaemonOptions = {}):
     sessionResolver: new ProviderSessionResolver(memorySpace),
     checkpointPolicy,
     implicitRecall: new ImplicitRecallService(memorySpace),
+    implicitRemember: new ImplicitRememberService(memorySpace),
     onWarning: options.onLifecycleDiagnostic ?? logLifecycleDiagnostic,
   });
   const codexRuntime: CodexLifecycleRuntimeContext = {

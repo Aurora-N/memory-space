@@ -5,7 +5,9 @@ import { ValidationError } from "../domain/errors.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
 import {
   type ImplicitRecallConfiguration,
+  type ImplicitRememberConfiguration,
   resolveImplicitRecallConfiguration,
+  resolveImplicitRememberConfiguration,
 } from "./project-config.ts";
 
 /** Inputs for explicit or nearest-ancestor Space binding resolution. */
@@ -20,6 +22,7 @@ export interface SpaceBinding {
   source: "explicit" | "config";
   configPath?: string;
   implicitRecall?: ImplicitRecallConfiguration;
+  implicitRemember?: ImplicitRememberConfiguration;
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -42,6 +45,7 @@ function parseProjectBinding(value: unknown, configPath: string): SpaceBinding {
     source: "config",
     configPath,
     implicitRecall: resolveImplicitRecallConfiguration(config),
+    implicitRemember: resolveImplicitRememberConfiguration(config),
   };
 }
 

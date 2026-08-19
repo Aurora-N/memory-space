@@ -14,47 +14,75 @@ import type {
   Session,
   SessionEvent,
   SessionEventType,
-  Space
+  Space,
 } from "../domain/types.ts";
 import type { CachePort } from "../ports/cache.ts";
-import type { MemoryExtractor } from "../ports/extractor.ts";
-import type { SessionProjectBindingSource } from "../ports/session-binding.ts";
+import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
+import type {
+  SessionProjectBinding,
+  SessionProjectBindingSource,
+} from "../ports/session-binding.ts";
 import type { MemoryHistoryRecord, MemoryStore } from "../ports/store.ts";
 import {
-  PROMOTION_OPERATION,
+  type CoreAdmissionReason,
   decideCoreAdmission,
   hasEffectiveExplicitPromotion,
   isCoreEligible,
-  type CoreAdmissionReason
+  PROMOTION_OPERATION,
 } from "./core-admission-policy.ts";
 import { buildHandoffProjection } from "./handoff-policy.ts";
 import {
   compareLexicalResults,
   normalizeLexicalText,
-  scoreLexicalMemory
+  scoreLexicalMemory,
 } from "./lexical-retrieval.ts";
+import { memoryCandidateFingerprint } from "./memory-candidate-fingerprint.ts";
 
 const families = new Set<MemoryFamily>(["knowledge", "state", "episode", "procedure"]);
 const tiers = new Set<MemoryTier>(["core", "indexed"]);
 const statuses = new Set<MemoryStatus>(["active", "resolved", "superseded", "archived"]);
-const eventTypes = new Set<SessionEventType>(["message", "tool_call", "artifact", "memory", "custom"]);
+const eventTypes = new Set<SessionEventType>([
+  "message",
+  "tool_call",
+  "artifact",
+  "memory",
+  "custom",
+]);
 const operations = new Set<CandidateOperation>(["create", "update", "supersede", "ignore"]);
 const sections = [
-  "Goal", "Current Roadmap", "Current Progress", "Active Tasks", "Decisions",
-  "Constraints / Conventions", "Blockers", "Open Questions"
+  "Goal",
+  "Current Roadmap",
+  "Current Progress",
+  "Active Tasks",
+  "Decisions",
+  "Constraints / Conventions",
+  "Blockers",
+  "Open Questions",
 ] as const;
-type Section = typeof sections[number];
+type Section = (typeof sections)[number];
 
 /** Input for creating an isolated Space; omitted IDs are generated. */
-export interface CreateSpaceInput { id?: string; name: string; description?: string }
+export interface CreateSpaceInput {
+  id?: string;
+  name: string;
+  description?: string;
+}
 /** Input for creating a Session permanently bound to an existing Space. */
 export interface CreateSessionInput {
-  id?: string; spaceId: string; agentId?: string; provider?: string;
-  externalSessionId?: string; summary?: string;
+  id?: string;
+  spaceId: string;
+  agentId?: string;
+  provider?: string;
+  externalSessionId?: string;
+  summary?: string;
 }
 /** Idempotent provider identity used to get or create one durable Session. */
 export interface ProviderSessionInput {
-  id?: string; spaceId: string; provider: string; externalSessionId: string; agentId?: string;
+  id?: string;
+  spaceId: string;
+  provider: string;
+  externalSessionId: string;
+  agentId?: string;
 }
 /** Trusted binding provenance supplied only by lifecycle integration. */
 export interface SessionProjectBindingInput {
@@ -63,24 +91,62 @@ export interface SessionProjectBindingInput {
 }
 /** Input for appending one immutable event to a Session. */
 export interface AppendEventInput {
-  id?: string; sessionId: string; type: SessionEventType;
-  payload: Record<string, unknown>; createdAt?: string;
+  id?: string;
+  sessionId: string;
+  type: SessionEventType;
+  payload: Record<string, unknown>;
+  createdAt?: string;
 }
 /** Explicit memory write that cannot request a tier, with optional validated Session provenance. */
 export interface RememberInput {
-  spaceId: string; family: MemoryFamily; type: string; key?: string; content: string;
-  data?: Record<string, unknown>; status?: MemoryStatus;
-  importance?: number; confidence?: number; sourceSessionId?: string;
-  sourceAgentId?: string; sourceEventIds?: string[];
+  spaceId: string;
+  family: MemoryFamily;
+  type: string;
+  key?: string;
+  content: string;
+  data?: Record<string, unknown>;
+  status?: MemoryStatus;
+  importance?: number;
+  confidence?: number;
+  sourceSessionId?: string;
+  sourceAgentId?: string;
+  sourceEventIds?: string[];
 }
 /** Idempotent checkpoint request through an optional explicit event boundary. */
-export interface CheckpointInput { sessionId: string; toEventId?: string; idempotencyKey: string }
+export interface CheckpointInput {
+  sessionId: string;
+  toEventId?: string;
+  idempotencyKey: string;
+}
+/** Bounded persisted evidence selected for one implicit-remember turn. */
+export interface ImplicitRememberEventWindow {
+  session: Session;
+  events: SessionEvent[];
+}
+/** One extractor candidate admitted for an Indexed-only implicit commit. */
+export interface CommitImplicitCandidateInput {
+  sessionId: string;
+  candidate: MemoryCandidate;
+  inspectedEventIds: string[];
+}
+/** Memory identity and mutation outcome from one transactional P8 candidate commit. */
+export interface CommitImplicitCandidateResult {
+  memory: Memory;
+  disposition: "created" | "updated" | "deduplicated";
+}
 /** Deterministic startup context assembled from Core Memory and the latest Handoff. */
 export interface BootstrapResult {
-  space: Space; coreMemories: Memory[]; handoffSnapshot?: HandoffSnapshot; context: string;
+  space: Space;
+  coreMemories: Memory[];
+  handoffSnapshot?: HandoffSnapshot;
+  context: string;
 }
 /** Ranked recall results plus their provider-neutral rendered context. */
-export interface ContextResult { query: string; results: MemorySearchResult[]; rendered: string }
+export interface ContextResult {
+  query: string;
+  results: MemorySearchResult[];
+  rendered: string;
+}
 /** Deterministic cursor-based browse query over one Space. */
 export interface BrowseMemoriesInput {
   spaceId: string;
@@ -112,19 +178,57 @@ export interface MemoryOverviewResult {
 }
 
 interface ValidatedMemory {
-  family: MemoryFamily; type: string; key?: string; content: string;
-  data?: Record<string, unknown>; tier: MemoryTier; status: MemoryStatus;
-  importance: number; confidence: number;
+  family: MemoryFamily;
+  type: string;
+  key?: string;
+  content: string;
+  data?: Record<string, unknown>;
+  tier: MemoryTier;
+  status: MemoryStatus;
+  importance: number;
+  confidence: number;
 }
 
 interface CommitInput extends ValidatedMemory {
-  spaceId: string; sourceSessionId?: string; sourceAgentId?: string;
-  sourceEventIds: string[]; operation: CandidateOperation; targetMemoryId?: string;
+  spaceId: string;
+  sourceSessionId?: string;
+  sourceAgentId?: string;
+  sourceEventIds: string[];
+  operation: CandidateOperation;
+  targetMemoryId?: string;
   reason?: string;
   admissionReason?: CoreAdmissionReason;
 }
 
-function timestamp(): string { return new Date().toISOString(); }
+function timestamp(): string {
+  return new Date().toISOString();
+}
+
+function boundedContentSuffix(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  let start = value.length - maxChars;
+  const first = value.charCodeAt(start);
+  if (first >= 0xdc00 && first <= 0xdfff) start += 1;
+  return value.slice(start);
+}
+
+function boundEventContent(event: SessionEvent, maxChars: number): SessionEvent {
+  const field =
+    typeof event.payload.content === "string"
+      ? "content"
+      : typeof event.payload.text === "string"
+        ? "text"
+        : undefined;
+  if (!field) return event;
+  const content = event.payload[field] as string;
+  const bounded = boundedContentSuffix(content, maxChars);
+  return bounded === content
+    ? event
+    : {
+        ...event,
+        payload: { ...event.payload, [field]: bounded },
+      };
+}
 
 function compareRecentlyUpdated(a: Memory, b: Memory): number {
   return b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id);
@@ -137,8 +241,10 @@ function countBy(memories: Memory[], value: (memory: Memory) => string): Record<
 }
 
 function encodeBrowseCursor(memory: Memory): string {
-  return Buffer.from(JSON.stringify({ updatedAt: memory.updatedAt, id: memory.id }), "utf8")
-    .toString("base64url");
+  return Buffer.from(
+    JSON.stringify({ updatedAt: memory.updatedAt, id: memory.id }),
+    "utf8"
+  ).toString("base64url");
 }
 
 function decodeBrowseCursor(value: string): { updatedAt: string; id: string } {
@@ -146,8 +252,13 @@ function decodeBrowseCursor(value: string): { updatedAt: string; id: string } {
     const parsed: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid");
     const cursor = parsed as Record<string, unknown>;
-    if (typeof cursor.updatedAt !== "string" || typeof cursor.id !== "string"
-      || cursor.updatedAt === "" || cursor.id === "") throw new Error("invalid");
+    if (
+      typeof cursor.updatedAt !== "string" ||
+      typeof cursor.id !== "string" ||
+      cursor.updatedAt === "" ||
+      cursor.id === ""
+    )
+      throw new Error("invalid");
     return { updatedAt: cursor.updatedAt, id: cursor.id };
   } catch {
     throw new ValidationError("browse cursor is invalid");
@@ -188,7 +299,7 @@ function validateSessionProjectBinding(
   if (value.source === "config") {
     return {
       source: value.source,
-      configPath: requiredString(value.configPath, "projectBinding.configPath")
+      configPath: requiredString(value.configPath, "projectBinding.configPath"),
     };
   }
   if (value.source === "explicit") {
@@ -200,22 +311,38 @@ function validateSessionProjectBinding(
   throw new ValidationError("projectBinding.source must be config or explicit");
 }
 
-function list(values: string[]): string { return values.length ? values.map((value) => `- ${value}`).join("\n") : "(none)"; }
+function list(values: string[]): string {
+  return values.length ? values.map((value) => `- ${value}`).join("\n") : "(none)";
+}
 function summary(memory: Memory): string {
-  return memory.key ? `[${memory.id}] (${memory.key}) ${memory.content}` : `[${memory.id}] ${memory.content}`;
+  return memory.key
+    ? `[${memory.id}] (${memory.key}) ${memory.content}`
+    : `[${memory.id}] ${memory.content}`;
 }
 
 function sectionFor(memory: Memory): Section {
   const mapping: Record<string, Section> = {
-    goal: "Goal", roadmap: "Current Roadmap", progress: "Current Progress",
-    task: "Active Tasks", decision: "Decisions", fact: "Decisions",
-    constraint: "Constraints / Conventions", convention: "Constraints / Conventions",
-    rule: "Constraints / Conventions", instruction: "Constraints / Conventions",
-    blocker: "Blockers", question: "Open Questions"
+    goal: "Goal",
+    roadmap: "Current Roadmap",
+    progress: "Current Progress",
+    task: "Active Tasks",
+    decision: "Decisions",
+    fact: "Decisions",
+    constraint: "Constraints / Conventions",
+    convention: "Constraints / Conventions",
+    rule: "Constraints / Conventions",
+    instruction: "Constraints / Conventions",
+    blocker: "Blockers",
+    question: "Open Questions",
   };
-  return mapping[memory.type]
-    ?? (memory.family === "knowledge" ? "Decisions"
-      : memory.family === "procedure" ? "Constraints / Conventions" : "Current Progress");
+  return (
+    mapping[memory.type] ??
+    (memory.family === "knowledge"
+      ? "Decisions"
+      : memory.family === "procedure"
+        ? "Constraints / Conventions"
+        : "Current Progress")
+  );
 }
 
 /**
@@ -230,7 +357,10 @@ export class MemorySpace {
   readonly #inFlightCheckpoints = new Map<string, Promise<Checkpoint>>();
 
   constructor(options: {
-    store: MemoryStore; extractor: MemoryExtractor; cache: CachePort; coreLimit?: number;
+    store: MemoryStore;
+    extractor: MemoryExtractor;
+    cache: CachePort;
+    coreLimit?: number;
   }) {
     this.store = options.store;
     this.extractor = options.extractor;
@@ -241,18 +371,24 @@ export class MemorySpace {
     }
   }
 
-  async close(): Promise<void> { await this.store.close(); }
+  async close(): Promise<void> {
+    await this.store.close();
+  }
 
   async createSpace(input: CreateSpaceInput): Promise<Space> {
     const now = timestamp();
     const space: Space = {
       id: optionalString(input.id, "space.id") ?? randomUUID(),
       name: requiredString(input.name, "space.name"),
-      description: optionalString(input.description, "space.description"), createdAt: now, updatedAt: now
+      description: optionalString(input.description, "space.description"),
+      createdAt: now,
+      updatedAt: now,
     };
-    try { await this.store.insertSpace(space); }
-    catch (error) {
-      if (String(error).includes("UNIQUE")) throw new ConflictError(`Space already exists: ${space.id}`);
+    try {
+      await this.store.insertSpace(space);
+    } catch (error) {
+      if (String(error).includes("UNIQUE"))
+        throw new ConflictError(`Space already exists: ${space.id}`);
       throw error;
     }
     return space;
@@ -272,11 +408,14 @@ export class MemorySpace {
     const projectBinding = validateSessionProjectBinding(projectBindingInput);
     const now = timestamp();
     const session: Session = {
-      id: optionalString(input.id, "session.id") ?? randomUUID(), spaceId: space.id,
+      id: optionalString(input.id, "session.id") ?? randomUUID(),
+      spaceId: space.id,
       agentId: optionalString(input.agentId, "session.agentId"),
       provider: optionalString(input.provider, "session.provider"),
       externalSessionId: optionalString(input.externalSessionId, "session.externalSessionId"),
-      summary: optionalString(input.summary, "session.summary"), createdAt: now, updatedAt: now
+      summary: optionalString(input.summary, "session.summary"),
+      createdAt: now,
+      updatedAt: now,
     };
     await this.store.transaction(async () => {
       await this.store.insertSession(session);
@@ -284,7 +423,7 @@ export class MemorySpace {
         await this.store.insertSessionProjectBinding({
           sessionId: session.id,
           spaceId: session.spaceId,
-          ...projectBinding
+          ...projectBinding,
         });
       }
     });
@@ -313,7 +452,7 @@ export class MemorySpace {
       externalSessionId,
       agentId: optionalString(input.agentId, "session.agentId"),
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     return this.store.transaction(async () => {
       const session = (await this.store.getOrCreateProviderSession(candidate)).session;
@@ -327,14 +466,17 @@ export class MemorySpace {
         await this.store.insertSessionProjectBinding({
           sessionId: session.id,
           spaceId: session.spaceId,
-          ...projectBinding
+          ...projectBinding,
         });
       }
       return session;
     });
   }
 
-  async findProviderSession(provider: string, externalSessionId: string): Promise<Session | undefined> {
+  async findProviderSession(
+    provider: string,
+    externalSessionId: string
+  ): Promise<Session | undefined> {
     return this.store.findSessionByProviderIdentity(
       requiredString(provider, "provider"),
       requiredString(externalSessionId, "externalSessionId")
@@ -349,14 +491,17 @@ export class MemorySpace {
 
   async appendEvent(input: AppendEventInput): Promise<SessionEvent> {
     const session = await this.getSession(input.sessionId);
-    if (!eventTypes.has(input.type)) throw new ValidationError(`Unsupported event.type: ${input.type}`);
+    if (!eventTypes.has(input.type))
+      throw new ValidationError(`Unsupported event.type: ${input.type}`);
     if (!input.payload || typeof input.payload !== "object" || Array.isArray(input.payload)) {
       throw new ValidationError("event.payload must be an object");
     }
     const event = await this.store.insertEvent({
-      id: optionalString(input.id, "event.id") ?? randomUUID(), sessionId: session.id,
-      type: input.type, payload: input.payload,
-      createdAt: optionalIsoDateTime(input.createdAt, "event.createdAt") ?? timestamp()
+      id: optionalString(input.id, "event.id") ?? randomUUID(),
+      sessionId: session.id,
+      type: input.type,
+      payload: input.payload,
+      createdAt: optionalIsoDateTime(input.createdAt, "event.createdAt") ?? timestamp(),
     });
     await this.store.updateSession({ ...session, updatedAt: timestamp() });
     return event;
@@ -372,30 +517,185 @@ export class MemorySpace {
     return this.store.findLatestEvent(session.id);
   }
 
+  async getSessionProjectBinding(sessionId: string): Promise<SessionProjectBinding | undefined> {
+    const session = await this.getSession(sessionId);
+    return this.store.findSessionProjectBinding(session.id);
+  }
+
+  async getImplicitRememberEventWindow(input: {
+    sessionId: string;
+    throughEventId: string;
+    maxEvents: number;
+    maxInputChars: number;
+  }): Promise<ImplicitRememberEventWindow> {
+    const session = await this.getSession(input.sessionId);
+    if (!Number.isInteger(input.maxEvents) || input.maxEvents < 1) {
+      throw new ValidationError("maxEvents must be a positive integer");
+    }
+    if (!Number.isInteger(input.maxInputChars) || input.maxInputChars < 1) {
+      throw new ValidationError("maxInputChars must be a positive integer");
+    }
+    const throughEvent = await this.#sessionEvent(session.id, input.throughEventId);
+    const fromEvent = session.lastCheckpointEventId
+      ? await this.#sessionEvent(session.id, session.lastCheckpointEventId)
+      : undefined;
+    if (throughEvent.sequence <= (fromEvent?.sequence ?? 0)) {
+      throw new ValidationError("throughEventId must be after the checkpoint boundary");
+    }
+    const recent = await this.store.listRecentEvents(
+      session.id,
+      fromEvent?.sequence ?? 0,
+      throughEvent.sequence,
+      input.maxEvents
+    );
+    const selected: SessionEvent[] = [];
+    let chars = 0;
+    for (let index = recent.length - 1; index >= 0; index -= 1) {
+      const event = recent[index];
+      if (!event) continue;
+      const content = event.payload.content ?? event.payload.text;
+      const eventChars = typeof content === "string" ? content.length : 0;
+      const remaining = input.maxInputChars - chars;
+      if (remaining <= 0) break;
+      selected.push(boundEventContent(event, remaining));
+      chars += Math.min(eventChars, remaining);
+      if (chars >= input.maxInputChars) break;
+    }
+    selected.reverse();
+    return { session, events: selected };
+  }
+
+  async extractMemoryCandidates(
+    events: SessionEvent[],
+    context: ExtractionContext
+  ): Promise<MemoryCandidate[]> {
+    const candidates = await this.extractor.extract(events, context);
+    if (!Array.isArray(candidates)) {
+      throw new ValidationError("Extractor must return a MemoryCandidate array");
+    }
+    return candidates;
+  }
+
+  async findActiveMemoryByNormalizedKey(spaceId: string, key: string): Promise<Memory | undefined> {
+    const space = await this.getSpace(requiredString(spaceId, "spaceId"));
+    const candidate = requiredString(key, "memory.key");
+    const normalizedCandidate = normalizeLexicalText(candidate);
+    const rawMatch = await this.store.findActiveMemoryByKey(space.id, candidate);
+    if (rawMatch && normalizeLexicalText(rawMatch.key ?? "") === normalizedCandidate) {
+      return rawMatch;
+    }
+    const active = await this.store.listMemories({
+      spaceId: space.id,
+      statuses: ["active"],
+    });
+    return active.find(
+      (memory) =>
+        memory.key !== undefined && normalizeLexicalText(memory.key) === normalizedCandidate
+    );
+  }
+
+  async commitImplicitCandidate(
+    input: CommitImplicitCandidateInput
+  ): Promise<CommitImplicitCandidateResult> {
+    const session = await this.getSession(input.sessionId);
+    const eventIds = new Set(input.inspectedEventIds);
+    const candidate = this.#validateCandidate(input.candidate, 0, eventIds);
+    if (candidate.operation === "ignore" || candidate.operation === "supersede") {
+      throw new ValidationError("Implicit remember candidate must be create or update");
+    }
+    const result = await this.store.transaction(async () => {
+      const fingerprint = memoryCandidateFingerprint(session.id, candidate);
+      const receipt = await this.store.findMemoryCandidateCommitReceipt(session.id, fingerprint);
+      if (receipt) {
+        return {
+          memory: await this.getMemory(receipt.memoryId),
+          disposition: "deduplicated" as const,
+        };
+      }
+      const existing = candidate.targetMemoryId
+        ? await this.getMemory(candidate.targetMemoryId)
+        : candidate.key
+          ? await this.findActiveMemoryByNormalizedKey(session.spaceId, candidate.key)
+          : undefined;
+      if (existing?.tier === "core") {
+        throw new ConflictError(
+          "Implicit remember cannot mutate existing Core Memory",
+          "IMPLICIT_REMEMBER_CORE_TARGET"
+        );
+      }
+      const beforeVersion = existing?.version;
+      const memory = await this.#commitMemory(
+        {
+          ...candidate,
+          spaceId: session.spaceId,
+          sourceSessionId: session.id,
+          sourceAgentId: session.agentId,
+          tier: "indexed",
+          admissionReason: "not-recommended",
+          reason: "implicit remember",
+        },
+        "implicit"
+      );
+      await this.store.insertMemoryCandidateCommitReceipt({
+        id: randomUUID(),
+        sessionId: session.id,
+        fingerprint,
+        memoryId: memory.id,
+        firstCommitSource: "implicit",
+        sourceEventIds: [...new Set(candidate.sourceEventIds)].sort(),
+        createdAt: timestamp(),
+      });
+      return {
+        memory,
+        disposition:
+          existing === undefined
+            ? ("created" as const)
+            : beforeVersion === memory.version
+              ? ("deduplicated" as const)
+              : ("updated" as const),
+      };
+    });
+    await this.#safeInvalidate(session.spaceId);
+    return result;
+  }
+
   async remember(input: RememberInput): Promise<Memory> {
     if ("tier" in input) {
-      throw new ValidationError("memory.remember does not accept tier; use promote() after remember()");
+      throw new ValidationError(
+        "memory.remember does not accept tier; use promote() after remember()"
+      );
     }
     const space = await this.getSpace(input.spaceId);
     const validated = this.#validateMemory(input);
     let session: Session | undefined;
     if (input.sourceSessionId) {
       session = await this.getSession(input.sourceSessionId);
-      if (session.spaceId !== space.id) throw new ValidationError("sourceSessionId must belong to memory.spaceId");
+      if (session.spaceId !== space.id)
+        throw new ValidationError("sourceSessionId must belong to memory.spaceId");
     }
     const sourceEventIds = input.sourceEventIds ?? [];
     if (sourceEventIds.length > 0) {
       if (!session) {
-        throw new ValidationError("sourceEventIds require sourceSessionId for provenance validation");
+        throw new ValidationError(
+          "sourceEventIds require sourceSessionId for provenance validation"
+        );
       }
       for (const eventId of sourceEventIds) await this.#sessionEvent(session.id, eventId);
     }
-    const memory = await this.store.transaction(() => this.#commitMemory({
-      ...validated, spaceId: space.id, sourceSessionId: session?.id,
-      sourceAgentId: input.sourceAgentId ?? session?.agentId,
-      sourceEventIds, operation: validated.key ? "update" : "create",
-      reason: "explicit remember"
-    }, "explicit"));
+    const memory = await this.store.transaction(() =>
+      this.#commitMemory(
+        {
+          ...validated,
+          spaceId: space.id,
+          sourceSessionId: session?.id,
+          sourceAgentId: input.sourceAgentId ?? session?.agentId,
+          sourceEventIds,
+          operation: validated.key ? "update" : "create",
+          reason: "explicit remember",
+        },
+        "explicit"
+      )
+    );
     await this.#safeInvalidate(space.id);
     return memory;
   }
@@ -415,18 +715,24 @@ export class MemorySpace {
     await this.getSpace(input.spaceId);
     const limit = input.limit ?? 50;
     this.#validateFilters({ ...input, query: "", limit });
-    const memories = (await this.store.listMemories({
-      spaceId: input.spaceId,
-      families: input.families,
-      types: input.types,
-      tiers: input.tiers,
-      statuses: input.statuses
-    })).sort(compareRecentlyUpdated);
+    const memories = (
+      await this.store.listMemories({
+        spaceId: input.spaceId,
+        families: input.families,
+        types: input.types,
+        tiers: input.tiers,
+        statuses: input.statuses,
+      })
+    ).sort(compareRecentlyUpdated);
     const cursor = input.cursor === undefined ? undefined : decodeBrowseCursor(input.cursor);
-    const pageStart = cursor === undefined ? 0 : memories.findIndex((memory) => (
-      memory.updatedAt < cursor.updatedAt
-      || (memory.updatedAt === cursor.updatedAt && memory.id < cursor.id)
-    ));
+    const pageStart =
+      cursor === undefined
+        ? 0
+        : memories.findIndex(
+            (memory) =>
+              memory.updatedAt < cursor.updatedAt ||
+              (memory.updatedAt === cursor.updatedAt && memory.id < cursor.id)
+          );
     const start = pageStart < 0 ? memories.length : pageStart;
     const items = memories.slice(start, start + limit);
     const hasMore = start + items.length < memories.length;
@@ -434,7 +740,7 @@ export class MemorySpace {
     return {
       items,
       total: memories.length,
-      nextCursor: hasMore && lastItem ? encodeBrowseCursor(lastItem) : undefined
+      nextCursor: hasMore && lastItem ? encodeBrowseCursor(lastItem) : undefined,
     };
   }
 
@@ -449,22 +755,29 @@ export class MemorySpace {
         tiers: countBy(memories, (memory) => memory.tier),
         statuses: countBy(memories, (memory) => memory.status),
         families: countBy(memories, (memory) => memory.family),
-        types: countBy(memories, (memory) => memory.type)
+        types: countBy(memories, (memory) => memory.type),
       },
       recentMemories: memories.slice(0, 8),
-      latestHandoff
+      latestHandoff,
     };
   }
 
-  async promote(memoryId: string, options: { reason?: string; actor?: "user" | "agent" } = {}): Promise<Memory> {
+  async promote(
+    memoryId: string,
+    options: { reason?: string; actor?: "user" | "agent" } = {}
+  ): Promise<Memory> {
     const memory = await this.getMemory(memoryId);
-    if (memory.status !== "active") throw new ConflictError("Only active memory can be promoted", "MEMORY_NOT_ACTIVE");
+    if (memory.status !== "active")
+      throw new ConflictError("Only active memory can be promoted", "MEMORY_NOT_ACTIVE");
     if (memory.tier === "core") return memory;
     const actor = options.actor ?? "agent";
     if (actor === "agent") {
       requiredString(options.reason, "promotion reason");
       if (!isCoreEligible(memory)) {
-        throw new ConflictError("Memory is not deterministically eligible for agent promotion", "PROMOTION_REJECTED");
+        throw new ConflictError(
+          "Memory is not deterministically eligible for agent promotion",
+          "PROMOTION_REJECTED"
+        );
       }
     }
     const result = await this.store.transaction(() =>
@@ -489,12 +802,22 @@ export class MemorySpace {
     return result;
   }
 
-  async setMemoryStatus(memoryId: string, status: MemoryStatus, options: { reason?: string } = {}): Promise<Memory> {
+  async setMemoryStatus(
+    memoryId: string,
+    status: MemoryStatus,
+    options: { reason?: string } = {}
+  ): Promise<Memory> {
     const memory = await this.getMemory(memoryId);
     if (!statuses.has(status)) throw new ValidationError(`Unsupported memory status: ${status}`);
     const tier = status === "active" ? memory.tier : "indexed";
     if (memory.status === status && memory.tier === tier) return memory;
-    const updated = { ...memory, status, tier, version: memory.version + 1, updatedAt: timestamp() };
+    const updated = {
+      ...memory,
+      status,
+      tier,
+      version: memory.version + 1,
+      updatedAt: timestamp(),
+    };
     await this.store.transaction(async () => {
       await this.store.updateMemory(updated);
       await this.#history(updated.id, "status", memory, updated, options.reason);
@@ -507,8 +830,11 @@ export class MemorySpace {
     await this.getSpace(input.spaceId);
     this.#validateFilters(input);
     const memories = await this.store.listMemories({
-      spaceId: input.spaceId, families: input.families, types: input.types,
-      tiers: input.tiers, statuses: input.statuses ?? ["active"]
+      spaceId: input.spaceId,
+      families: input.families,
+      types: input.types,
+      tiers: input.tiers,
+      statuses: input.statuses ?? ["active"],
     });
     const query = input.query ?? "";
     const matches = memories.map((memory) => {
@@ -519,7 +845,7 @@ export class MemorySpace {
           canonicalSlotConflict: false,
           strongExact: false,
           keyContentMatchedTokens: [] as string[],
-          unresolvedQueryTokens: [] as string[]
+          unresolvedQueryTokens: [] as string[],
         };
       }
       const match = scoreLexicalMemory(query, memory);
@@ -529,24 +855,28 @@ export class MemorySpace {
         canonicalSlotConflict: match.canonicalSlotConflict,
         strongExact: match.exactKey || match.exactContentPhrase,
         keyContentMatchedTokens: match.keyContentMatchedTokens,
-        unresolvedQueryTokens: match.unresolvedQueryTokens
+        unresolvedQueryTokens: match.unresolvedQueryTokens,
       };
     });
-    const hasUnsupportedCanonicalConflict = matches.some((candidate) => (
-      candidate.canonicalSlotConflict
-      && candidate.unresolvedQueryTokens.some((unresolvedToken) => (
-        !matches.some((support) => (
-          support.memory.id !== candidate.memory.id
-          && support.score > 0
-          && support.keyContentMatchedTokens.includes(unresolvedToken)
-        ))
-      ))
-    ));
+    const hasUnsupportedCanonicalConflict = matches.some(
+      (candidate) =>
+        candidate.canonicalSlotConflict &&
+        candidate.unresolvedQueryTokens.some(
+          (unresolvedToken) =>
+            !matches.some(
+              (support) =>
+                support.memory.id !== candidate.memory.id &&
+                support.score > 0 &&
+                support.keyContentMatchedTokens.includes(unresolvedToken)
+            )
+        )
+    );
     if (
-      query.trim() !== ""
-      && !matches.some((match) => match.strongExact)
-      && hasUnsupportedCanonicalConflict
-    ) return [];
+      query.trim() !== "" &&
+      !matches.some((match) => match.strongExact) &&
+      hasUnsupportedCanonicalConflict
+    )
+      return [];
     const results = matches
       .filter((result) => query.trim() === "" || result.score > 0)
       .map(({ memory, score }) => ({ memory, score }));
@@ -558,33 +888,26 @@ export class MemorySpace {
     spaceId: string,
     key: string
   ): Promise<Memory | undefined> {
-    const space = await this.getSpace(requiredString(spaceId, "spaceId"));
-    const candidate = requiredString(key, "memory.key");
-    const normalizedCandidate = normalizeLexicalText(candidate);
-    const rawMatch = await this.store.findActiveMemoryByKey(space.id, candidate);
-    if (
-      rawMatch?.tier === "indexed"
-      && normalizeLexicalText(rawMatch.key ?? "") === normalizedCandidate
-    ) {
-      return rawMatch;
-    }
-    const eligible = await this.store.listMemories({
-      spaceId: space.id,
-      tiers: ["indexed"],
-      statuses: ["active"]
-    });
-    return eligible.find((memory) => memory.key !== undefined
-      && normalizeLexicalText(memory.key) === normalizedCandidate);
+    const match = await this.findActiveMemoryByNormalizedKey(spaceId, key);
+    return match?.tier === "indexed" ? match : undefined;
   }
 
   async context(input: MemorySearchInput): Promise<ContextResult> {
     const results = await this.search(input);
     const rendered = [
-      `# Memory Context: ${input.query ?? ""}`, "",
-      results.length ? results.map(({ memory }) => [
-        `## ${memory.type}: ${memory.key ?? memory.id}`, memory.content,
-        `Memory: ${memory.id} | Tier: ${memory.tier} | Source session: ${memory.sourceSessionId ?? "unknown"}`
-      ].join("\n")).join("\n\n") : "(no relevant memory)"
+      `# Memory Context: ${input.query ?? ""}`,
+      "",
+      results.length
+        ? results
+            .map(({ memory }) =>
+              [
+                `## ${memory.type}: ${memory.key ?? memory.id}`,
+                memory.content,
+                `Memory: ${memory.id} | Tier: ${memory.tier} | Source session: ${memory.sourceSessionId ?? "unknown"}`,
+              ].join("\n")
+            )
+            .join("\n\n")
+        : "(no relevant memory)",
     ].join("\n");
     return { query: input.query ?? "", results, rendered };
   }
@@ -594,23 +917,38 @@ export class MemorySpace {
     const cached = await this.#safeCacheGet<BootstrapResult>(cacheKey);
     if (cached) return cached;
     const space = await this.getSpace(spaceId);
-    const coreMemories = (await this.store.listMemories({
-      spaceId, tiers: ["core"], statuses: ["active"]
-    })).sort((a, b) => a.type.localeCompare(b.type) || (a.key ?? "").localeCompare(b.key ?? "") || a.id.localeCompare(b.id));
+    const coreMemories = (
+      await this.store.listMemories({
+        spaceId,
+        tiers: ["core"],
+        statuses: ["active"],
+      })
+    ).sort(
+      (a, b) =>
+        a.type.localeCompare(b.type) ||
+        (a.key ?? "").localeCompare(b.key ?? "") ||
+        a.id.localeCompare(b.id)
+    );
     const handoffSnapshot = await this.store.findLatestHandoff(spaceId);
     const lines = ["# Space Context"];
     for (const section of sections) {
-      lines.push("", `## ${section}`, list(coreMemories.filter((memory) => sectionFor(memory) === section).map(summary)));
+      lines.push(
+        "",
+        `## ${section}`,
+        list(coreMemories.filter((memory) => sectionFor(memory) === section).map(summary))
+      );
     }
-    const handoff = handoffSnapshot ? [
-      handoffSnapshot.goal ? `Goal: ${handoffSnapshot.goal}` : "",
-      ...handoffSnapshot.completed.map((value) => `Completed: ${value}`),
-      ...handoffSnapshot.activeTasks.map((value) => `Active task: ${value}`),
-      ...handoffSnapshot.decisions.map((value) => `Decision: ${value}`),
-      ...handoffSnapshot.blockers.map((value) => `Blocker: ${value}`),
-      ...handoffSnapshot.openQuestions.map((value) => `Open question: ${value}`),
-      ...handoffSnapshot.nextSteps.map((value) => `Next step: ${value}`)
-    ].filter(Boolean) : [];
+    const handoff = handoffSnapshot
+      ? [
+          handoffSnapshot.goal ? `Goal: ${handoffSnapshot.goal}` : "",
+          ...handoffSnapshot.completed.map((value) => `Completed: ${value}`),
+          ...handoffSnapshot.activeTasks.map((value) => `Active task: ${value}`),
+          ...handoffSnapshot.decisions.map((value) => `Decision: ${value}`),
+          ...handoffSnapshot.blockers.map((value) => `Blocker: ${value}`),
+          ...handoffSnapshot.openQuestions.map((value) => `Open question: ${value}`),
+          ...handoffSnapshot.nextSteps.map((value) => `Next step: ${value}`),
+        ].filter(Boolean)
+      : [];
     lines.push("", "## Latest Handoff", list(handoff));
     const result = { space, coreMemories, handoffSnapshot, context: lines.join("\n") };
     await this.#safeCacheSet(cacheKey, result, 60);
@@ -649,24 +987,44 @@ export class MemorySpace {
       return existing;
     }
     const fromEvent = session.lastCheckpointEventId
-      ? await this.#sessionEvent(session.id, session.lastCheckpointEventId) : undefined;
+      ? await this.#sessionEvent(session.id, session.lastCheckpointEventId)
+      : undefined;
     if (existing) this.#assertCheckpointIdentity(input.toEventId, existing);
     const resolvedToEventId = input.toEventId ?? existing?.toEventId;
     const toEvent = resolvedToEventId
-      ? await this.#sessionEvent(session.id, resolvedToEventId) : await this.store.findLatestEvent(session.id);
+      ? await this.#sessionEvent(session.id, resolvedToEventId)
+      : await this.store.findLatestEvent(session.id);
     if (!toEvent) throw new ValidationError("Cannot checkpoint a session with no events");
     if (toEvent.sequence <= (fromEvent?.sequence ?? 0)) {
-      throw new ValidationError("toEventId must be after the previous successful checkpoint boundary");
+      throw new ValidationError(
+        "toEventId must be after the previous successful checkpoint boundary"
+      );
     }
-    const events = await this.store.listEvents(session.id, fromEvent?.sequence ?? 0, toEvent.sequence);
-    let checkpoint: Checkpoint = existing ? {
-      ...existing, fromEventId: session.lastCheckpointEventId, toEventId: toEvent.id,
-      status: "processing", handoffSnapshotId: undefined, error: undefined, completedAt: undefined
-    } : {
-      id: randomUUID(), spaceId: session.spaceId, sessionId: session.id,
-      fromEventId: session.lastCheckpointEventId, toEventId: toEvent.id,
-      idempotencyKey, status: "processing", createdAt: timestamp()
-    };
+    const events = await this.store.listEvents(
+      session.id,
+      fromEvent?.sequence ?? 0,
+      toEvent.sequence
+    );
+    let checkpoint: Checkpoint = existing
+      ? {
+          ...existing,
+          fromEventId: session.lastCheckpointEventId,
+          toEventId: toEvent.id,
+          status: "processing",
+          handoffSnapshotId: undefined,
+          error: undefined,
+          completedAt: undefined,
+        }
+      : {
+          id: randomUUID(),
+          spaceId: session.spaceId,
+          sessionId: session.id,
+          fromEventId: session.lastCheckpointEventId,
+          toEventId: toEvent.id,
+          idempotencyKey,
+          status: "processing",
+          createdAt: timestamp(),
+        };
     if (existing) {
       await this.store.updateCheckpoint(checkpoint);
     } else {
@@ -677,8 +1035,12 @@ export class MemorySpace {
         this.#assertCheckpointIdentity(input.toEventId ?? toEvent.id, existing);
         if (existing.status === "completed") return existing;
         checkpoint = {
-          ...existing, fromEventId: session.lastCheckpointEventId, status: "processing",
-          handoffSnapshotId: undefined, error: undefined, completedAt: undefined
+          ...existing,
+          fromEventId: session.lastCheckpointEventId,
+          status: "processing",
+          handoffSnapshotId: undefined,
+          error: undefined,
+          completedAt: undefined,
         };
         await this.store.updateCheckpoint(checkpoint);
       }
@@ -690,53 +1052,101 @@ export class MemorySpace {
       const projectBinding = await this.store.findSessionProjectBinding(session.id);
       candidates = await this.extractor.extract(events, {
         session,
+        trigger: "checkpoint",
+        operationId: checkpoint.id,
         checkpointId: checkpoint.id,
-        projectBinding
+        projectBinding,
       });
-      if (!Array.isArray(candidates)) throw new ValidationError("Extractor must return a MemoryCandidate array");
+      if (!Array.isArray(candidates))
+        throw new ValidationError("Extractor must return a MemoryCandidate array");
       const eventIds = new Set(events.map((event) => event.id));
-      const normalized = candidates.map((candidate, index) => this.#validateCandidate(candidate, index, eventIds));
+      const normalized = candidates.map((candidate, index) =>
+        this.#validateCandidate(candidate, index, eventIds)
+      );
       completed = await this.store.transaction(async () => {
         const currentSession = await this.getSession(session.id);
         if (currentSession.lastCheckpointEventId !== session.lastCheckpointEventId) {
-          throw new ConflictError("Checkpoint boundary changed while processing", "STALE_CHECKPOINT_BOUNDARY");
+          throw new ConflictError(
+            "Checkpoint boundary changed while processing",
+            "STALE_CHECKPOINT_BOUNDARY"
+          );
         }
         for (const candidate of normalized) {
           if (candidate.operation !== "ignore") {
             const admission = decideCoreAdmission(candidate);
-            await this.#commitMemory({
-              ...candidate, spaceId: session.spaceId, sourceSessionId: session.id,
-              sourceAgentId: session.agentId, tier: admission.tier,
-              admissionReason: admission.reason,
-              reason: candidate.promoteReason ?? "checkpoint extraction"
-            }, "extractor");
+            const fingerprint = memoryCandidateFingerprint(session.id, candidate);
+            const receipt = await this.store.findMemoryCandidateCommitReceipt(
+              session.id,
+              fingerprint
+            );
+            const memory = await this.#commitMemory(
+              {
+                ...candidate,
+                targetMemoryId: receipt?.memoryId ?? candidate.targetMemoryId,
+                spaceId: session.spaceId,
+                sourceSessionId: session.id,
+                sourceAgentId: session.agentId,
+                tier: admission.tier,
+                admissionReason: admission.reason,
+                reason: candidate.promoteReason ?? "checkpoint extraction",
+              },
+              "extractor"
+            );
+            if (!receipt) {
+              await this.store.insertMemoryCandidateCommitReceipt({
+                id: randomUUID(),
+                sessionId: session.id,
+                fingerprint,
+                memoryId: memory.id,
+                firstCommitSource: "checkpoint",
+                sourceEventIds: [...new Set(candidate.sourceEventIds)].sort(),
+                createdAt: timestamp(),
+              });
+            }
           }
         }
-        await this.store.replaceCandidates(checkpoint.id, normalized.map((candidate) => ({
-          candidate, accepted: candidate.operation !== "ignore",
-          rejectionReason: candidate.operation === "ignore" ? "extractor ignored candidate" : undefined
-        })));
+        await this.store.replaceCandidates(
+          checkpoint.id,
+          normalized.map((candidate) => ({
+            candidate,
+            accepted: candidate.operation !== "ignore",
+            rejectionReason:
+              candidate.operation === "ignore" ? "extractor ignored candidate" : undefined,
+          }))
+        );
         const snapshot = await this.#buildSnapshot(session, checkpoint.id);
         await this.store.insertHandoff(snapshot);
         const completedAt = timestamp();
         const done: Checkpoint = {
-          ...checkpoint, status: "completed", handoffSnapshotId: snapshot.id, completedAt
+          ...checkpoint,
+          status: "completed",
+          handoffSnapshotId: snapshot.id,
+          completedAt,
         };
         await this.store.updateCheckpoint(done);
         await this.store.updateSession({
-          ...session, lastCheckpointEventId: toEvent.id,
-          latestHandoffSnapshotId: snapshot.id, updatedAt: completedAt
+          ...session,
+          lastCheckpointEventId: toEvent.id,
+          latestHandoffSnapshotId: snapshot.id,
+          updatedAt: completedAt,
         });
         return done;
       });
     } catch (error) {
       const failed: Checkpoint = {
-        ...checkpoint, status: "failed", error: error instanceof Error ? error.message : String(error)
+        ...checkpoint,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
       };
       await this.store.updateCheckpoint(failed);
-      await this.store.replaceCandidates(checkpoint.id, candidates.map((candidate) => ({
-        candidate, accepted: false, rejectionReason: failed.error
-      })));
+      await this.store.replaceCandidates(
+        checkpoint.id,
+        candidates.map((candidate) => ({
+          candidate,
+          accepted: false,
+          rejectionReason: failed.error,
+        }))
+      );
       throw error;
     }
     await this.#safeInvalidate(session.spaceId);
@@ -775,30 +1185,44 @@ export class MemorySpace {
     const family = requiredString(input.family, "memory.family") as MemoryFamily;
     if (!families.has(family)) throw new ValidationError(`Unsupported memory.family: ${family}`);
     const explicitTier = "tier" in input ? input.tier : undefined;
-    const tier = (explicitTier ?? (input as Partial<MemoryCandidate>).recommendedTier ?? "indexed") as MemoryTier;
+    const tier = (explicitTier ??
+      (input as Partial<MemoryCandidate>).recommendedTier ??
+      "indexed") as MemoryTier;
     if (!tiers.has(tier)) throw new ValidationError(`Unsupported memory.tier: ${tier}`);
     const status = ("status" in input ? input.status : undefined) ?? "active";
     if (!statuses.has(status)) throw new ValidationError(`Unsupported memory.status: ${status}`);
-    if (input.data !== undefined && (!input.data || typeof input.data !== "object" || Array.isArray(input.data))) {
+    if (
+      input.data !== undefined &&
+      (!input.data || typeof input.data !== "object" || Array.isArray(input.data))
+    ) {
       throw new ValidationError("memory.data must be an object");
     }
     return {
-      family, type: requiredString(input.type, "memory.type"),
-      key: optionalString(input.key, "memory.key"), content: requiredString(input.content, "memory.content"),
-      data: input.data, tier, status,
+      family,
+      type: requiredString(input.type, "memory.type"),
+      key: optionalString(input.key, "memory.key"),
+      content: requiredString(input.content, "memory.content"),
+      data: input.data,
+      tier,
+      status,
       importance: score(input.importance, 0.5, "memory.importance"),
-      confidence: score(input.confidence, 1, "memory.confidence")
+      confidence: score(input.confidence, 1, "memory.confidence"),
     };
   }
 
-  #validateCandidate(value: unknown, index: number, eventIds: Set<string>): MemoryCandidate & ValidatedMemory {
+  #validateCandidate(
+    value: unknown,
+    index: number,
+    eventIds: Set<string>
+  ): MemoryCandidate & ValidatedMemory {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new ValidationError(`Candidate ${index} must be an object`);
     }
     const candidate = value as Partial<MemoryCandidate>;
     const memory = this.#validateMemory(candidate);
     const operation = candidate.operation ?? "create";
-    if (!operations.has(operation)) throw new ValidationError(`Candidate ${index} has invalid operation`);
+    if (!operations.has(operation))
+      throw new ValidationError(`Candidate ${index} has invalid operation`);
     if (!Array.isArray(candidate.sourceEventIds) || candidate.sourceEventIds.length === 0) {
       throw new ValidationError(`Candidate ${index} must include sourceEventIds`);
     }
@@ -809,47 +1233,60 @@ export class MemorySpace {
       throw new ValidationError(`Candidate ${index} update requires key or targetMemoryId`);
     }
     return {
-      ...memory, recommendedTier: memory.tier, operation,
+      ...memory,
+      recommendedTier: memory.tier,
+      operation,
       sourceEventIds: [...new Set(candidate.sourceEventIds)],
       targetMemoryId: optionalString(candidate.targetMemoryId, "candidate.targetMemoryId"),
-      promoteReason: optionalString(candidate.promoteReason, "candidate.promoteReason")
+      promoteReason: optionalString(candidate.promoteReason, "candidate.promoteReason"),
     };
   }
 
   #validateFilters(input: MemorySearchInput): void {
     const validate = <T>(values: T[] | undefined, allowed: Set<T> | undefined, label: string) => {
       if (values === undefined) return;
-      if (!Array.isArray(values) || values.length === 0) throw new ValidationError(`${label} filter must be a non-empty array`);
-      if (allowed && values.some((value) => !allowed.has(value))) throw new ValidationError(`Invalid ${label} filter`);
+      if (!Array.isArray(values) || values.length === 0)
+        throw new ValidationError(`${label} filter must be a non-empty array`);
+      if (allowed && values.some((value) => !allowed.has(value)))
+        throw new ValidationError(`Invalid ${label} filter`);
     };
     validate(input.families, families, "family");
     validate(input.tiers, tiers, "tier");
     validate(input.statuses, statuses, "status");
-    if (!Number.isInteger(input.limit ?? 20) || (input.limit ?? 20) < 1 || (input.limit ?? 20) > 100) {
+    if (
+      !Number.isInteger(input.limit ?? 20) ||
+      (input.limit ?? 20) < 1 ||
+      (input.limit ?? 20) > 100
+    ) {
       throw new ValidationError("search limit must be an integer between 1 and 100");
     }
   }
 
   async #sessionEvent(sessionId: string, eventId: string): Promise<SessionEvent> {
     const event = await this.store.findEvent(sessionId, eventId);
-    if (!event) throw new ValidationError(`Event ${eventId} does not belong to Session ${sessionId}`);
+    if (!event)
+      throw new ValidationError(`Event ${eventId} does not belong to Session ${sessionId}`);
     return event;
   }
 
   async #assertCoreCapacity(spaceId: string, excludeMemoryId?: string): Promise<void> {
     const core = await this.store.listMemories({ spaceId, tiers: ["core"], statuses: ["active"] });
     if (core.filter((memory) => memory.id !== excludeMemoryId).length >= this.coreLimit) {
-      throw new ConflictError(`Core Memory capacity of ${this.coreLimit} reached`, "CORE_CAPACITY_REACHED");
+      throw new ConflictError(
+        `Core Memory capacity of ${this.coreLimit} reached`,
+        "CORE_CAPACITY_REACHED"
+      );
     }
   }
 
   async #existingTierForAdmission(
     existing: Memory,
     input: CommitInput,
-    actor: "explicit" | "extractor",
+    actor: "explicit" | "implicit" | "extractor",
     equivalent: boolean
   ): Promise<MemoryTier> {
     if (actor === "explicit") return existing.tier;
+    if (actor === "implicit") return "indexed";
     if (input.admissionReason === "eligible") return "core";
     if (input.admissionReason === "bounded-local") {
       if (equivalent && existing.tier === "core") {
@@ -861,11 +1298,17 @@ export class MemorySpace {
     return existing.tier;
   }
 
-  async #commitMemory(input: CommitInput, actor: "explicit" | "extractor"): Promise<Memory> {
+  async #commitMemory(
+    input: CommitInput,
+    actor: "explicit" | "implicit" | "extractor"
+  ): Promise<Memory> {
     let existing = input.targetMemoryId
       ? await this.getMemory(input.targetMemoryId)
-      : input.key ? await this.store.findActiveMemoryByKey(input.spaceId, input.key) : undefined;
-    if (existing && existing.spaceId !== input.spaceId) throw new ValidationError("targetMemoryId belongs to another Space");
+      : input.key
+        ? await this.store.findActiveMemoryByKey(input.spaceId, input.key)
+        : undefined;
+    if (existing && existing.spaceId !== input.spaceId)
+      throw new ValidationError("targetMemoryId belongs to another Space");
     if (existing?.key && (existing.family !== input.family || existing.type !== input.type)) {
       throw new ConflictError(
         `Memory key ${existing.key} is already bound to ${existing.family}/${existing.type}`,
@@ -874,21 +1317,31 @@ export class MemorySpace {
     }
     if (input.operation === "supersede" && existing) {
       const superseded: Memory = {
-        ...existing, status: "superseded", tier: "indexed",
-        version: existing.version + 1, updatedAt: timestamp()
+        ...existing,
+        status: "superseded",
+        tier: "indexed",
+        version: existing.version + 1,
+        updatedAt: timestamp(),
       };
       await this.store.updateMemory(superseded);
       await this.#history(
-        superseded.id, "supersede", existing, superseded, input.reason,
-        input.sourceSessionId, input.sourceEventIds
+        superseded.id,
+        "supersede",
+        existing,
+        superseded,
+        input.reason,
+        input.sourceSessionId,
+        input.sourceEventIds
       );
       if (!input.key) return superseded;
       existing = undefined;
     }
     const now = timestamp();
     if (existing) {
-      for (const eventId of input.sourceEventIds) await this.store.addMemorySource(existing.id, eventId, now);
-      const equivalent = normalizeLexicalText(existing.content) === normalizeLexicalText(input.content);
+      for (const eventId of input.sourceEventIds)
+        await this.store.addMemorySource(existing.id, eventId, now);
+      const equivalent =
+        normalizeLexicalText(existing.content) === normalizeLexicalText(input.content);
       if (equivalent) {
         let result = existing;
         const nextTier = await this.#existingTierForAdmission(existing, input, actor, true);
@@ -901,25 +1354,45 @@ export class MemorySpace {
           );
         }
         await this.#history(
-          existing.id, "deduplicate", existing, result, input.reason,
-          input.sourceSessionId, input.sourceEventIds
+          existing.id,
+          "deduplicate",
+          existing,
+          result,
+          input.reason,
+          input.sourceSessionId,
+          input.sourceEventIds
         );
         return result;
       }
-      const nextTier = input.status === "active"
-        ? await this.#existingTierForAdmission(existing, input, actor, false)
-        : "indexed";
+      const nextTier =
+        input.status === "active"
+          ? await this.#existingTierForAdmission(existing, input, actor, false)
+          : "indexed";
       if (nextTier === "core") await this.#assertCoreCapacity(input.spaceId, existing.id);
       const updated: Memory = {
-        ...existing, family: input.family, type: input.type, content: input.content, data: input.data,
-        tier: nextTier, status: input.status, importance: input.importance, confidence: input.confidence,
-        sourceSessionId: input.sourceSessionId, sourceAgentId: input.sourceAgentId,
-        version: existing.version + 1, updatedAt: now
+        ...existing,
+        family: input.family,
+        type: input.type,
+        content: input.content,
+        data: input.data,
+        tier: nextTier,
+        status: input.status,
+        importance: input.importance,
+        confidence: input.confidence,
+        sourceSessionId: input.sourceSessionId,
+        sourceAgentId: input.sourceAgentId,
+        version: existing.version + 1,
+        updatedAt: now,
       };
       await this.store.updateMemory(updated);
       await this.#history(
-        updated.id, "update", existing, updated, input.reason,
-        input.sourceSessionId, input.sourceEventIds
+        updated.id,
+        "update",
+        existing,
+        updated,
+        input.reason,
+        input.sourceSessionId,
+        input.sourceEventIds
       );
       if (existing.tier === "indexed" && updated.tier === "core") {
         await this.#history(
@@ -937,15 +1410,35 @@ export class MemorySpace {
     const tier = input.status === "active" ? input.tier : "indexed";
     if (tier === "core") await this.#assertCoreCapacity(input.spaceId);
     const created: Memory = {
-      id: randomUUID(), spaceId: input.spaceId, family: input.family, type: input.type,
-      key: input.key, content: input.content, data: input.data, tier, status: input.status,
-      importance: input.importance, confidence: input.confidence,
-      sourceSessionId: input.sourceSessionId, sourceAgentId: input.sourceAgentId,
-      version: 1, createdAt: now, updatedAt: now
+      id: randomUUID(),
+      spaceId: input.spaceId,
+      family: input.family,
+      type: input.type,
+      key: input.key,
+      content: input.content,
+      data: input.data,
+      tier,
+      status: input.status,
+      importance: input.importance,
+      confidence: input.confidence,
+      sourceSessionId: input.sourceSessionId,
+      sourceAgentId: input.sourceAgentId,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
     };
     await this.store.insertMemory(created);
-    for (const eventId of input.sourceEventIds) await this.store.addMemorySource(created.id, eventId, now);
-    await this.#history(created.id, "create", undefined, created, input.reason, input.sourceSessionId, input.sourceEventIds);
+    for (const eventId of input.sourceEventIds)
+      await this.store.addMemorySource(created.id, eventId, now);
+    await this.#history(
+      created.id,
+      "create",
+      undefined,
+      created,
+      input.reason,
+      input.sourceSessionId,
+      input.sourceEventIds
+    );
     return created;
   }
 
@@ -963,20 +1456,36 @@ export class MemorySpace {
   }
 
   async #history(
-    memoryId: string, operation: string, before?: Memory, after?: Memory, reason?: string,
-    sourceSessionId?: string, sourceEventIds: string[] = []
+    memoryId: string,
+    operation: string,
+    before?: Memory,
+    after?: Memory,
+    reason?: string,
+    sourceSessionId?: string,
+    sourceEventIds: string[] = []
   ): Promise<void> {
     await this.store.addMemoryHistory({
-      memoryId, operation, before, after, reason, sourceSessionId, sourceEventIds, createdAt: timestamp()
+      memoryId,
+      operation,
+      before,
+      after,
+      reason,
+      sourceSessionId,
+      sourceEventIds,
+      createdAt: timestamp(),
     });
   }
 
   async #buildSnapshot(session: Session, checkpointId: string): Promise<HandoffSnapshot> {
     const activeCore = await this.store.listMemories({
-      spaceId: session.spaceId, tiers: ["core"], statuses: ["active"]
+      spaceId: session.spaceId,
+      tiers: ["core"],
+      statuses: ["active"],
     });
     const resolvedTasks = await this.store.listMemories({
-      spaceId: session.spaceId, types: ["task"], statuses: ["resolved"]
+      spaceId: session.spaceId,
+      types: ["task"],
+      statuses: ["resolved"],
     });
     const completedTasks: Memory[] = [];
     for (const memory of resolvedTasks) {
@@ -991,12 +1500,15 @@ export class MemorySpace {
     const projection = buildHandoffProjection({
       activeCore,
       completedTasks,
-      historiesByMemoryId
+      historiesByMemoryId,
     });
     return {
-      id: randomUUID(), spaceId: session.spaceId, sessionId: session.id, checkpointId,
+      id: randomUUID(),
+      spaceId: session.spaceId,
+      sessionId: session.id,
+      checkpointId,
       ...projection,
-      createdAt: timestamp()
+      createdAt: timestamp(),
     };
   }
 

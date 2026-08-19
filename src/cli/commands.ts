@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
+import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
 import {
   formatStageB1Comparison,
   type StageB1ComparisonReport,
@@ -20,7 +21,10 @@ import {
   ProjectExtractionRulesInvalidError,
   readProjectExtractionRules,
 } from "../binding/extraction-rules.ts";
-import type { ImplicitRecallConfiguration } from "../binding/project-config.ts";
+import type {
+  ImplicitRecallConfiguration,
+  ImplicitRememberConfiguration,
+} from "../binding/project-config.ts";
 import type { Space } from "../domain/types.ts";
 import {
   readLocalProjectBinding,
@@ -117,6 +121,7 @@ export interface StatusReport {
   space: { id: string; name: string };
   binding: { source: "explicit" | "config"; configPath?: string };
   implicitRecall: ImplicitRecallConfiguration;
+  implicitRemember: ImplicitRememberConfiguration;
   latestCheckpoint?: { id: string };
   latestHandoff?: {
     id: string;
@@ -164,6 +169,7 @@ export async function runInit(options: InitOptions, context: CommandContext): Pr
     context.write(`Space:   ${space.name} (${space.id})`);
     context.write(`Binding: ${localBinding.configPath ?? localBinding.source}`);
     context.write(`Implicit Recall: ${localBinding.implicitRecall?.effectiveMode ?? "off"}`);
+    context.write(`Implicit Remember: ${localBinding.implicitRemember?.effectiveMode ?? "off"}`);
     providerNextSteps(context.write);
     return;
   }
@@ -179,6 +185,9 @@ export async function runInit(options: InitOptions, context: CommandContext): Pr
     context.write(`Space:   ${space.name} (${space.id})`);
     context.write(`Binding: ${inheritedBinding.configPath ?? inheritedBinding.source}`);
     context.write(`Implicit Recall: ${inheritedBinding.implicitRecall?.effectiveMode ?? "off"}`);
+    context.write(
+      `Implicit Remember: ${inheritedBinding.implicitRemember?.effectiveMode ?? "off"}`
+    );
     providerNextSteps(context.write);
     return;
   }
@@ -215,6 +224,7 @@ export async function runInit(options: InitOptions, context: CommandContext): Pr
   context.write(`Space:   ${space.name} (${space.id})`);
   context.write(`Binding: ${configPath}`);
   context.write("Implicit Recall: exact");
+  context.write("Implicit Remember: conservative");
   providerNextSteps(context.write);
 }
 
@@ -411,6 +421,35 @@ export async function runDoctor(
     );
   }
 
+  if (binding?.implicitRemember?.source === "invalid") {
+    checks.push(
+      check(
+        "implicit-remember",
+        "error",
+        `${binding.implicitRemember.error}; effective mode is off.`,
+        `Repair implicitRemember.mode in ${binding.configPath ?? ".memory-space/config.json"}.`
+      )
+    );
+  } else if (binding?.implicitRemember) {
+    checks.push(
+      check(
+        "implicit-remember",
+        binding.implicitRemember.effectiveMode === "off" ? "warn" : "ok",
+        binding.implicitRemember.source === "default"
+          ? "Effective mode: off (default; project has not opted in)."
+          : `Effective mode: ${binding.implicitRemember.effectiveMode} (explicit).`
+      )
+    );
+  } else {
+    checks.push(
+      check(
+        "implicit-remember",
+        "error",
+        "No matching project binding can authorize implicit remember; effective mode is off."
+      )
+    );
+  }
+
   if (binding) {
     try {
       const rules = await readProjectExtractionRules(binding);
@@ -521,6 +560,11 @@ export async function runStatus(
       source: "invalid",
       error: "No project disclosure configuration is available",
     },
+    implicitRemember: binding.implicitRemember ?? {
+      effectiveMode: "off",
+      source: "invalid",
+      error: "No project implicit-write configuration is available",
+    },
     latestCheckpoint: handoff ? { id: handoff.checkpointId } : undefined,
     latestHandoff: handoff
       ? {
@@ -534,7 +578,10 @@ export async function runStatus(
   };
   if (options.json) {
     context.write(JSON.stringify(report, null, 2));
-    return report.implicitRecall.source === "invalid" ? 1 : 0;
+    return report.implicitRecall.source === "invalid" ||
+      report.implicitRemember.source === "invalid"
+      ? 1
+      : 0;
   }
   context.write("Memory Space status");
   context.write(`Daemon:           OK (${context.client.endpoint})`);
@@ -548,6 +595,13 @@ export async function runStatus(
     }`
   );
   context.write(
+    `Implicit Remember:${
+      report.implicitRemember.source === "invalid"
+        ? ` ERROR (${report.implicitRemember.error}; effective mode off)`
+        : ` ${report.implicitRemember.effectiveMode} (${report.implicitRemember.source})`
+    }`
+  );
+  context.write(
     `Latest checkpoint:${report.latestCheckpoint ? ` ${report.latestCheckpoint.id}` : " none"}`
   );
   context.write(`Latest Handoff:   ${report.latestHandoff ? report.latestHandoff.id : "none"}`);
@@ -556,7 +610,9 @@ export async function runStatus(
     context.write(`Handoff created:  ${report.latestHandoff.createdAt}`);
     context.write(`Next steps:       ${report.latestHandoff.nextSteps.join("; ") || "none"}`);
   }
-  return report.implicitRecall.source === "invalid" ? 1 : 0;
+  return report.implicitRecall.source === "invalid" || report.implicitRemember.source === "invalid"
+    ? 1
+    : 0;
 }
 
 export async function runEval(
@@ -605,6 +661,36 @@ export async function runP7ImplicitRecallEvalCommand(
       `Cross-provider matrix             ${report.metrics.crossProviderMatrix.passed}/${report.metrics.crossProviderMatrix.total}`
     );
     write(`Hard correctness                  ${report.hardCorrectness.toUpperCase()}`);
+  }
+  return report.hardCorrectness === "pass" ? 0 : 1;
+}
+
+export async function runP8ImplicitRememberEvalCommand(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<P8ImplicitRememberReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    write("P8 implicit turn-time remember eval");
+    write("");
+    write(
+      `Implicit Remember Precision       ${report.metrics.implicitRememberPrecision.toFixed(6)}`
+    );
+    write(`Implicit Core Write Rate         ${report.metrics.implicitCoreWriteRate.toFixed(6)}`);
+    write(
+      `Same-Evidence Duplicate Rate     ${report.metrics.sameEvidenceDuplicateRate.toFixed(6)}`
+    );
+    write(`Replay Duplicate Rate            ${report.metrics.replayDuplicateRate.toFixed(6)}`);
+    write(
+      `Assistant-Only Persistence Rate  ${report.metrics.assistantOnlyPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Lifecycle Blocking Failure Rate  ${report.metrics.lifecycleBlockingFailureRate.toFixed(6)}`
+    );
+    write(`Hard correctness                 ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;
 }

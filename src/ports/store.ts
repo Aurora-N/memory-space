@@ -6,7 +6,7 @@ import type {
   MemoryTier,
   Session,
   SessionEvent,
-  Space
+  Space,
 } from "../domain/types.ts";
 import type { SessionProjectBinding } from "./session-binding.ts";
 
@@ -19,6 +19,17 @@ export interface MemoryHistoryRecord {
   after?: Memory;
   reason?: string;
   sourceSessionId?: string;
+  sourceEventIds: string[];
+  createdAt: string;
+}
+
+/** Durable idempotency receipt for one extractor candidate and source evidence set. */
+export interface MemoryCandidateCommitReceipt {
+  id: string;
+  sessionId: string;
+  fingerprint: string;
+  memoryId: string;
+  firstCommitSource: "implicit" | "checkpoint";
   sourceEventIds: string[];
   createdAt: string;
 }
@@ -49,7 +60,10 @@ export interface MemoryStore {
   /** Atomically returns the existing provider identity or creates it once. */
   getOrCreateProviderSession(session: Session): Promise<{ session: Session; created: boolean }>;
   findSession(id: string): Promise<Session | undefined>;
-  findSessionByProviderIdentity(provider: string, externalSessionId: string): Promise<Session | undefined>;
+  findSessionByProviderIdentity(
+    provider: string,
+    externalSessionId: string
+  ): Promise<Session | undefined>;
   /** Returns Space Sessions ordered by latest update, then stable ID. */
   listSessions(spaceId: string): Promise<Session[]>;
   /** Preserves the first trusted project binding recorded for a Session. */
@@ -61,7 +75,18 @@ export interface MemoryStore {
   findEvent(sessionId: string, eventId: string): Promise<SessionEvent | undefined>;
   findLatestEvent(sessionId: string): Promise<SessionEvent | undefined>;
   /** Returns events in ascending sequence order within inclusive upper and exclusive lower bounds. */
-  listEvents(sessionId: string, afterSequence?: number, throughSequence?: number): Promise<SessionEvent[]>;
+  listEvents(
+    sessionId: string,
+    afterSequence?: number,
+    throughSequence?: number
+  ): Promise<SessionEvent[]>;
+  /** Returns the newest bounded event suffix in ascending sequence order. */
+  listRecentEvents(
+    sessionId: string,
+    afterSequence: number,
+    throughSequence: number,
+    limit: number
+  ): Promise<SessionEvent[]>;
 
   insertMemory(memory: Memory): Promise<void>;
   updateMemory(memory: Memory): Promise<void>;
@@ -73,15 +98,25 @@ export interface MemoryStore {
   addMemoryHistory(record: Omit<MemoryHistoryRecord, "id">): Promise<void>;
   /** Returns immutable history in ascending persistence order. */
   listMemoryHistory(memoryId: string): Promise<MemoryHistoryRecord[]>;
+  findMemoryCandidateCommitReceipt(
+    sessionId: string,
+    fingerprint: string
+  ): Promise<MemoryCandidateCommitReceipt | undefined>;
+  insertMemoryCandidateCommitReceipt(receipt: MemoryCandidateCommitReceipt): Promise<void>;
 
   insertCheckpoint(checkpoint: Checkpoint): Promise<void>;
   /** Atomically returns the checkpoint for an idempotency key or creates it once. */
-  getOrCreateCheckpoint(checkpoint: Checkpoint): Promise<{ checkpoint: Checkpoint; created: boolean }>;
+  getOrCreateCheckpoint(
+    checkpoint: Checkpoint
+  ): Promise<{ checkpoint: Checkpoint; created: boolean }>;
   updateCheckpoint(checkpoint: Checkpoint): Promise<void>;
   findCheckpoint(id: string): Promise<Checkpoint | undefined>;
   findCheckpointByIdempotency(sessionId: string, key: string): Promise<Checkpoint | undefined>;
   /** Replaces the complete candidate decision set for one checkpoint. */
-  replaceCandidates(checkpointId: string, candidates: Array<{ candidate: unknown; accepted: boolean; rejectionReason?: string }>): Promise<void>;
+  replaceCandidates(
+    checkpointId: string,
+    candidates: Array<{ candidate: unknown; accepted: boolean; rejectionReason?: string }>
+  ): Promise<void>;
 
   insertHandoff(snapshot: HandoffSnapshot): Promise<void>;
   findHandoff(id: string): Promise<HandoffSnapshot | undefined>;

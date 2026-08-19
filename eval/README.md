@@ -30,6 +30,23 @@ normalization/rendering, but does not require a daemon or authenticated CLI.
 Real native/production bridge evidence is recorded in
 [`../docs/reports/quality/P7_PROVIDER_CAPABILITY_SPIKE.md`](../docs/reports/quality/P7_PROVIDER_CAPABILITY_SPIKE.md).
 
+## P8 implicit turn-time remember
+
+The P8 deterministic suite covers opaque assignments, durable decisions,
+transient and assistant-only rejection, recalled-content repetition, opt-out,
+invalid configuration, replay, checkpoint convergence, Core collision, and
+Space mismatch:
+
+```bash
+pnpm memory-space eval implicit-remember
+pnpm memory-space eval implicit-remember --json
+pnpm run smoke:p8 -- --provider claude
+```
+
+The evaluator uses only persisted SessionEvents and local deterministic
+extraction. Real-provider results are recorded in
+[`../docs/reports/quality/P8_IMPLICIT_REMEMBER_RESULT.md`](../docs/reports/quality/P8_IMPLICIT_REMEMBER_RESULT.md).
+
 The P4 cross-session proof is implemented once in `eval/support/cross-session-runner.ts`. The `node:test` wrapper and P5 CLI both call that canonical runner:
 
 ```bash

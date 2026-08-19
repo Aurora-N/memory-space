@@ -2,7 +2,7 @@ import { ValidationError } from "../domain/errors.ts";
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
 import { builtInKeySchemas, builtInMemoryKeys } from "./extraction-contract.ts";
-import { isTransientExtractionEvidence } from "./extraction-policy.ts";
+import { isTransientExtractionEvidence } from "../application/extraction-policy.ts";
 
 const families = new Set<MemoryFamily>(["knowledge", "state", "episode", "procedure"]);
 const ruleFields = new Set([

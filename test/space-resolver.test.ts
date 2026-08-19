@@ -89,6 +89,10 @@ test("SpaceResolver keeps binding validity separate from implicit recall validit
       effectiveMode: "exact",
       source: "default",
     });
+    assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRemember, {
+      effectiveMode: "off",
+      source: "default",
+    });
 
     for (const mode of ["off", "exact", "lexical"] as const) {
       writeFileSync(
@@ -120,6 +124,38 @@ test("SpaceResolver keeps binding validity separate from implicit recall validit
       assert.equal(binding.implicitRecall?.effectiveMode, "off");
       assert.equal(binding.implicitRecall?.source, "invalid");
       assert.match(binding.implicitRecall?.error ?? "", /implicitRecall/u);
+    }
+
+    for (const mode of ["off", "conservative"] as const) {
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-remember",
+          implicitRemember: { mode },
+        })
+      );
+      assert.deepEqual((await resolver.resolve({ cwd: root })).implicitRemember, {
+        configuredMode: mode,
+        effectiveMode: mode,
+        source: "explicit",
+      });
+    }
+
+    for (const implicitRemember of [{ mode: "semantic" }, [], { mode: 123 }]) {
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-still-valid",
+          implicitRemember,
+        })
+      );
+      const binding = await resolver.resolve({ cwd: root });
+      assert.equal(binding.spaceId, "space-still-valid");
+      assert.equal(binding.implicitRemember?.effectiveMode, "off");
+      assert.equal(binding.implicitRemember?.source, "invalid");
+      assert.match(binding.implicitRemember?.error ?? "", /implicitRemember/u);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

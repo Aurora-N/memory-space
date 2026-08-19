@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "scenarioId": "opaque-stable-assignment",
+      "category": "opaque-assignment",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "natural-durable-decision",
+      "category": "natural-decision",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "transient-execution-narration",
+      "category": "transient",
+      "durable": false,
+      "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "assistant-only-repetition",
+      "category": "assistant-only",
+      "durable": false,
+      "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "p7-recalled-content-repetition",
+      "category": "recalled-repetition",
+      "durable": false,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "per-turn-opt-out",
+      "category": "opt-out",
+      "durable": false,
+      "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "invalid-project-config",
+      "category": "invalid-config",
+      "durable": false,
+      "expectedMemoryRows": 0
+    },
+    {
+      "scenarioId": "replayed-stop",
+      "category": "replay",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "stop-then-session-end",
+      "category": "stop-checkpoint",
+      "durable": true,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "existing-core-key-collision",
+      "category": "core-collision",
+      "durable": false,
+      "expectedMemoryRows": 1
+    },
+    {
+      "scenarioId": "space-binding-mismatch",
+      "category": "space-mismatch",
+      "durable": false,
+      "expectedMemoryRows": 0
+    }
+  ]
+}

@@ -24,6 +24,7 @@
     "smoke:codex:p2": "node scripts/codex-p2-real-smoke.mjs",
     "smoke:p7:capability": "node scripts/p7-provider-capability-spike.mjs",
     "smoke:p7": "node scripts/p7-real-smoke.mjs",
+    "smoke:p8": "node scripts/p8-real-smoke.mjs",
     "mcp:standalone": "node --experimental-strip-types src/mcp/standalone-stdio.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts",
     "lint:source": "node scripts/lint.mjs",
@@ -32,7 +33,7 @@
     "lint:comments": "node scripts/comment-lint.mjs",
     "lint": "pnpm run lint:source && pnpm run lint:biome && pnpm run lint:architecture && pnpm run lint:comments",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm run lint && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test && node scripts/p7-provider-capability-spike.mjs --self-test && node scripts/p7-real-smoke.mjs --self-test",
+    "check": "pnpm run lint && tsc --noEmit && node --experimental-strip-types --test test/*.test.ts eval/*.test.ts eval/quality/*.test.ts && node scripts/codex-p2-real-smoke.mjs --self-test && node scripts/claude-p3-real-smoke.mjs --self-test && node scripts/p7-provider-capability-spike.mjs --self-test && node scripts/p7-real-smoke.mjs --self-test && node scripts/p8-real-smoke.mjs --self-test",
     "check:workspace": "corepack pnpm --recursive --include-workspace-root --if-present run check"
   },
   "devDependencies": {

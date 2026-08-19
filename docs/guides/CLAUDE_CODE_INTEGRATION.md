@@ -68,7 +68,9 @@ curl --fail --silent \
 ```json
 {
   "version": 1,
-  "spaceId": "my-project"
+  "spaceId": "my-project",
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -115,7 +117,7 @@ The native mapping follows the current official lifecycle contract:
 |---|---|
 | `SessionStart` | bind/reuse Session, bootstrap, inject `additionalContext` |
 | `UserPromptSubmit` | append the original full user prompt, then optionally inject bounded active Indexed Memory according to the trusted project `implicitRecall.mode` |
-| `Stop` | append the reliable `last_assistant_message` when non-empty |
+| `Stop` | append the reliable `last_assistant_message` when non-empty, then best-effort implicit remember from persisted user-backed evidence when configured |
 | `PreCompact` | checkpoint only uncommitted events |
 | `SessionEnd` | checkpoint only uncommitted events |
 
@@ -124,6 +126,10 @@ privilege-shaped custom fields are not trusted Memory commands. `PostToolUse`,
 `TaskCompleted`, and other Claude-only events are ignored by default. The
 native `transcript_path` is stored only as an opaque `TranscriptRef`; Memory
 Space does not parse or replicate the transcript.
+
+Implicit remember is not a checkpoint. A successful `Stop` may create or update
+only Indexed Memory; it does not create a Checkpoint/Handoff or advance the
+checkpoint boundary. Missing `implicitRemember` defaults to `off`.
 
 `SessionEnd` normally has a 1.5 second aggregate hook budget. The example sets
 an eight-second per-hook timeout, which Claude Code uses to raise that budget.

@@ -110,8 +110,8 @@ memory-space 把“聊天记录”与“项目记忆”分开：
 1. 项目通过 `.memory-space/config.json` 绑定到一个 `Space`。
 2. Agent 启动 Session 时，Lifecycle hook 解析或复用内部 Session，并注入 Core Memory 与最新 Handoff。
 3. 完整用户 prompt 和可靠的最终回复文本被记录为轻量对话事件；完整 transcript 文件不会被默认读取或复制进数据库。
-4. 每次用户 prompt 先被持久化，再按项目 `implicitRecall.mode` 从同一 Space 的 active Indexed Memory 中执行有界召回；Agent 仍可通过 MCP 显式搜索、记忆或提升 Memory。
-5. `PreCompact`、`SessionEnd` 或显式 checkpoint 将新事件提取为候选项；领域与准入策略再决定创建、更新、忽略及 Core/Indexed tier，最后在事务中更新 Memory 与 HandoffSnapshot。
+4. 每次用户 prompt 先被持久化，再按项目 `implicitRecall.mode` 从同一 Space 的 active Indexed Memory 中执行有界召回；可靠回复落库后，`implicitRemember.mode=conservative` 会从持久事件中保守提取用户提供的长期知识并只写入 Indexed。
+5. `PreCompact`、`SessionEnd` 或显式 checkpoint 仍扫描完整的未 checkpoint 事件范围；领域与准入策略再决定创建、更新、忽略及 Core/Indexed tier，最后在事务中更新 Memory 与 HandoffSnapshot。
 6. 同一 Provider 的 resume 复用原内部 Session；另一个 Provider 会创建自己的 Session，但只要绑定同一 Space，就能通过 Core/Handoff 接手工作，并通过 prompt-time 或显式召回读取 Indexed 细节。
 
 ### 核心模型
@@ -225,7 +225,8 @@ pnpm memory-space status "$PROJECT_ROOT"
 {
   "version": 1,
   "spaceId": "space_...",
-  "implicitRecall": { "mode": "exact" }
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -234,6 +235,7 @@ pnpm memory-space status "$PROJECT_ROOT"
 | `version` | `1` | 必填的配置格式版本。 |
 | `spaceId` | 非空字符串 | 必填；由 `init` 创建或确认。不要随意修改，已有 Provider Session 的 Space 绑定不会因此迁移。 |
 | `implicitRecall.mode` | `exact`、`lexical`、`off` | 可选；缺省为 `exact`。非法值会 fail-closed 为 `off`。 |
+| `implicitRemember.mode` | `conservative`、`off` | 可选；缺省为 `off`，已有项目升级后不会自动写入。新 `init` 绑定会显式使用 `conservative`。非法值会 fail-closed 为 `off`。 |
 
 - `exact`：仅按 prompt 中的稳定 Memory key 精确召回，默认且最保守；
 - `lexical`：同时执行 exact-key 与完整 prompt 的有界词面召回；
@@ -241,6 +243,10 @@ pnpm memory-space status "$PROJECT_ROOT"
 
 召回结果是“不可信历史上下文”，当前代码仍是事实来源。绑定损坏、Space
 不匹配或召回故障时，本次自动召回关闭，但 prompt 继续执行。
+
+`conservative` 只接受带当前用户消息证据的高置信度、非临时候选，并强制写入
+Indexed。它不会创建 Checkpoint/Handoff、推进 checkpoint 边界或修改已有 Core。
+用户可用“不要记住这次内容”或 `Do not remember this turn` 仅关闭本次自动写入。
 
 #### 自动提取规则：`.memory-space/extraction-rules.json`
 
@@ -530,8 +536,8 @@ The integration has two channels. Lifecycle hooks bootstrap context, perform pro
 1. A project binds to a `Space` through `.memory-space/config.json`.
 2. On Session start, a lifecycle hook resolves or reuses the internal Session and injects Core Memory plus the latest Handoff.
 3. Full user prompts and reliable final-response text are captured as lightweight conversation events; transcript files are not read or copied by default.
-4. Each user prompt is persisted first, then project `implicitRecall.mode` may perform bounded recall from active Indexed Memory in the same Space. MCP remains available for explicit search, remember, and promote operations.
-5. `PreCompact`, `SessionEnd`, or an explicit checkpoint extracts candidates. Domain and admission policy then decide create/update/ignore behavior and the Core/Indexed tier before Memory and HandoffSnapshot are updated transactionally.
+4. Each user prompt is persisted first, then project `implicitRecall.mode` may perform bounded recall from active Indexed Memory in the same Space. After a reliable assistant response is persisted, `implicitRemember.mode=conservative` may extract durable user-provided knowledge from persisted events and write it only to Indexed.
+5. `PreCompact`, `SessionEnd`, or an explicit checkpoint still scans the complete uncheckpointed event range. Domain and admission policy then decide create/update/ignore behavior and the Core/Indexed tier before Memory and HandoffSnapshot are updated transactionally.
 6. A same-provider resume reuses its internal Session. Another provider creates its own Session, but the same Space lets it continue through Core/Handoff and retrieve Indexed detail implicitly or explicitly.
 
 ### Memory model
@@ -651,7 +657,8 @@ directly. The nearest ancestor binding wins:
 {
   "version": 1,
   "spaceId": "space_...",
-  "implicitRecall": { "mode": "exact" }
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -660,6 +667,7 @@ directly. The nearest ancestor binding wins:
 | `version` | `1` | Required configuration format version. |
 | `spaceId` | non-empty string | Required; created or confirmed by `init`. Do not casually change it because existing provider Sessions do not migrate. |
 | `implicitRecall.mode` | `exact`, `lexical`, `off` | Optional; defaults to `exact`. Invalid values fail closed to `off`. |
+| `implicitRemember.mode` | `conservative`, `off` | Optional; defaults to `off`, so existing projects do not begin auto-writing after an upgrade. New `init` bindings explicitly use `conservative`. Invalid values fail closed to `off`. |
 
 - `exact`: recall only stable Memory keys present in the prompt; the most conservative default;
 - `lexical`: run bounded exact-key and full-prompt lexical recall;
@@ -668,6 +676,12 @@ directly. The nearest ancestor binding wins:
 Recall output is untrusted historical context; current code remains the source
 of truth. A malformed binding, Space mismatch, or recall failure disables
 automatic recall for that prompt without blocking the prompt.
+
+`conservative` accepts only high-confidence, non-transient candidates backed by
+a current user message and always writes Indexed. It does not create a
+Checkpoint/Handoff, advance checkpoint boundaries, or mutate existing Core.
+Users can disable one turn with `Do not remember this turn` or the documented
+Chinese equivalents.
 
 #### Automatic extraction rules: `.memory-space/extraction-rules.json`
 

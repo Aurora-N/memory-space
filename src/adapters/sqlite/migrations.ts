@@ -112,4 +112,22 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: "memory-candidate-commit-receipts",
+    sql: `
+      CREATE TABLE memory_candidate_commit_receipts (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        fingerprint TEXT NOT NULL,
+        memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+        first_commit_source TEXT NOT NULL CHECK (first_commit_source IN ('implicit','checkpoint')),
+        source_event_ids_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(session_id, fingerprint)
+      );
+      CREATE INDEX memory_candidate_commit_receipts_memory_idx
+        ON memory_candidate_commit_receipts(memory_id);
+    `,
+  },
 ];

@@ -1,8 +1,9 @@
+import { isDistinctiveStableKey } from "../application/stable-key.ts";
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
 import { builtInExtractionRules, DeclarativeRuleExtractor } from "./declarative-rule-extractor.ts";
 import { builtInMemoryKeys } from "./extraction-contract.ts";
-import { isTransientExtractionEvidence } from "./extraction-policy.ts";
+import { isTransientExtractionEvidence } from "../application/extraction-policy.ts";
 
 interface TypeDefinition {
   type: string;
@@ -249,6 +250,28 @@ function naturalCandidate(line: string, sourceEventId: string): MemoryCandidate 
   return undefined;
 }
 
+function opaqueAssignmentCandidate(
+  line: string,
+  sourceEventId: string
+): MemoryCandidate | undefined {
+  const match = line.match(/^([A-Za-z0-9][A-Za-z0-9._:/-]{2,127})\s*=\s*(\S(?:.*\S)?)$/u);
+  if (!match || !isDistinctiveStableKey(match[1])) return undefined;
+  const key = match[1];
+  const value = match[2];
+  if (/^(?:=|>|<)/u.test(value)) return undefined;
+  return {
+    family: "knowledge",
+    type: "fact",
+    key,
+    content: `${key} = ${value}`,
+    confidence: 0.98,
+    importance: 0.5,
+    recommendedTier: "indexed",
+    sourceEventIds: [sourceEventId],
+    operation: "update",
+  };
+}
+
 function structuredCandidates(event: SessionEvent): MemoryCandidate[] {
   if (event.type !== "memory") return [];
   const payload = event.payload;
@@ -290,6 +313,11 @@ export class RuleBasedExtractor implements MemoryExtractor {
         const special = this.specialCases.extractLine(line, event.id);
         if (special.length > 0) {
           candidates.push(...special);
+          continue;
+        }
+        const assignment = opaqueAssignmentCandidate(line, event.id);
+        if (assignment) {
+          candidates.push(assignment);
           continue;
         }
         if (explicit) {

@@ -3,36 +3,34 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
-import type { MemoryQualityReport } from "../../eval/quality/types.ts";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
+import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
 import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
-import type {
-  StageB2ExtractionComparisonReport
-} from "../../eval/quality/extraction-comparison.ts";
-import type {
-  StageB3CoreHandoffComparisonReport
-} from "../../eval/quality/core-handoff-comparison.ts";
+import type { StageB3CoreHandoffComparisonReport } from "../../eval/quality/core-handoff-comparison.ts";
+import type { StageB2ExtractionComparisonReport } from "../../eval/quality/extraction-comparison.ts";
+import type { MemoryQualityReport } from "../../eval/quality/types.ts";
+import type { CrossSessionEvalReport } from "../../eval/support/cross-session-runner.ts";
 import {
-  runDoctor,
   runConfigureClaudeCode,
   runConfigureCodex,
+  runDoctor,
   runEval,
   runInit,
   runInspect,
+  runP7ImplicitRecallEvalCommand,
+  runP8ImplicitRememberEvalCommand,
   runQualityComparison,
   runQualityCoreHandoffComparison,
-  runQualityExtractionComparison,
   runQualityEval,
-  runP7ImplicitRecallEvalCommand,
+  runQualityExtractionComparison,
   runStatus,
-  runUnbind
+  runUnbind,
 } from "./commands.ts";
 import { asCliError, CliError } from "./errors.ts";
 import {
   DEFAULT_DAEMON_ENDPOINT,
   LocalMemorySpaceClient,
-  type LocalMemorySpaceClientPort
+  type LocalMemorySpaceClientPort,
 } from "./local-client.ts";
 import { openLocalBrowser } from "./open-browser.ts";
 
@@ -71,6 +69,7 @@ export interface CliDependencies {
   qualityExtractionComparisonRunner?: () => Promise<StageB2ExtractionComparisonReport>;
   qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
   p7ImplicitRecallEvalRunner?: () => Promise<P7ImplicitRecallReport>;
+  p8ImplicitRememberEvalRunner?: () => Promise<P8ImplicitRememberReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
   openBrowser?: (url: string) => Promise<void>;
   installationRoot?: string;
@@ -88,6 +87,7 @@ Usage:
   memory-space status [path] [--endpoint <url>] [--json]
   memory-space eval cross-session [--json]
   memory-space eval implicit-recall [--json]
+  memory-space eval implicit-remember [--json]
   memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
 Development invocation:
@@ -109,7 +109,7 @@ function parseOptions(
       }
       throw new CliError("USAGE_ERROR", `Unexpected argument: ${argument}`, {
         exitCode: 2,
-        remediation: "Run memory-space --help."
+        remediation: "Run memory-space --help.",
       });
     }
     const name = argument.slice(2) as ValueOption | BooleanOption;
@@ -125,7 +125,7 @@ function parseOptions(
     if (!allowedValues.includes(name as ValueOption)) {
       throw new CliError("USAGE_ERROR", `Unknown option: ${argument}`, {
         exitCode: 2,
-        remediation: "Run memory-space --help."
+        remediation: "Run memory-space --help.",
       });
     }
     const value = args[index + 1];
@@ -139,8 +139,7 @@ function parseOptions(
         throw new CliError("USAGE_ERROR", "Specify the project path only once.", { exitCode: 2 });
       }
       result.cwd = value;
-    }
-    else if (name === "name") result.name = value;
+    } else if (name === "name") result.name = value;
     else result.endpoint = value;
   }
   return result;
@@ -176,10 +175,12 @@ async function defaultP7ImplicitRecallEvalRunner(): Promise<P7ImplicitRecallRepo
   return module.runP7ImplicitRecallEval();
 }
 
-export async function runCli(
-  argv: string[],
-  dependencies: CliDependencies = {}
-): Promise<number> {
+async function defaultP8ImplicitRememberEvalRunner(): Promise<P8ImplicitRememberReport> {
+  const module = await import("../../eval/p8-implicit-remember.ts");
+  return module.runP8ImplicitRememberEval();
+}
+
+export async function runCli(argv: string[], dependencies: CliDependencies = {}): Promise<number> {
   const write = dependencies.stdout ?? ((line: string) => console.log(line));
   const writeError = dependencies.stderr ?? ((line: string) => console.error(line));
   const environment = dependencies.env ?? process.env;
@@ -194,17 +195,32 @@ export async function runCli(
     const command = argv[0];
     if (command === "eval") {
       const target = argv[1];
-      if (target !== "cross-session" && target !== "quality" && target !== "implicit-recall") {
-        throw new CliError("USAGE_ERROR", "eval requires the cross-session, quality, or implicit-recall target.", {
-          exitCode: 2,
-          remediation: "Run: memory-space eval <cross-session|quality|implicit-recall>"
-        });
+      if (
+        target !== "cross-session" &&
+        target !== "quality" &&
+        target !== "implicit-recall" &&
+        target !== "implicit-remember"
+      ) {
+        throw new CliError(
+          "USAGE_ERROR",
+          "eval requires the cross-session, quality, implicit-recall, or implicit-remember target.",
+          {
+            exitCode: 2,
+            remediation:
+              "Run: memory-space eval <cross-session|quality|implicit-recall|implicit-remember>",
+          }
+        );
       }
       const options = parseOptions(
         argv.slice(2),
         [],
         target === "quality"
-          ? ["json", "compare-stage-a", "compare-stage-a-extraction", "compare-stage-b2-core-handoff"]
+          ? [
+              "json",
+              "compare-stage-a",
+              "compare-stage-a-extraction",
+              "compare-stage-b2-core-handoff",
+            ]
           : ["json"]
       );
       if (target === "implicit-recall") {
@@ -214,10 +230,17 @@ export async function runCli(
           dependencies.p7ImplicitRecallEvalRunner ?? defaultP7ImplicitRecallEvalRunner
         );
       }
+      if (target === "implicit-remember") {
+        return await runP8ImplicitRememberEvalCommand(
+          options,
+          write,
+          dependencies.p8ImplicitRememberEvalRunner ?? defaultP8ImplicitRememberEvalRunner
+        );
+      }
       const comparisonModes = [
         options.compareStageA,
         options.compareStageAExtraction,
-        options.compareStageB2CoreHandoff
+        options.compareStageB2CoreHandoff,
       ].filter(Boolean).length;
       if (comparisonModes > 1) {
         throw new CliError(
@@ -230,35 +253,33 @@ export async function runCli(
         ? await runEval(options, write, dependencies.evalRunner ?? defaultEvalRunner)
         : options.compareStageB2CoreHandoff
           ? await runQualityCoreHandoffComparison(
-            options,
-            write,
-            dependencies.qualityCoreHandoffComparisonRunner
-              ?? defaultQualityCoreHandoffComparisonRunner
-          )
-        : options.compareStageAExtraction
-          ? await runQualityExtractionComparison(
-            options,
-            write,
-            dependencies.qualityExtractionComparisonRunner
-              ?? defaultQualityExtractionComparisonRunner
-          )
-        : options.compareStageA
-          ? await runQualityComparison(
-            options,
-            write,
-            dependencies.qualityComparisonRunner ?? defaultQualityComparisonRunner
-          )
-        : await runQualityEval(
-          options,
-          write,
-          dependencies.qualityEvalRunner ?? defaultQualityEvalRunner
-        );
+              options,
+              write,
+              dependencies.qualityCoreHandoffComparisonRunner ??
+                defaultQualityCoreHandoffComparisonRunner
+            )
+          : options.compareStageAExtraction
+            ? await runQualityExtractionComparison(
+                options,
+                write,
+                dependencies.qualityExtractionComparisonRunner ??
+                  defaultQualityExtractionComparisonRunner
+              )
+            : options.compareStageA
+              ? await runQualityComparison(
+                  options,
+                  write,
+                  dependencies.qualityComparisonRunner ?? defaultQualityComparisonRunner
+                )
+              : await runQualityEval(
+                  options,
+                  write,
+                  dependencies.qualityEvalRunner ?? defaultQualityEvalRunner
+                );
     }
 
     if (command === "unbind") {
-      const options = parseOptions(
-        argv.slice(1), ["cwd", "space-id"], [], true
-      );
+      const options = parseOptions(argv.slice(1), ["cwd", "space-id"], [], true);
       await runUnbind(options, { cwd, write });
       return 0;
     }
@@ -268,7 +289,8 @@ export async function runCli(
       if (provider !== "codex" && provider !== "claude-code") {
         throw new CliError("USAGE_ERROR", "configure requires the codex or claude-code provider.", {
           exitCode: 2,
-          remediation: "Run: memory-space configure <codex|claude-code> [path] [--endpoint <url>] [--dry-run]"
+          remediation:
+            "Run: memory-space configure <codex|claude-code> [path] [--endpoint <url>] [--dry-run]",
         });
       }
       const options = parseOptions(argv.slice(2), ["cwd", "endpoint"], ["dry-run"], true);
@@ -282,26 +304,26 @@ export async function runCli(
     if (!localCommands.has(command)) {
       throw new CliError("USAGE_ERROR", `Unknown command: ${command}`, {
         exitCode: 2,
-        remediation: "Run memory-space --help."
+        remediation: "Run memory-space --help.",
       });
     }
 
-    const allowedValues: ValueOption[] = command === "init"
-      ? ["cwd", "name", "space-id", "endpoint"]
-      : ["cwd", "endpoint"];
+    const allowedValues: ValueOption[] =
+      command === "init" ? ["cwd", "name", "space-id", "endpoint"] : ["cwd", "endpoint"];
     const options = parseOptions(
       argv.slice(1),
       allowedValues,
       command === "doctor" || command === "status"
         ? ["json"]
-        : command === "inspect" ? ["no-open"] : [],
+        : command === "inspect"
+          ? ["no-open"]
+          : [],
       true
     );
-    const endpoint = options.endpoint
-      ?? environment.MEMORY_SPACE_URL
-      ?? DEFAULT_DAEMON_ENDPOINT;
-    const client = (dependencies.clientFactory ?? ((value) =>
-      new LocalMemorySpaceClient({ endpoint: value })))(endpoint);
+    const endpoint = options.endpoint ?? environment.MEMORY_SPACE_URL ?? DEFAULT_DAEMON_ENDPOINT;
+    const client = (
+      dependencies.clientFactory ?? ((value) => new LocalMemorySpaceClient({ endpoint: value }))
+    )(endpoint);
     const context = { cwd, home, client, write, writeBinding: dependencies.writeBinding };
 
     if (command === "init") {
@@ -317,7 +339,7 @@ export async function runCli(
           "DAEMON_REQUEST_FAILED",
           "The running daemon is attached to a different project.",
           {
-            remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project."
+            remediation: "Restart pnpm start with MEMORY_SPACE_CWD set to this project.",
           }
         );
       }

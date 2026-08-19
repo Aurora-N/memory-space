@@ -24,6 +24,8 @@ import { ProjectExtractionRuleExtractor } from "../src/integration/project-extra
 const valuePlaceholder = "$" + "{value}";
 
 const context: ExtractionContext = {
+  trigger: "checkpoint",
+  operationId: "checkpoint-project-rules",
   checkpointId: "checkpoint-project-rules",
   session: {
     id: "session-project-rules",

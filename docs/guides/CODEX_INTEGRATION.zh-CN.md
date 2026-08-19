@@ -62,7 +62,9 @@ curl --fail --silent \
 ```json
 {
   "version": 1,
-  "spaceId": "my-project"
+  "spaceId": "my-project",
+  "implicitRecall": { "mode": "exact" },
+  "implicitRemember": { "mode": "conservative" }
 }
 ```
 
@@ -102,13 +104,17 @@ Memory Space 定义、处于生效状态的用户级 Memory Space scope、格式
 |---|---|
 | `SessionStart` | 绑定或复用 Session，执行 bootstrap，注入附加上下文 |
 | `UserPromptSubmit` | 追加完整用户消息，然后根据可信项目的 `implicitRecall.mode`，可选地注入有界的 active Indexed Memory |
-| `Stop` | 当 `last_assistant_message` 存在且非空时追加该消息 |
+| `Stop` | 当 `last_assistant_message` 存在且非空时先追加该消息，再按配置对持久化、用户证据支持的内容执行 best-effort implicit remember |
 | `PreCompact` | 仅 checkpoint 尚未提交的事件 |
 | `SessionEnd` | 仅 checkpoint 尚未提交的事件 |
 
 `PreToolUse` 和 `PostToolUse` 被有意排除，不会采集。Codex 会提供
 `transcript_path`；Memory Space 只将其作为捕获消息上的不透明
 `TranscriptRef` 保存，不会自动读取或复制 transcript。
+
+Implicit remember 不是 checkpoint。成功的 `Stop` 最多创建或更新 Indexed Memory，
+不会创建 Checkpoint/Handoff，也不会推进 checkpoint 边界。缺少
+`implicitRemember` 时默认 `off`。
 
 在 Codex 中打开 `/hooks`，检查准确的命令定义并信任它们。hook 定义发生变化后
 必须重新检查。项目本地 hooks 只会为可信项目加载。只能在一个生效的 hook 来源中
