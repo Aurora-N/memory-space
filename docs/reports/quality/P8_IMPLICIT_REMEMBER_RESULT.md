@@ -8,7 +8,7 @@
 
 **P8 hardening commit:** `600e585224db93ae38c7a62c836e23c7953300ed`
 
-**P8 cross-turn opt-out hardening:** pending
+**P8 cross-turn opt-out hardening:** `42efbefe15036a5bea4515d98bb4f55b76a905f5`
 
 **Status:** COMPLETE / REVIEW PASS / FROZEN / CLAUDE REAL-PROVIDER PASS / CODEX BLOCKED
 
