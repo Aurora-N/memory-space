@@ -152,15 +152,16 @@ export class ImplicitRememberService implements ImplicitRememberServicePort {
     });
     base.inspectedEventIds = window.events.map((event) => event.id);
     const projectBinding = await this.memorySpace.getSessionProjectBinding(window.session.id);
+    const sourceEvents = await this.memorySpace.getImplicitRememberSourceEvidence({
+      sessionId: window.session.id,
+      eventIds: window.events.map((event) => event.id),
+    });
     const candidates = await this.memorySpace.extractMemoryCandidates(window.events, {
       session: window.session,
       trigger: "implicit_remember",
       operationId: `implicit:${window.session.id}:${input.throughEventId}`,
       projectBinding,
-    });
-    const sourceEvents = await this.memorySpace.getImplicitRememberSourceEvidence({
-      sessionId: window.session.id,
-      eventIds: window.events.map((event) => event.id),
+      sourceEvents,
     });
     const eventsById = new Map(window.events.map((event) => [event.id, event]));
     const sourceEventsById = new Map(sourceEvents.map((event) => [event.id, event]));

@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
+import type { P9SemanticExtractionReport } from "../../eval/p9-semantic-extraction.ts";
 import {
   formatStageB1Comparison,
   type StageB1ComparisonReport,
@@ -24,6 +25,7 @@ import {
 import type {
   ImplicitRecallConfiguration,
   ImplicitRememberConfiguration,
+  SemanticExtractionConfiguration,
 } from "../binding/project-config.ts";
 import type { Space } from "../domain/types.ts";
 import {
@@ -37,6 +39,11 @@ import { configureCodexProject } from "./codex-config.ts";
 import { CliError } from "./errors.ts";
 import { type LocalMemorySpaceClientPort, MEMORY_MCP_TOOLS } from "./local-client.ts";
 import { detectProviderConfigs } from "./provider-config.ts";
+import {
+  configureSemanticExtraction,
+  promptSemanticSetup,
+  type SemanticSetupOptions,
+} from "./semantic-setup.ts";
 
 export interface CommandContext {
   cwd: string;
@@ -55,6 +62,149 @@ export interface InitOptions {
 export interface InspectOptions {
   cwd?: string;
   noOpen?: boolean;
+}
+
+export async function runSemanticSetup(
+  options: {
+    cwd?: string;
+    backend?: string;
+    provider?: string;
+    adapter?: string;
+    baseUrl?: string;
+    model?: string;
+    apiKeyEnv?: string;
+    timeoutMs?: string;
+    off?: boolean;
+    dryRun?: boolean;
+  },
+  context: Pick<CommandContext, "cwd" | "write">
+): Promise<void> {
+  const cwd = options.cwd ?? context.cwd;
+  const timeoutMs =
+    options.timeoutMs === undefined ? undefined : Number.parseInt(options.timeoutMs, 10);
+  if (
+    options.timeoutMs !== undefined &&
+    (!Number.isInteger(timeoutMs) || String(timeoutMs) !== options.timeoutMs)
+  ) {
+    throw new CliError("USAGE_ERROR", "--timeout-ms must be an integer.", { exitCode: 2 });
+  }
+  let setup: SemanticSetupOptions;
+  if (options.off) {
+    if (
+      options.backend ||
+      options.provider ||
+      options.adapter ||
+      options.baseUrl ||
+      options.model ||
+      options.apiKeyEnv ||
+      options.timeoutMs
+    ) {
+      throw new CliError("USAGE_ERROR", "--off cannot be combined with backend options.", {
+        exitCode: 2,
+      });
+    }
+    setup = { cwd, off: true, dryRun: options.dryRun };
+  } else if (!options.backend) {
+    setup = { ...(await promptSemanticSetup(cwd)), dryRun: options.dryRun };
+  } else if (options.backend === "host-agent") {
+    if (
+      options.provider !== "auto" &&
+      options.provider !== "claude-code" &&
+      options.provider !== "codex"
+    ) {
+      throw new CliError(
+        "USAGE_ERROR",
+        "Host-agent setup requires --provider auto, claude-code, or codex.",
+        { exitCode: 2 }
+      );
+    }
+    if (options.adapter || options.baseUrl || options.model || options.apiKeyEnv) {
+      throw new CliError("USAGE_ERROR", "Host-agent setup received incompatible options.", {
+        exitCode: 2,
+      });
+    }
+    if (options.provider === "codex") {
+      throw new CliError(
+        "VALIDATION_ERROR",
+        "Codex host semantic extraction is unsupported because the installed CLI cannot prove tool and MCP isolation.",
+        {
+          remediation:
+            "Choose --provider claude-code, or configure a local/external semantic backend.",
+        }
+      );
+    }
+    setup = {
+      cwd,
+      backend: "host-agent",
+      provider: options.provider,
+      timeoutMs: timeoutMs ?? 30_000,
+      dryRun: options.dryRun,
+    };
+  } else if (options.backend === "local") {
+    if (options.adapter !== "ollama" || !options.model) {
+      throw new CliError("USAGE_ERROR", "Local setup requires --adapter ollama and --model.", {
+        exitCode: 2,
+      });
+    }
+    if (options.provider || options.apiKeyEnv) {
+      throw new CliError("USAGE_ERROR", "Local setup received incompatible options.", {
+        exitCode: 2,
+      });
+    }
+    setup = {
+      cwd,
+      backend: "local",
+      adapter: "ollama",
+      model: options.model,
+      baseUrl: options.baseUrl,
+      timeoutMs,
+      dryRun: options.dryRun,
+    };
+  } else if (options.backend === "external") {
+    if (options.adapter !== "openai-compatible" || !options.baseUrl || !options.model) {
+      throw new CliError(
+        "USAGE_ERROR",
+        "External setup requires --adapter openai-compatible, --base-url, and --model.",
+        { exitCode: 2 }
+      );
+    }
+    if (options.provider) {
+      throw new CliError("USAGE_ERROR", "External setup received incompatible options.", {
+        exitCode: 2,
+      });
+    }
+    setup = {
+      cwd,
+      backend: "external",
+      adapter: "openai-compatible",
+      baseUrl: options.baseUrl,
+      model: options.model,
+      apiKeyEnv: options.apiKeyEnv,
+      timeoutMs,
+      dryRun: options.dryRun,
+    };
+  } else {
+    throw new CliError("USAGE_ERROR", "--backend must be host-agent, local, or external.", {
+      exitCode: 2,
+    });
+  }
+  const result = await configureSemanticExtraction(setup, context.cwd);
+  context.write(
+    result.dryRun ? "Semantic extraction setup dry run" : "Semantic extraction configured"
+  );
+  context.write(`Project config: ${result.path}`);
+  context.write(`Mode:           ${String(result.semanticExtraction.mode)}`);
+  if ("backend" in setup) {
+    context.write(`Backend:        ${setup.backend}`);
+    if (setup.backend === "host-agent") {
+      context.write(`Provider:       ${setup.provider}`);
+      context.write("No additional model API key; uses the selected coding-agent account/quota.");
+    } else {
+      context.write(`Adapter:        ${setup.adapter}`);
+      context.write(`Model:          ${setup.model}`);
+    }
+  }
+  if (result.dryRun) context.write("No files were changed.");
 }
 
 export async function runConfigureCodex(
@@ -122,6 +272,10 @@ export interface StatusReport {
   binding: { source: "explicit" | "config"; configPath?: string };
   implicitRecall: ImplicitRecallConfiguration;
   implicitRemember: ImplicitRememberConfiguration;
+  semanticExtraction: SemanticExtractionConfiguration & {
+    availability?: "available" | "blocked" | "unavailable" | "unknown";
+    reason?: string;
+  };
   latestCheckpoint?: { id: string };
   latestHandoff?: {
     id: string;
@@ -450,6 +604,69 @@ export async function runDoctor(
     );
   }
 
+  const semantic = binding?.semanticExtraction;
+  if (semantic?.source === "invalid") {
+    checks.push(
+      check(
+        "semantic-extraction",
+        "error",
+        `${semantic.error}; effective mode is off.`,
+        `Repair semanticExtraction in ${binding?.configPath ?? ".memory-space/config.json"}.`
+      )
+    );
+  } else if (!semantic || semantic.effectiveMode === "off") {
+    checks.push(
+      check(
+        "semantic-extraction",
+        "warn",
+        semantic?.source === "explicit"
+          ? "Effective mode: off (explicit)."
+          : "Effective mode: off (default; project has not opted in)."
+      )
+    );
+  } else {
+    checks.push(check("semantic-extraction", "ok", "Effective mode: grounded (explicit)."));
+    const model = semantic.model;
+    if (model?.backend === "external") {
+      const missing = model.apiKeyEnv !== undefined && !process.env[model.apiKeyEnv];
+      checks.push(
+        check(
+          "semantic-backend",
+          missing ? "error" : "ok",
+          missing
+            ? `external / ${model.adapter} / missing env ${model.apiKeyEnv}`
+            : `external / ${model.adapter} / configured endpoint`,
+          missing ? `Set ${model.apiKeyEnv} in the daemon environment.` : undefined
+        )
+      );
+    } else if (model?.backend === "local") {
+      checks.push(
+        check(
+          "semantic-backend",
+          "warn",
+          `local / ${model.adapter} / availability checked at extraction time.`
+        )
+      );
+    } else if (model?.backend === "host-agent") {
+      const status =
+        model.provider === "claude-code" ? "ok" : model.provider === "auto" ? "warn" : "error";
+      checks.push(
+        check(
+          "semantic-backend",
+          status,
+          model.provider === "claude-code"
+            ? "host-agent / claude-code / isolation capability reviewed."
+            : model.provider === "auto"
+              ? "host-agent / auto / Claude Code is reviewed; Codex is unsupported."
+              : "host-agent / codex / capability unsupported.",
+          status === "error"
+            ? "Choose the reviewed Claude Code host backend, local Ollama, or an external endpoint."
+            : undefined
+        )
+      );
+    }
+  }
+
   if (binding) {
     try {
       const rules = await readProjectExtractionRules(binding);
@@ -565,6 +782,12 @@ export async function runStatus(
       source: "invalid",
       error: "No project implicit-write configuration is available",
     },
+    semanticExtraction: binding.semanticExtraction ?? {
+      effectiveMode: "off",
+      source: "invalid",
+      timeoutMs: 8_000,
+      error: "No project semantic-extraction configuration is available",
+    },
     latestCheckpoint: handoff ? { id: handoff.checkpointId } : undefined,
     latestHandoff: handoff
       ? {
@@ -579,7 +802,8 @@ export async function runStatus(
   if (options.json) {
     context.write(JSON.stringify(report, null, 2));
     return report.implicitRecall.source === "invalid" ||
-      report.implicitRemember.source === "invalid"
+      report.implicitRemember.source === "invalid" ||
+      report.semanticExtraction.source === "invalid"
       ? 1
       : 0;
   }
@@ -602,6 +826,21 @@ export async function runStatus(
     }`
   );
   context.write(
+    `Semantic Extract: ${
+      report.semanticExtraction.source === "invalid"
+        ? `ERROR (${report.semanticExtraction.error}; effective mode off)`
+        : `${report.semanticExtraction.effectiveMode} (${report.semanticExtraction.source})`
+    }`
+  );
+  if (report.semanticExtraction.model) {
+    const model = report.semanticExtraction.model;
+    context.write(
+      `Semantic Backend: ${model.backend} / ${
+        model.backend === "host-agent" ? model.provider : model.adapter
+      }`
+    );
+  }
+  context.write(
     `Latest checkpoint:${report.latestCheckpoint ? ` ${report.latestCheckpoint.id}` : " none"}`
   );
   context.write(`Latest Handoff:   ${report.latestHandoff ? report.latestHandoff.id : "none"}`);
@@ -610,7 +849,9 @@ export async function runStatus(
     context.write(`Handoff created:  ${report.latestHandoff.createdAt}`);
     context.write(`Next steps:       ${report.latestHandoff.nextSteps.join("; ") || "none"}`);
   }
-  return report.implicitRecall.source === "invalid" || report.implicitRemember.source === "invalid"
+  return report.implicitRecall.source === "invalid" ||
+    report.implicitRemember.source === "invalid" ||
+    report.semanticExtraction.source === "invalid"
     ? 1
     : 0;
 }
@@ -704,6 +945,53 @@ export async function runP8ImplicitRememberEvalCommand(
       `Cross-Turn Opt-Out Violation     ${report.metrics.crossTurnOptOutViolationRate.toFixed(6)}`
     );
     write(`Hard correctness                 ${report.hardCorrectness.toUpperCase()}`);
+  }
+  return report.hardCorrectness === "pass" ? 0 : 1;
+}
+
+export async function runP9SemanticExtractionEvalCommand(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<P9SemanticExtractionReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) {
+    write(JSON.stringify(report, null, 2));
+  } else {
+    write("P9 grounded semantic extraction eval");
+    write("");
+    write(
+      `Semantic Durable Precision        ${report.metrics.semanticDurablePrecision.toFixed(6)}`
+    );
+    write(`Semantic Durable Recall           ${report.metrics.semanticDurableRecall.toFixed(6)}`);
+    write(
+      `Unsupported Claim Persistence     ${report.metrics.unsupportedClaimPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Assistant-Only Persistence        ${report.metrics.assistantOnlySemanticPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Transient Persistence             ${report.metrics.transientSemanticPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Speculative Persistence           ${report.metrics.speculativeSemanticPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Sensitive Persistence             ${report.metrics.sensitiveSemanticPersistenceRate.toFixed(6)}`
+    );
+    write(
+      `Opt-Out Violation                 ${report.metrics.optOutSemanticViolationRate.toFixed(6)}`
+    );
+    write(
+      `Cross-Turn Opt-Out Violation      ${report.metrics.crossTurnOptOutSemanticViolationRate.toFixed(6)}`
+    );
+    write(
+      `Deterministic Fallback Success    ${report.metrics.deterministicFallbackSuccessRate.toFixed(6)}`
+    );
+    write(
+      `Cross-Session Recall Success      ${report.metrics.crossSessionRecallSuccessRate.toFixed(6)}`
+    );
+    write(`Hard correctness                  ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;
 }

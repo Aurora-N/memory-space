@@ -1,8 +1,6 @@
 import { fileURLToPath } from "node:url";
-import {
-  codexUnavailableOutput,
-  type CodexHookOutput
-} from "./bootstrap-renderer.ts";
+import { codexUnavailableOutput, type CodexHookOutput } from "./bootstrap-renderer.ts";
+import { isSemanticExtractionChild } from "../../../integration/internal-invocation.ts";
 import { invokeCodexLifecycleHook } from "./hook-client.ts";
 
 async function readStdin(): Promise<unknown> {
@@ -24,6 +22,7 @@ function writeOutput(output: CodexHookOutput | undefined): void {
 
 /** Runs the size-bounded Codex stdin/stdout hook and emits fail-open output on failure. */
 export async function runCodexHook(): Promise<void> {
+  if (isSemanticExtractionChild()) return;
   try {
     writeOutput(await invokeCodexLifecycleHook(await readStdin()));
   } catch {
@@ -32,6 +31,5 @@ export async function runCodexHook(): Promise<void> {
   }
 }
 
-const isMain = process.argv[1] !== undefined
-  && fileURLToPath(import.meta.url) === process.argv[1];
+const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) void runCodexHook();

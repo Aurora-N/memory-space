@@ -27,7 +27,17 @@ import { ImplicitRecallService } from "./integration/implicit-recall.ts";
 import { ImplicitRememberService } from "./integration/implicit-remember.ts";
 import { type LifecycleDiagnostic, LifecycleHandler } from "./integration/lifecycle-handler.ts";
 import { ProjectExtractionRuleExtractor } from "./integration/project-extraction-rule-extractor.ts";
+import { ProjectSemanticExtractionConfigurationResolver } from "./integration/project-semantic-extraction-config.ts";
 import { ProviderSessionResolver } from "./integration/provider-session-resolver.ts";
+import {
+  type SemanticExtractionDiagnosticSink,
+  SemanticMemoryExtractor,
+} from "./integration/semantic-memory-extractor.ts";
+import {
+  DefaultSemanticModelResolver,
+  type HostAgentSemanticModelFactory,
+  ReviewedHostAgentSemanticModelFactory,
+} from "./integration/semantic-model-resolver.ts";
 import type { MCPRuntimeContext } from "./mcp/request-context.ts";
 import { createMemoryMcpServerForGateway } from "./mcp/server.ts";
 import { MemoryMcpGateway } from "./mcp/tools.ts";
@@ -42,6 +52,9 @@ export interface MemorySpaceDaemonOptions extends DefaultMemorySpaceOptions {
   memorySpaceFactory?: (options: DefaultMemorySpaceOptions) => MemorySpace;
   onMcpError?: (error: Error) => void;
   onLifecycleDiagnostic?: (diagnostic: LifecycleDiagnostic) => void;
+  onSemanticDiagnostic?: SemanticExtractionDiagnosticSink["record"];
+  semanticFetch?: typeof fetch;
+  semanticHostAgent?: HostAgentSemanticModelFactory;
   inspectorDirectory?: string | false;
 }
 
@@ -101,6 +114,19 @@ export function createMemorySpaceDaemon(options: MemorySpaceDaemonOptions = {}):
     explicitSpaceId: options.mcpRuntime?.explicitSpaceId ?? process.env.MEMORY_SPACE_SPACE_ID,
   };
   const spaceResolver = new SpaceResolver();
+  const semanticExtractor = new SemanticMemoryExtractor({
+    configurationResolver: new ProjectSemanticExtractionConfigurationResolver(),
+    modelResolver: new DefaultSemanticModelResolver({
+      env: process.env,
+      fetch: options.semanticFetch,
+      hostAgent:
+        options.semanticHostAgent ??
+        new ReviewedHostAgentSemanticModelFactory({ env: process.env }),
+    }),
+    diagnostics: options.onSemanticDiagnostic
+      ? { record: options.onSemanticDiagnostic }
+      : undefined,
+  });
   const memorySpaceOptions: DefaultMemorySpaceOptions = {
     databasePath: options.databasePath ?? process.env.MEMORY_SPACE_DB ?? "./data/memory-space.db",
     extractor:
@@ -111,6 +137,7 @@ export function createMemorySpaceDaemon(options: MemorySpaceDaemonOptions = {}):
           explicitSpaceId: runtime.explicitSpaceId,
           spaceResolver,
         }),
+        semanticExtractor,
       ]),
     cache: options.cache,
     coreLimit: options.coreLimit ?? Number(process.env.MEMORY_SPACE_CORE_LIMIT ?? 64),

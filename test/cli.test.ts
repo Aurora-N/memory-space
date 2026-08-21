@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,7 @@ import { join } from "node:path";
 import test from "node:test";
 import type { P7ImplicitRecallReport } from "../eval/p7-implicit-recall.ts";
 import type { P8ImplicitRememberReport } from "../eval/p8-implicit-remember.ts";
+import type { P9SemanticExtractionReport } from "../eval/p9-semantic-extraction.ts";
 import { runStageB1Comparison } from "../eval/quality/comparison.ts";
 import { runStageB3CoreHandoffComparison } from "../eval/quality/core-handoff-comparison.ts";
 import { runStageB2ExtractionComparison } from "../eval/quality/extraction-comparison.ts";
@@ -1486,6 +1488,91 @@ test("doctor and status expose missing, explicit, and invalid implicit remember 
   }
 });
 
+test("doctor and status expose semantic mode and backend without credential values", async () => {
+  const scenarios = [
+    {
+      name: "missing",
+      semanticExtraction: undefined,
+      expected: { mode: "off", source: "default", doctor: "warn", exitCode: 0 },
+    },
+    {
+      name: "local",
+      semanticExtraction: {
+        mode: "grounded",
+        model: { backend: "local", adapter: "ollama", model: "qwen3:4b" },
+      },
+      expected: { mode: "grounded", source: "explicit", doctor: "ok", exitCode: 0 },
+    },
+    {
+      name: "invalid",
+      semanticExtraction: {
+        mode: "grounded",
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://models.example.test/v1",
+          model: "fixture",
+          apiKey: "fixture-secret",
+        },
+      },
+      expected: { mode: "off", source: "invalid", doctor: "error", exitCode: 1 },
+    },
+  ] as const;
+  for (const scenario of scenarios) {
+    const { directory, project } = temporaryProject(`semantic-${scenario.name}`);
+    const client = new FakeClient();
+    try {
+      bind(project, {
+        version: 1,
+        spaceId: `space-semantic-${scenario.name}`,
+        implicitRecall: { mode: "lexical" },
+        implicitRemember: { mode: "conservative" },
+        ...(scenario.semanticExtraction === undefined
+          ? {}
+          : { semanticExtraction: scenario.semanticExtraction }),
+      });
+      addSpace(client, `space-semantic-${scenario.name}`);
+      const doctor = await cli(["doctor", "--cwd", project, "--json"], {
+        cwd: project,
+        client,
+      });
+      assert.equal(doctor.code, scenario.expected.exitCode);
+      const checks = (
+        JSON.parse(doctor.stdout) as {
+          checks: Array<{ id: string; status: string; message: string }>;
+        }
+      ).checks;
+      assert.equal(
+        checks.find((item) => item.id === "semantic-extraction")?.status,
+        scenario.expected.doctor
+      );
+      assert.doesNotMatch(doctor.stdout, /fixture-secret/u);
+
+      const status = await cli(["status", "--cwd", project, "--json"], {
+        cwd: project,
+        client,
+      });
+      assert.equal(status.code, scenario.expected.exitCode);
+      const report = JSON.parse(status.stdout) as {
+        semanticExtraction: {
+          effectiveMode: string;
+          source: string;
+          model?: { backend: string; adapter?: string };
+        };
+        implicitRecall: { effectiveMode: string };
+        implicitRemember: { effectiveMode: string };
+      };
+      assert.equal(report.semanticExtraction.effectiveMode, scenario.expected.mode);
+      assert.equal(report.semanticExtraction.source, scenario.expected.source);
+      assert.equal(report.implicitRecall.effectiveMode, "lexical");
+      assert.equal(report.implicitRemember.effectiveMode, "conservative");
+      assert.doesNotMatch(status.stdout, /fixture-secret/u);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+});
+
 function evalReport(status: "pass" | "fail"): CrossSessionEvalReport {
   return {
     checks: [{ id: "matrix.codex.codex", label: "Codex → Codex", status }],
@@ -1678,6 +1765,255 @@ test("implicit remember eval CLI is daemon-independent and supports human/JSON o
     });
     assert.equal(json.code, 1);
     assert.equal((JSON.parse(json.stdout) as { hardCorrectness: string }).hardCorrectness, "fail");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("semantic extraction eval CLI is daemon-independent and supports human/JSON output", async () => {
+  const { directory, project } = temporaryProject("p9-eval");
+  try {
+    const report = {
+      version: 1,
+      fixtureVersion: 1,
+      metrics: {
+        semanticDurablePrecision: 1,
+        semanticDurableRecall: 1,
+        fixtureDurableRecall: 1,
+        holdoutDurableRecall: 1,
+        unsupportedClaimPersistenceRate: 0,
+        assistantOnlySemanticPersistenceRate: 0,
+        transientSemanticPersistenceRate: 0,
+        speculativeSemanticPersistenceRate: 0,
+        sensitiveSemanticPersistenceRate: 0,
+        optOutSemanticViolationRate: 0,
+        crossTurnOptOutSemanticViolationRate: 0,
+        implicitCoreWriteRate: 0,
+        sameEvidenceDuplicateRate: 0,
+        checkpointHistoricalReplayCount: 0,
+        deterministicFallbackSuccessRate: 1,
+        semanticLifecycleBlockingFailureRate: 0,
+        crossSessionRecallSuccessRate: 1,
+      },
+      scenarios: [],
+      hardCorrectness: "pass",
+    } satisfies P9SemanticExtractionReport;
+    const human = await cli(["eval", "semantic-extraction"], {
+      cwd: project,
+      dependencies: {
+        p9SemanticExtractionEvalRunner: async () => report,
+        clientFactory: () => {
+          throw new Error("P9 eval must not construct a daemon client");
+        },
+      },
+    });
+    assert.equal(human.code, 0);
+    assert.match(human.stdout, /P9 grounded semantic extraction eval/u);
+
+    const json = await cli(["eval", "semantic-extraction", "--json"], {
+      cwd: project,
+      dependencies: { p9SemanticExtractionEvalRunner: async () => report },
+    });
+    assert.equal(JSON.parse(json.stdout).hardCorrectness, "pass");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("semantic setup preserves binding policy and stores only an external credential env name", async () => {
+  const { directory, project } = temporaryProject("semantic-setup-external");
+  try {
+    const path = bind(project, {
+      version: 1,
+      spaceId: "semantic-space",
+      implicitRecall: { mode: "lexical" },
+      implicitRemember: { mode: "conservative" },
+      unrelated: { preserved: true },
+    });
+    const result = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "external",
+        "--adapter",
+        "openai-compatible",
+        "--base-url",
+        "https://models.example.test/v1",
+        "--model",
+        "fixture-model",
+        "--api-key-env",
+        "SEMANTIC_API_KEY",
+      ],
+      { cwd: project }
+    );
+    assert.equal(result.code, 0, result.stderr);
+    const config = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    assert.equal(config.spaceId, "semantic-space");
+    assert.deepEqual(config.implicitRecall, { mode: "lexical" });
+    assert.deepEqual(config.implicitRemember, { mode: "conservative" });
+    assert.deepEqual(config.unrelated, { preserved: true });
+    assert.deepEqual(config.semanticExtraction, {
+      mode: "grounded",
+      timeoutMs: 8_000,
+      model: {
+        backend: "external",
+        adapter: "openai-compatible",
+        baseUrl: "https://models.example.test/v1",
+        model: "fixture-model",
+        apiKeyEnv: "SEMANTIC_API_KEY",
+      },
+    });
+    assert.doesNotMatch(readFileSync(path, "utf8"), /sk-/u);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("semantic setup supports local, host-agent, off, and dry-run without changing P7/P8", async () => {
+  const { directory, project } = temporaryProject("semantic-setup-modes");
+  try {
+    const path = bind(project, {
+      version: 1,
+      spaceId: "semantic-space",
+      implicitRecall: { mode: "exact" },
+      implicitRemember: { mode: "off" },
+    });
+    const local = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "local",
+        "--adapter",
+        "ollama",
+        "--model",
+        "qwen3:4b",
+      ],
+      { cwd: project }
+    );
+    assert.equal(local.code, 0, local.stderr);
+    let config = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    assert.deepEqual(config.semanticExtraction, {
+      mode: "grounded",
+      timeoutMs: 8_000,
+      model: { backend: "local", adapter: "ollama", model: "qwen3:4b" },
+    });
+
+    const beforeDryRun = readFileSync(path, "utf8");
+    const preview = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "host-agent",
+        "--provider",
+        "claude-code",
+        "--dry-run",
+      ],
+      { cwd: project }
+    );
+    assert.equal(preview.code, 0, preview.stderr);
+    assert.match(preview.stdout, /No additional model API key/u);
+    assert.equal(readFileSync(path, "utf8"), beforeDryRun);
+
+    const off = await cli(["semantic", "setup", project, "--off"], { cwd: project });
+    assert.equal(off.code, 0, off.stderr);
+    config = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    assert.deepEqual(config.semanticExtraction, { mode: "off" });
+    assert.deepEqual(config.implicitRecall, { mode: "exact" });
+    assert.deepEqual(config.implicitRemember, { mode: "off" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("semantic setup rejects unsafe targets, raw secret flags, and mixed backend options", async () => {
+  const { directory, project } = temporaryProject("semantic-setup-unsafe");
+  try {
+    const outside = join(directory, "outside.json");
+    writeFileSync(outside, JSON.stringify({ version: 1, spaceId: "outside" }));
+    mkdirSync(join(project, ".memory-space"), { recursive: true });
+    symlinkSync(outside, join(project, ".memory-space", "config.json"));
+    const unsafe = await cli(["semantic", "setup", project, "--off"], { cwd: project });
+    assert.equal(unsafe.code, 1);
+    assert.equal(readFileSync(outside, "utf8"), JSON.stringify({ version: 1, spaceId: "outside" }));
+
+    unlinkSync(join(project, ".memory-space", "config.json"));
+    bind(project, { version: 1, spaceId: "safe" });
+    const rawSecret = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "external",
+        "--adapter",
+        "openai-compatible",
+        "--base-url",
+        "https://models.example.test",
+        "--model",
+        "fixture",
+        "--api-key",
+        "sk-should-never-parse",
+      ],
+      { cwd: project }
+    );
+    assert.equal(rawSecret.code, 2);
+    assert.doesNotMatch(
+      readFileSync(join(project, ".memory-space", "config.json"), "utf8"),
+      /sk-/u
+    );
+
+    const mixed = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "local",
+        "--adapter",
+        "ollama",
+        "--model",
+        "fixture",
+        "--provider",
+        "codex",
+      ],
+      { cwd: project }
+    );
+    assert.equal(mixed.code, 2);
+
+    const unsupported = await cli(
+      ["semantic", "setup", project, "--backend", "host-agent", "--provider", "codex"],
+      { cwd: project }
+    );
+    assert.equal(unsupported.code, 1);
+    assert.match(unsupported.stderr, /unsupported/u);
+
+    const credentialUrl = await cli(
+      [
+        "semantic",
+        "setup",
+        project,
+        "--backend",
+        "external",
+        "--adapter",
+        "openai-compatible",
+        "--base-url",
+        "https://user:secret@models.example.test/v1",
+        "--model",
+        "fixture",
+      ],
+      { cwd: project }
+    );
+    assert.equal(credentialUrl.code, 1);
+    assert.doesNotMatch(
+      readFileSync(join(project, ".memory-space", "config.json"), "utf8"),
+      /user:secret/u
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

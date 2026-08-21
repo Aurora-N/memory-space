@@ -235,6 +235,23 @@ test("Codex hook client fails open without leaking transport details", async () 
   const cliOutput = JSON.parse(child.stdout) as CodexHookOutput;
   assert.match(cliOutput.systemMessage ?? "", /MEMORY_SERVICE_UNAVAILABLE/u);
   assert.doesNotMatch(child.stdout, /ECONNREFUSED|secret-internal-host/u);
+
+  const semanticChild = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", "src/adapters/providers/codex/hook.ts"],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      input: "not-json",
+      env: {
+        ...process.env,
+        MEMORY_SPACE_INTERNAL_INVOCATION: "semantic-extraction"
+      }
+    }
+  );
+  assert.equal(semanticChild.status, 0, semanticChild.stderr);
+  assert.equal(semanticChild.stdout, "");
+  assert.equal(semanticChild.stderr, "");
 });
 
 test("Codex lifecycle Memory failure is non-blocking and provider-safe", async () => {

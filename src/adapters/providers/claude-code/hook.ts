@@ -1,8 +1,6 @@
 import { fileURLToPath } from "node:url";
-import {
-  claudeCodeUnavailableOutput,
-  type ClaudeCodeHookOutput
-} from "./bootstrap-renderer.ts";
+import { claudeCodeUnavailableOutput, type ClaudeCodeHookOutput } from "./bootstrap-renderer.ts";
+import { isSemanticExtractionChild } from "../../../integration/internal-invocation.ts";
 import { invokeClaudeCodeLifecycleHook } from "./hook-client.ts";
 
 async function readStdin(): Promise<unknown> {
@@ -26,6 +24,7 @@ function writeOutput(output: ClaudeCodeHookOutput | undefined): void {
 
 /** Runs the size-bounded Claude Code stdin/stdout hook and emits fail-open output on failure. */
 export async function runClaudeCodeHook(): Promise<void> {
+  if (isSemanticExtractionChild()) return;
   try {
     writeOutput(await invokeClaudeCodeLifecycleHook(await readStdin()));
   } catch {
@@ -34,6 +33,5 @@ export async function runClaudeCodeHook(): Promise<void> {
   }
 }
 
-const isMain = process.argv[1] !== undefined
-  && fileURLToPath(import.meta.url) === process.argv[1];
+const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) void runClaudeCodeHook();

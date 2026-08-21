@@ -93,6 +93,11 @@ test("SpaceResolver keeps binding validity separate from implicit recall validit
       effectiveMode: "off",
       source: "default",
     });
+    assert.deepEqual((await resolver.resolve({ cwd: root })).semanticExtraction, {
+      effectiveMode: "off",
+      source: "default",
+      timeoutMs: 8000,
+    });
 
     for (const mode of ["off", "exact", "lexical"] as const) {
       writeFileSync(
@@ -156,6 +161,116 @@ test("SpaceResolver keeps binding validity separate from implicit recall validit
       assert.equal(binding.implicitRemember?.effectiveMode, "off");
       assert.equal(binding.implicitRemember?.source, "invalid");
       assert.match(binding.implicitRemember?.error ?? "", /implicitRemember/u);
+    }
+
+    const validSemanticConfigurations = [
+      {
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://models.example.test/v1",
+          model: "fixture",
+          apiKeyEnv: "SEMANTIC_API_KEY",
+        },
+      },
+      {
+        model: {
+          backend: "local",
+          adapter: "ollama",
+          model: "qwen3:4b",
+          baseUrl: "http://127.0.0.1:11434",
+        },
+      },
+      { model: { backend: "host-agent", provider: "auto" } },
+    ] as const;
+    for (const semantic of validSemanticConfigurations) {
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-semantic",
+          implicitRecall: { mode: "lexical" },
+          implicitRemember: { mode: "conservative" },
+          semanticExtraction: { mode: "grounded", ...semantic },
+        })
+      );
+      const binding = await resolver.resolve({ cwd: root });
+      assert.equal(binding.semanticExtraction?.effectiveMode, "grounded");
+      assert.equal(binding.semanticExtraction?.source, "explicit");
+      assert.equal(binding.implicitRecall?.effectiveMode, "lexical");
+      assert.equal(binding.implicitRemember?.effectiveMode, "conservative");
+    }
+
+    const invalidSemanticConfigurations = [
+      [],
+      { mode: "auto" },
+      { mode: "grounded", timeoutMs: -1, model: validSemanticConfigurations[0].model },
+      {
+        mode: "grounded",
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://models.example.test/v1",
+          model: "fixture",
+          apiKey: "raw-secret",
+        },
+      },
+      {
+        mode: "grounded",
+        model: {
+          backend: "local",
+          adapter: "ollama",
+          model: "fixture",
+          baseUrl: "https://remote.example.test",
+        },
+      },
+      {
+        mode: "grounded",
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://models.example.test/v1",
+          model: "fixture",
+          provider: "claude-code",
+        },
+      },
+      {
+        mode: "grounded",
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://user:secret@models.example.test/v1",
+          model: "fixture",
+        },
+      },
+      {
+        mode: "grounded",
+        model: {
+          backend: "external",
+          adapter: "openai-compatible",
+          baseUrl: "https://models.example.test/v1?api_key=secret",
+          model: "fixture",
+        },
+      },
+    ];
+    for (const semanticExtraction of invalidSemanticConfigurations) {
+      writeFileSync(
+        path,
+        JSON.stringify({
+          version: 1,
+          spaceId: "space-semantic-invalid",
+          implicitRecall: { mode: "lexical" },
+          implicitRemember: { mode: "conservative" },
+          semanticExtraction,
+        })
+      );
+      const binding = await resolver.resolve({ cwd: root });
+      assert.equal(binding.spaceId, "space-semantic-invalid");
+      assert.equal(binding.semanticExtraction?.effectiveMode, "off");
+      assert.equal(binding.semanticExtraction?.source, "invalid");
+      assert.equal(binding.implicitRecall?.effectiveMode, "lexical");
+      assert.equal(binding.implicitRemember?.effectiveMode, "conservative");
+      assert.doesNotMatch(binding.semanticExtraction?.error ?? "", /raw-secret/u);
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

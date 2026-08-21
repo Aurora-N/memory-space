@@ -301,6 +301,23 @@ test("Claude hook client forwards native payload and fails open safely", async (
   const cliOutput = JSON.parse(child.stdout) as ClaudeCodeHookOutput;
   assert.match(cliOutput.systemMessage ?? "", /MEMORY_SERVICE_UNAVAILABLE/u);
   assert.doesNotMatch(child.stdout, /ECONNREFUSED|private-host/u);
+
+  const semanticChild = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", "src/adapters/providers/claude-code/hook.ts"],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      input: "not-json",
+      env: {
+        ...process.env,
+        MEMORY_SPACE_INTERNAL_INVOCATION: "semantic-extraction"
+      }
+    }
+  );
+  assert.equal(semanticChild.status, 0, semanticChild.stderr);
+  assert.equal(semanticChild.stdout, "");
+  assert.equal(semanticChild.stderr, "");
 });
 
 test("Claude hook client accepts event-correct prompt context and rejects mismatches", async () => {

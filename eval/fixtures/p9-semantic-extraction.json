@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "scenarioId": "component-api-fact",
+      "category": "durable",
+      "split": "fixture",
+      "user": "上传组件是通过 variant 来判断是否使用新版样式的，现在 variant 一共有 a、b、c 三种。",
+      "content": "variant 一共有 a、b、c 三种",
+      "type": "fact"
+    },
+    {
+      "scenarioId": "database-config-fact",
+      "category": "durable",
+      "split": "fixture",
+      "user": "项目数据库使用 PostgreSQL，连接池上限是 20。",
+      "content": "项目数据库使用 PostgreSQL",
+      "type": "fact"
+    },
+    {
+      "scenarioId": "project-decision",
+      "category": "durable",
+      "split": "fixture",
+      "user": "团队已经决定使用 pnpm 作为包管理器。",
+      "content": "团队已经决定使用 pnpm 作为包管理器",
+      "type": "decision"
+    },
+    {
+      "scenarioId": "project-constraint",
+      "category": "durable",
+      "split": "fixture",
+      "user": "支付回调必须保持幂等，不能依赖客户端重试。",
+      "content": "支付回调必须保持幂等",
+      "type": "constraint"
+    },
+    {
+      "scenarioId": "project-convention",
+      "category": "durable",
+      "split": "fixture",
+      "user": "这个仓库约定所有迁移文件都使用 UTC 时间戳命名。",
+      "content": "所有迁移文件都使用 UTC 时间戳命名",
+      "type": "convention"
+    },
+    {
+      "scenarioId": "durable-task",
+      "category": "durable",
+      "split": "fixture",
+      "user": "退款去向与月付链路优化是本季度必须完成的项目任务。",
+      "content": "退款去向与月付链路优化是本季度必须完成的项目任务",
+      "family": "state",
+      "type": "task"
+    },
+    {
+      "scenarioId": "english-api-fact",
+      "category": "durable",
+      "split": "holdout",
+      "user": "The upload API accepts multipart requests and requires the checksum header.",
+      "content": "The upload API accepts multipart requests and requires the checksum header",
+      "type": "fact"
+    },
+    {
+      "scenarioId": "multi-sentence-state",
+      "category": "durable",
+      "split": "holdout",
+      "user": "退款链路已经完成方案评审。当前长期目标是把退款去向统一到订单详情页。",
+      "content": "长期目标是把退款去向统一到订单详情页",
+      "family": "state",
+      "type": "goal"
+    },
+    {
+      "scenarioId": "current-action",
+      "category": "transient",
+      "split": "fixture",
+      "user": "我现在检查一下 uploader.ts。",
+      "content": "我现在检查一下 uploader.ts",
+      "durability": "interaction_local"
+    },
+    {
+      "scenarioId": "recent-test-result",
+      "category": "transient",
+      "split": "holdout",
+      "user": "刚才上传组件的测试挂了。",
+      "content": "刚才上传组件的测试挂了",
+      "durability": "interaction_local"
+    },
+    {
+      "scenarioId": "speculative-variant",
+      "category": "speculative",
+      "split": "fixture",
+      "user": "我猜 variant 可能还有 d。",
+      "content": "我猜 variant 可能还有 d",
+      "assertion": "uncertain"
+    },
+    {
+      "scenarioId": "hypothesis-cache",
+      "category": "speculative",
+      "split": "holdout",
+      "user": "也许是缓存的问题。",
+      "content": "也许是缓存的问题",
+      "assertion": "hypothetical"
+    },
+    {
+      "scenarioId": "temporary-experiment",
+      "category": "transient",
+      "split": "fixture",
+      "user": "我们先临时试试 PostgreSQL。",
+      "content": "我们先临时试试 PostgreSQL",
+      "durability": "interaction_local"
+    },
+    {
+      "scenarioId": "assistant-only",
+      "category": "assistant-only",
+      "split": "fixture",
+      "user": "继续。",
+      "assistant": "variant 有 a、b、c 三种。",
+      "content": "variant 有 a、b、c 三种",
+      "evidenceRole": "assistant"
+    },
+    {
+      "scenarioId": "assistant-proposal-acknowledgement",
+      "category": "assistant-only",
+      "split": "holdout",
+      "user": "OK。",
+      "assistant": "我们应该切换到 PostgreSQL。",
+      "content": "我们应该切换到 PostgreSQL",
+      "evidenceRole": "assistant"
+    },
+    {
+      "scenarioId": "credential-value",
+      "category": "sensitive",
+      "split": "fixture",
+      "user": "数据库密码是 eval-sensitive-value。",
+      "content": "数据库密码是 eval-sensitive-value"
+    },
+    {
+      "scenarioId": "invalid-quote",
+      "category": "unsupported",
+      "split": "fixture",
+      "user": "variant 有 a、b、c 三种。",
+      "content": "variant 有 a、b、c 三种",
+      "quote": "variant 有 a、b、c、d 四种"
+    },
+    {
+      "scenarioId": "unknown-event",
+      "category": "unsupported",
+      "split": "holdout",
+      "user": "数据库使用 PostgreSQL。",
+      "content": "数据库使用 PostgreSQL",
+      "unknownEvent": true
+    },
+    {
+      "scenarioId": "explicit-opt-out",
+      "category": "opt-out",
+      "split": "fixture",
+      "user": "Do not remember this turn\n上传组件的 variant 有 a、b、c 三种。",
+      "content": "上传组件的 variant 有 a、b、c 三种"
+    },
+    {
+      "scenarioId": "cross-turn-opt-out",
+      "category": "cross-turn-opt-out",
+      "split": "holdout",
+      "user": "Do not remember this turn\nPRIVATE_VARIANT 有 a、b、c 三种。",
+      "content": "PRIVATE_VARIANT 有 a、b、c 三种"
+    }
+  ]
+}

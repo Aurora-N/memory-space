@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import {
   resolveImplicitRecallConfiguration,
   resolveImplicitRememberConfiguration,
+  resolveSemanticExtractionConfiguration,
 } from "../binding/project-config.ts";
 import { type SpaceBinding, SpaceResolver } from "../binding/space-resolver.ts";
 import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/errors.ts";
@@ -45,6 +46,7 @@ export async function readLocalProjectBinding(cwd: string): Promise<SpaceBinding
     configPath,
     implicitRecall: resolveImplicitRecallConfiguration(config),
     implicitRemember: resolveImplicitRememberConfiguration(config),
+    semanticExtraction: resolveSemanticExtractionConfiguration(config),
   };
 }
 

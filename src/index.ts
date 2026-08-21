@@ -37,6 +37,9 @@ export type {
 } from "./adapters/providers/codex/integration.ts";
 export { CodexLifecycleIntegration } from "./adapters/providers/codex/integration.ts";
 export { NoopExtractor, RuleBasedExtractor } from "./adapters/rule-based-extractor.ts";
+export { ScriptedSemanticExtractionModel } from "./adapters/semantic-models/fake.ts";
+export { OllamaSemanticExtractionModel } from "./adapters/semantic-models/ollama.ts";
+export { OpenAiCompatibleSemanticExtractionModel } from "./adapters/semantic-models/openai-compatible.ts";
 export { SqliteMemoryStore } from "./adapters/sqlite/sqlite-store.ts";
 export type {
   AppendEventInput,
@@ -62,10 +65,20 @@ export type {
   ImplicitRememberConfigSource,
   ImplicitRememberConfiguration,
   ImplicitRememberMode,
+  ExternalSemanticModelConfiguration,
+  HostAgentSemanticModelConfiguration,
+  LocalSemanticModelConfiguration,
+  SemanticExtractionConfigSource,
+  SemanticExtractionConfiguration,
+  SemanticExtractionMode,
+  SemanticModelBackend,
+  SemanticModelConfiguration,
 } from "./binding/project-config.ts";
 export {
   resolveImplicitRecallConfiguration,
   resolveImplicitRememberConfiguration,
+  resolveSemanticExtractionConfiguration,
+  semanticExtractionDefaults,
 } from "./binding/project-config.ts";
 export type { SpaceBinding, SpaceResolutionInput } from "./binding/space-resolver.ts";
 export { SpaceResolver } from "./binding/space-resolver.ts";
@@ -119,6 +132,47 @@ export {
   ImplicitRememberService,
   implicitRememberDefaults,
 } from "./integration/implicit-remember.ts";
+export {
+  isSemanticExtractionChild,
+  memorySpaceInternalInvocationEnvironment,
+  semanticExtractionInternalInvocation,
+} from "./integration/internal-invocation.ts";
+export type {
+  SemanticExtractionDiagnostic,
+  SemanticExtractionDiagnosticSink,
+  SemanticExtractionRejectedItem,
+} from "./integration/semantic-memory-extractor.ts";
+export {
+  buildSemanticModelEvents,
+  SemanticExtractionError,
+  SemanticMemoryExtractor,
+  semanticExtractionPromptV1,
+} from "./integration/semantic-memory-extractor.ts";
+export { ProjectSemanticExtractionConfigurationResolver } from "./integration/project-semantic-extraction-config.ts";
+export type { HostAgentSemanticModelFactory } from "./integration/semantic-model-resolver.ts";
+export {
+  DefaultSemanticModelResolver,
+  ReviewedHostAgentSemanticModelFactory,
+} from "./integration/semantic-model-resolver.ts";
+export {
+  ClaudeCodeHostSemanticExtractionModel,
+  claudeCodeHostLimits,
+  DefaultHostProcessRunner,
+} from "./adapters/semantic-models/claude-code-host.ts";
+export type {
+  HostProcessResult,
+  HostProcessRunner,
+} from "./adapters/semantic-models/claude-code-host.ts";
+export type {
+  SemanticExtractionModel,
+  SemanticExtractionModelEvent,
+  SemanticExtractionModelInput,
+  SemanticModelResolution,
+  SemanticModelResolutionContext,
+  SemanticModelResolver,
+  SemanticModelUnavailableReason,
+} from "./ports/semantic-extraction-model.ts";
+export { SemanticExtractionModelError } from "./ports/semantic-extraction-model.ts";
 export type {
   LifecycleContext,
   LifecycleDiagnostic,

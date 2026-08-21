@@ -11,6 +11,11 @@ export interface ExtractionContext {
   operationId: string;
   checkpointId?: string;
   projectBinding?: SessionProjectBinding;
+  /**
+   * Full persisted copies for events present in the extraction range.
+   * Derived/bounded event views must never be used for grounding or control decisions.
+   */
+  sourceEvents?: readonly SessionEvent[];
 }
 
 /** Converts persisted session events into candidate durable memories. */

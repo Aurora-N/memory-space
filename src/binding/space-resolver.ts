@@ -6,8 +6,10 @@ import { SpaceBindingInvalidError, SpaceNotBoundError } from "../integration/err
 import {
   type ImplicitRecallConfiguration,
   type ImplicitRememberConfiguration,
+  type SemanticExtractionConfiguration,
   resolveImplicitRecallConfiguration,
   resolveImplicitRememberConfiguration,
+  resolveSemanticExtractionConfiguration,
 } from "./project-config.ts";
 
 /** Inputs for explicit or nearest-ancestor Space binding resolution. */
@@ -23,6 +25,7 @@ export interface SpaceBinding {
   configPath?: string;
   implicitRecall?: ImplicitRecallConfiguration;
   implicitRemember?: ImplicitRememberConfiguration;
+  semanticExtraction?: SemanticExtractionConfiguration;
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -46,6 +49,7 @@ function parseProjectBinding(value: unknown, configPath: string): SpaceBinding {
     configPath,
     implicitRecall: resolveImplicitRecallConfiguration(config),
     implicitRemember: resolveImplicitRememberConfiguration(config),
+    semanticExtraction: resolveSemanticExtractionConfiguration(config),
   };
 }
 

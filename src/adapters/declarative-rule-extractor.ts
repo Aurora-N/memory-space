@@ -3,6 +3,7 @@ import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/type
 import type { ExtractionContext, MemoryExtractor } from "../ports/extractor.ts";
 import { builtInKeySchemas, builtInMemoryKeys } from "./extraction-contract.ts";
 import { isTransientExtractionEvidence } from "../application/extraction-policy.ts";
+import { normalizeLexicalText } from "../application/lexical-retrieval.ts";
 
 const families = new Set<MemoryFamily>(["knowledge", "state", "episode", "procedure"]);
 const ruleFields = new Set([
@@ -282,6 +283,15 @@ function candidateIdentity(candidate: MemoryCandidate): string {
   ]);
 }
 
+function candidateEvidenceIdentity(candidate: MemoryCandidate): string {
+  return JSON.stringify([
+    candidate.family,
+    candidate.type,
+    normalizeLexicalText(candidate.content),
+    [...new Set(candidate.sourceEventIds)].sort(),
+  ]);
+}
+
 /** Runs extractors in order and removes only exact duplicate candidates. */
 export class CompositeMemoryExtractor implements MemoryExtractor {
   readonly extractors: readonly MemoryExtractor[];
@@ -293,11 +303,14 @@ export class CompositeMemoryExtractor implements MemoryExtractor {
   async extract(events: SessionEvent[], context: ExtractionContext): Promise<MemoryCandidate[]> {
     const candidates: MemoryCandidate[] = [];
     const seen = new Set<string>();
+    const seenEvidence = new Set<string>();
     for (const extractor of this.extractors) {
       for (const candidate of await extractor.extract(events, context)) {
         const identity = candidateIdentity(candidate);
-        if (seen.has(identity)) continue;
+        const evidenceIdentity = candidateEvidenceIdentity(candidate);
+        if (seen.has(identity) || seenEvidence.has(evidenceIdentity)) continue;
         seen.add(identity);
+        seenEvidence.add(evidenceIdentity);
         candidates.push(candidate);
       }
     }

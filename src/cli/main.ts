@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
+import type { P9SemanticExtractionReport } from "../../eval/p9-semantic-extraction.ts";
 import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
 import type { StageB3CoreHandoffComparisonReport } from "../../eval/quality/core-handoff-comparison.ts";
 import type { StageB2ExtractionComparisonReport } from "../../eval/quality/extraction-comparison.ts";
@@ -19,10 +20,12 @@ import {
   runInspect,
   runP7ImplicitRecallEvalCommand,
   runP8ImplicitRememberEvalCommand,
+  runP9SemanticExtractionEvalCommand,
   runQualityComparison,
   runQualityCoreHandoffComparison,
   runQualityEval,
   runQualityExtractionComparison,
+  runSemanticSetup,
   runStatus,
   runUnbind,
 } from "./commands.ts";
@@ -34,11 +37,23 @@ import {
 } from "./local-client.ts";
 import { openLocalBrowser } from "./open-browser.ts";
 
-type ValueOption = "cwd" | "name" | "space-id" | "endpoint";
+type ValueOption =
+  | "cwd"
+  | "name"
+  | "space-id"
+  | "endpoint"
+  | "backend"
+  | "provider"
+  | "adapter"
+  | "base-url"
+  | "model"
+  | "api-key-env"
+  | "timeout-ms";
 type BooleanOption =
   | "json"
   | "no-open"
   | "dry-run"
+  | "off"
   | "compare-stage-a"
   | "compare-stage-a-extraction"
   | "compare-stage-b2-core-handoff";
@@ -54,6 +69,14 @@ interface ParsedOptions {
   compareStageA?: boolean;
   compareStageAExtraction?: boolean;
   compareStageB2CoreHandoff?: boolean;
+  backend?: string;
+  provider?: string;
+  adapter?: string;
+  baseUrl?: string;
+  model?: string;
+  apiKeyEnv?: string;
+  timeoutMs?: string;
+  off?: boolean;
 }
 
 export interface CliDependencies {
@@ -70,6 +93,7 @@ export interface CliDependencies {
   qualityCoreHandoffComparisonRunner?: () => Promise<StageB3CoreHandoffComparisonReport>;
   p7ImplicitRecallEvalRunner?: () => Promise<P7ImplicitRecallReport>;
   p8ImplicitRememberEvalRunner?: () => Promise<P8ImplicitRememberReport>;
+  p9SemanticExtractionEvalRunner?: () => Promise<P9SemanticExtractionReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
   openBrowser?: (url: string) => Promise<void>;
   installationRoot?: string;
@@ -81,6 +105,7 @@ Usage:
   memory-space inspect [path] [--endpoint <url>] [--no-open]
   memory-space configure codex [path] [--endpoint <url>] [--dry-run]
   memory-space configure claude-code [path] [--endpoint <url>] [--dry-run]
+  memory-space semantic setup [path] [--backend <host-agent|local|external> ... | --off] [--dry-run]
   memory-space init [path] [--name <name>] [--space-id <id>] [--endpoint <url>]
   memory-space unbind [path] [--space-id <expected-id>]
   memory-space doctor [path] [--endpoint <url>] [--json]
@@ -88,6 +113,7 @@ Usage:
   memory-space eval cross-session [--json]
   memory-space eval implicit-recall [--json]
   memory-space eval implicit-remember [--json]
+  memory-space eval semantic-extraction [--json]
   memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
 Development invocation:
@@ -119,6 +145,7 @@ function parseOptions(
       else if (name === "compare-stage-b2-core-handoff") result.compareStageB2CoreHandoff = true;
       else if (name === "no-open") result.noOpen = true;
       else if (name === "dry-run") result.dryRun = true;
+      else if (name === "off") result.off = true;
       else result.json = true;
       continue;
     }
@@ -140,7 +167,14 @@ function parseOptions(
       }
       result.cwd = value;
     } else if (name === "name") result.name = value;
-    else result.endpoint = value;
+    else if (name === "endpoint") result.endpoint = value;
+    else if (name === "backend") result.backend = value;
+    else if (name === "provider") result.provider = value;
+    else if (name === "adapter") result.adapter = value;
+    else if (name === "base-url") result.baseUrl = value;
+    else if (name === "model") result.model = value;
+    else if (name === "api-key-env") result.apiKeyEnv = value;
+    else result.timeoutMs = value;
   }
   return result;
 }
@@ -180,6 +214,11 @@ async function defaultP8ImplicitRememberEvalRunner(): Promise<P8ImplicitRemember
   return module.runP8ImplicitRememberEval();
 }
 
+async function defaultP9SemanticExtractionEvalRunner(): Promise<P9SemanticExtractionReport> {
+  const module = await import("../../eval/p9-semantic-extraction.ts");
+  return module.runP9SemanticExtractionEval();
+}
+
 export async function runCli(argv: string[], dependencies: CliDependencies = {}): Promise<number> {
   const write = dependencies.stdout ?? ((line: string) => console.log(line));
   const writeError = dependencies.stderr ?? ((line: string) => console.error(line));
@@ -199,15 +238,16 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         target !== "cross-session" &&
         target !== "quality" &&
         target !== "implicit-recall" &&
-        target !== "implicit-remember"
+        target !== "implicit-remember" &&
+        target !== "semantic-extraction"
       ) {
         throw new CliError(
           "USAGE_ERROR",
-          "eval requires the cross-session, quality, implicit-recall, or implicit-remember target.",
+          "eval requires the cross-session, quality, implicit-recall, implicit-remember, or semantic-extraction target.",
           {
             exitCode: 2,
             remediation:
-              "Run: memory-space eval <cross-session|quality|implicit-recall|implicit-remember>",
+              "Run: memory-space eval <cross-session|quality|implicit-recall|implicit-remember|semantic-extraction>",
           }
         );
       }
@@ -235,6 +275,13 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           options,
           write,
           dependencies.p8ImplicitRememberEvalRunner ?? defaultP8ImplicitRememberEvalRunner
+        );
+      }
+      if (target === "semantic-extraction") {
+        return await runP9SemanticExtractionEvalCommand(
+          options,
+          write,
+          dependencies.p9SemanticExtractionEvalRunner ?? defaultP9SemanticExtractionEvalRunner
         );
       }
       const comparisonModes = [
@@ -297,6 +344,23 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
       options.endpoint ??= environment.MEMORY_SPACE_URL;
       const runner = provider === "codex" ? runConfigureCodex : runConfigureClaudeCode;
       await runner(options, { cwd, home, write }, dependencies.installationRoot);
+      return 0;
+    }
+
+    if (command === "semantic") {
+      if (argv[1] !== "setup") {
+        throw new CliError("USAGE_ERROR", "semantic requires the setup subcommand.", {
+          exitCode: 2,
+          remediation: "Run: memory-space semantic setup [path] [backend options]",
+        });
+      }
+      const options = parseOptions(
+        argv.slice(2),
+        ["cwd", "backend", "provider", "adapter", "base-url", "model", "api-key-env", "timeout-ms"],
+        ["off", "dry-run"],
+        true
+      );
+      await runSemanticSetup(options, { cwd, write });
       return 0;
     }
 

@@ -1117,6 +1117,7 @@ export class MemorySpace {
         operationId: checkpoint.id,
         checkpointId: checkpoint.id,
         projectBinding,
+        sourceEvents: events,
       });
       if (!Array.isArray(candidates))
         throw new ValidationError("Extractor must return a MemoryCandidate array");
