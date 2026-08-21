@@ -1,10 +1,10 @@
 # CR-PHASE12 — P9 Grounded Semantic Extraction Self-Review
 
-**Date:** 2026-08-20
+**Date:** 2026-08-21
 
 **Baseline:** `cc8c86930cc4a729772534448f3d0ceabf24518d`
 
-**Reviewed implementation:** working tree pending implementation commits
+**Reviewed implementation:** `8f5f6001bbdc376cefb75d6428765ae239760f07`
 
 **Status:** REVIEW PASS / REAL BACKEND GATES PARTIAL
 

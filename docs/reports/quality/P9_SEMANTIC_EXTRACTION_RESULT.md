@@ -1,12 +1,12 @@
 # P9 Grounded Semantic Memory Extraction Result
 
-**Date:** 2026-08-20
+**Date:** 2026-08-21
 
 **P9 semantic extraction spec:** `dee763a1df265b3a93809bb2ce4edf129fa52fe1`
 
 **P9 backend amendment:** `cc8c86930cc4a729772534448f3d0ceabf24518d`
 
-**Implementation commits:** pending
+**Implementation commit:** `8f5f6001bbdc376cefb75d6428765ae239760f07`
 
 **Self-review:** `docs/reviews/CR-PHASE12-P9.md`
 
