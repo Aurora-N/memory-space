@@ -6,7 +6,9 @@
 
 **Reviewed implementation:** `8f5f6001bbdc376cefb75d6428765ae239760f07`
 
-**Status:** REVIEW PASS / REAL BACKEND GATES PARTIAL
+**External compatibility follow-up:** `8350d6db78e1bb1d5c02bfd22b1d005bc9cb9a1a`
+
+**Status:** REVIEW PASS / EXTERNAL AND CLAUDE HOST PASS / LOCAL BLOCKED / CODEX UNSUPPORTED
 
 ## Scope
 
@@ -86,7 +88,11 @@ No open P0 or P1 implementation findings remain after the fixes and focused
 retest. The provider-neutral semantic foundation and Claude host-agent backend
 are review-passing.
 
-P9 is not marked FROZEN because the external reference backend could not complete
-a real-model smoke with the available credential, and no Ollama runtime/model
-was installed. Those availability gates are reported independently rather than
-reclassified as implementation PASS.
+The external reference backend subsequently passed a real production pipeline
+smoke through a third-party OpenAI-compatible route after removing the optional
+`temperature` request field that the route did not handle. JSON mode, strict
+schema validation, grounding, and deterministic admission remain unchanged.
+
+P9 is not marked FROZEN because no Ollama runtime/model is installed and Codex
+host-agent isolation remains unsupported. Those gates are reported independently
+rather than reclassified as implementation PASS.

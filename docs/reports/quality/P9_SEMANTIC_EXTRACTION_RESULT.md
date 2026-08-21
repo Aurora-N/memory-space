@@ -8,9 +8,11 @@
 
 **Implementation commit:** `8f5f6001bbdc376cefb75d6428765ae239760f07`
 
+**External compatibility fix:** `8350d6db78e1bb1d5c02bfd22b1d005bc9cb9a1a`
+
 **Self-review:** `docs/reviews/CR-PHASE12-P9.md`
 
-**Status:** IMPLEMENTATION COMPLETE / REVIEW PASS / CLAUDE HOST PASS / EXTERNAL BLOCKED / LOCAL BLOCKED / CODEX UNSUPPORTED
+**Status:** IMPLEMENTATION COMPLETE / REVIEW PASS / CLAUDE HOST PASS / EXTERNAL PASS / LOCAL BLOCKED / CODEX UNSUPPORTED
 
 ## Implemented architecture
 
@@ -39,7 +41,7 @@ conservative implicit remember does not enable P9 or cause a model request.
 
 | Backend | Status | Evidence |
 |---|---|---|
-| external / openai-compatible | BLOCKED | Production adapter and tests pass; available OpenAI credential returned HTTP 401 |
+| external / openai-compatible | PASS | Third-party OpenAI-compatible route with `gpt-5.6-sol` passed the production pipeline smoke |
 | local / Ollama | BLOCKED | Production loopback adapter and tests pass; Ollama runtime/model not installed |
 | host-agent / Claude Code | PASS | Claude Code 2.1.112 real isolated production smoke passed |
 | host-agent / Codex | UNSUPPORTED | Codex 0.147.0 cannot prove all-tools/MCP/hooks isolation |
@@ -47,6 +49,12 @@ conservative implicit remember does not enable P9 or cause a model request.
 The Claude backend requires no additional model API key but may consume the
 user's existing Claude Code account quota. No automatic fallback occurs among
 backend classes or providers.
+
+The external smoke used an explicitly configured third-party
+OpenAI-compatible endpoint. The route accepts JSON mode but hangs when
+`temperature: 0` is sent, so the reference adapter omits that optional field
+while retaining `response_format: { "type": "json_object" }`, strict schema
+validation, grounding, and deterministic admission.
 
 ## Mandatory scenario
 
@@ -69,6 +77,28 @@ Session B asked:
 
 P7 lexical recall injected Indexed Memory containing `a、b、c`. No semantic
 child Session was persisted; only the two expected coding Sessions existed.
+
+The same scenario passed through the external backend using:
+
+```text
+set -a
+source .env
+set +a
+node scripts/p9-real-smoke.mjs --backend external
+```
+
+Observed external result:
+
+```json
+{
+  "backend": "external",
+  "provider": "codex",
+  "status": "PASS",
+  "semanticMemoryRows": 1,
+  "indexedOnly": true,
+  "crossSessionRecall": true
+}
+```
 
 ## Deterministic evaluation
 
@@ -161,5 +191,7 @@ and stores only an environment variable name for external credentials.
 - No durable never-persist watermark; checkpoint privacy semantics remain the
   existing P8 v1 contract.
 - Sensitive-evidence detection is intentionally narrow and is not full DLP.
-- External and local real-runtime gates remain blocked by environment
-  availability, not reported as PASS.
+- The local Ollama real-runtime gate remains blocked because no Ollama
+  runtime/model is installed.
+- Codex host-agent remains unsupported because its CLI cannot prove complete
+  tools/MCP/hooks isolation.
