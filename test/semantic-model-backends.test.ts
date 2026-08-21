@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { OllamaSemanticExtractionModel } from "../src/adapters/semantic-models/ollama.ts";
 import {
   ClaudeCodeHostSemanticExtractionModel,
   type HostProcessRunner,
 } from "../src/adapters/semantic-models/claude-code-host.ts";
-import { OpenAiCompatibleSemanticExtractionModel } from "../src/adapters/semantic-models/openai-compatible.ts";
 import { semanticHttpLimits } from "../src/adapters/semantic-models/http.ts";
+import { OllamaSemanticExtractionModel } from "../src/adapters/semantic-models/ollama.ts";
+import { OpenAiCompatibleSemanticExtractionModel } from "../src/adapters/semantic-models/openai-compatible.ts";
 import {
   DefaultSemanticModelResolver,
   ReviewedHostAgentSemanticModelFactory,
@@ -50,6 +50,9 @@ test("external adapter performs one bounded structured request without exposing 
     new Headers(requests[0]?.init?.headers).get("authorization"),
     "Bearer fixture-secret"
   );
+  const requestBody = JSON.parse(String(requests[0]?.init?.body)) as Record<string, unknown>;
+  assert.equal("temperature" in requestBody, false);
+  assert.deepEqual(requestBody.response_format, { type: "json_object" });
   assert.doesNotMatch(JSON.stringify(await model.extract(input)), /fixture-secret/u);
 });
 

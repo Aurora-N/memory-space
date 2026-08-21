@@ -5,6 +5,22 @@ import { join } from "node:path";
 import { createMemorySpaceDaemon } from "../src/index.ts";
 
 type Provider = "claude-code";
+type Backend = "host-agent" | "external";
+
+interface SmokeConfiguration {
+  backend: Backend;
+  provider: Provider | "codex";
+  model: Record<string, unknown>;
+}
+
+function backendArgument(): Backend {
+  const index = process.argv.indexOf("--backend");
+  const value = index < 0 ? "host-agent" : process.argv[index + 1];
+  if (value !== "host-agent" && value !== "external") {
+    throw new Error("P9 real smoke supports --backend host-agent or external");
+  }
+  return value;
+}
 
 function providerArgument(): Provider {
   const index = process.argv.indexOf("--provider");
@@ -15,7 +31,37 @@ function providerArgument(): Provider {
   return value;
 }
 
-function bind(project: string, spaceId: string, provider: Provider): void {
+function smokeConfiguration(): SmokeConfiguration {
+  if (backendArgument() === "host-agent") {
+    const provider = providerArgument();
+    return {
+      backend: "host-agent",
+      provider,
+      model: { backend: "host-agent", provider },
+    };
+  }
+  const baseUrl = process.env.SEMANTIC_BASE_URL;
+  const model = process.env.SEMANTIC_MODEL;
+  const apiKey = process.env.MEMORY_SPACE_SEMANTIC_API_KEY;
+  if (!baseUrl || !model || !apiKey) {
+    throw new Error(
+      "External smoke requires SEMANTIC_BASE_URL, SEMANTIC_MODEL, and MEMORY_SPACE_SEMANTIC_API_KEY"
+    );
+  }
+  return {
+    backend: "external",
+    provider: "codex",
+    model: {
+      backend: "external",
+      adapter: "openai-compatible",
+      baseUrl,
+      model,
+      apiKeyEnv: "MEMORY_SPACE_SEMANTIC_API_KEY",
+    },
+  };
+}
+
+function bind(project: string, spaceId: string, configuration: SmokeConfiguration): void {
   mkdirSync(join(project, ".memory-space"), { recursive: true });
   writeFileSync(
     join(project, ".memory-space", "config.json"),
@@ -28,7 +74,7 @@ function bind(project: string, spaceId: string, provider: Provider): void {
         semanticExtraction: {
           mode: "grounded",
           timeoutMs: 30_000,
-          model: { backend: "host-agent", provider },
+          model: configuration.model,
         },
       },
       null,
@@ -37,14 +83,15 @@ function bind(project: string, spaceId: string, provider: Provider): void {
   );
 }
 
-async function realSmoke(provider: Provider): Promise<void> {
+async function realSmoke(configuration: SmokeConfiguration): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), "memory-space-p9-real-"));
   const project = join(root, "project");
   const spaceId = "p9-real-smoke";
+  const provider = configuration.provider;
   const source =
     "上传组件是通过 variant 来判断是否使用新版样式的，现在 variant 一共有 a、b、c 三种。";
   mkdirSync(project);
-  bind(project, spaceId, provider);
+  bind(project, spaceId, configuration);
   const daemon = createMemorySpaceDaemon({
     databasePath: join(root, "memory.db"),
     mcpRuntime: { cwd: project },
@@ -98,6 +145,7 @@ async function realSmoke(provider: Provider): Promise<void> {
     console.log(
       JSON.stringify(
         {
+          backend: configuration.backend,
           provider,
           status: "PASS",
           semanticMemoryRows: memories.length,
@@ -115,6 +163,7 @@ async function realSmoke(provider: Provider): Promise<void> {
 }
 
 function selfTest(): void {
+  assert.equal(backendArgument(), "host-agent");
   assert.equal(providerArgument(), "claude-code");
   console.log(JSON.stringify({ status: "PASS", mode: "self-test" }));
 }
@@ -122,5 +171,5 @@ function selfTest(): void {
 if (process.argv.includes("--self-test")) {
   selfTest();
 } else {
-  await realSmoke(providerArgument());
+  await realSmoke(smokeConfiguration());
 }

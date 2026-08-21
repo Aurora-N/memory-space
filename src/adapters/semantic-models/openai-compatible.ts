@@ -41,7 +41,6 @@ export class OpenAiCompatibleSemanticExtractionModel implements SemanticExtracti
       headers: this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : undefined,
       body: {
         model: this.model,
-        temperature: 0,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: input.instruction },
