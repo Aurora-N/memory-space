@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
 import type { P9SemanticExtractionReport } from "../../eval/p9-semantic-extraction.ts";
+import type { P9RealSemanticQualityReport } from "../../eval/p9-real-semantic-quality.ts";
 import {
   formatStageB1Comparison,
   type StageB1ComparisonReport,
@@ -44,6 +45,7 @@ import {
   promptSemanticSetup,
   type SemanticSetupOptions,
 } from "./semantic-setup.ts";
+import { probeHostAgentCapability } from "../integration/host-agent-capability.ts";
 
 export interface CommandContext {
   cwd: string;
@@ -198,6 +200,16 @@ export async function runSemanticSetup(
     context.write(`Backend:        ${setup.backend}`);
     if (setup.backend === "host-agent") {
       context.write(`Provider:       ${setup.provider}`);
+      if (setup.provider === "claude-code") {
+        const capability = await probeHostAgentCapability("claude-code");
+        context.write(
+          `Capability:     ${capability.status.toUpperCase()}${capability.version ? ` (${capability.version})` : ""}`
+        );
+      } else {
+        context.write(
+          "Capability:     UNVERIFIED until resolved from a persisted Session provider"
+        );
+      }
       context.write("No additional model API key; uses the selected coding-agent account/quota.");
     } else {
       context.write(`Adapter:        ${setup.adapter}`);
@@ -648,20 +660,24 @@ export async function runDoctor(
         )
       );
     } else if (model?.backend === "host-agent") {
+      const provider = model.provider === "auto" ? undefined : model.provider;
+      const capability = provider ? await probeHostAgentCapability(provider) : undefined;
       const status =
-        model.provider === "claude-code" ? "ok" : model.provider === "auto" ? "warn" : "error";
+        capability?.status === "reviewed"
+          ? "ok"
+          : capability?.status === "unsupported"
+            ? "error"
+            : "warn";
       checks.push(
         check(
           "semantic-backend",
           status,
-          model.provider === "claude-code"
-            ? "host-agent / claude-code / isolation capability reviewed."
-            : model.provider === "auto"
-              ? "host-agent / auto / Claude Code is reviewed; Codex is unsupported."
-              : "host-agent / codex / capability unsupported.",
-          status === "error"
-            ? "Choose the reviewed Claude Code host backend, local Ollama, or an external endpoint."
-            : undefined
+          capability
+            ? `host-agent / ${model.provider} / ${capability.status.toUpperCase()}${capability.version ? ` (${capability.version})` : ""}: ${capability.reason}`
+            : "host-agent / auto / runtime capability depends on the persisted Session provider.",
+          capability?.status === "reviewed"
+            ? undefined
+            : "Use a reviewed runtime, local Ollama, or an external endpoint."
         )
       );
     }
@@ -958,12 +974,17 @@ export async function runP9SemanticExtractionEvalCommand(
   if (options.json) {
     write(JSON.stringify(report, null, 2));
   } else {
-    write("P9 grounded semantic extraction eval");
+    write("P9 deterministic pipeline / admission eval");
     write("");
     write(
-      `Semantic Durable Precision        ${report.metrics.semanticDurablePrecision.toFixed(6)}`
+      `Pipeline Persistence Precision     ${report.metrics.pipelinePersistencePrecision.toFixed(6)}`
     );
-    write(`Semantic Durable Recall           ${report.metrics.semanticDurableRecall.toFixed(6)}`);
+    write(
+      `Pipeline Durable Acceptance       ${report.metrics.pipelineDurableAcceptanceRate.toFixed(6)}`
+    );
+    write(
+      `Grounding Acceptance Correctness  ${report.metrics.groundingAcceptanceCorrectness.toFixed(6)}`
+    );
     write(
       `Unsupported Claim Persistence     ${report.metrics.unsupportedClaimPersistenceRate.toFixed(6)}`
     );
@@ -994,6 +1015,26 @@ export async function runP9SemanticExtractionEvalCommand(
     write(`Hard correctness                  ${report.hardCorrectness.toUpperCase()}`);
   }
   return report.hardCorrectness === "pass" ? 0 : 1;
+}
+
+export async function runP9RealSemanticQualityEvalCommand(
+  options: { json?: boolean },
+  write: (line: string) => void,
+  runner: () => Promise<P9RealSemanticQualityReport>
+): Promise<number> {
+  const report = await runner();
+  if (options.json) write(JSON.stringify(report, null, 2));
+  else if (report.status === "blocked") {
+    write("P9 real semantic model quality eval");
+    write(`REAL SEMANTIC QUALITY EVAL = BLOCKED (${report.reason})`);
+  } else {
+    write("P9 real semantic model quality eval");
+    write(`Backend                      ${report.backend}`);
+    write(`Semantic Durable Precision    ${report.semanticDurablePrecision.toFixed(6)}`);
+    write(`Semantic Durable Recall       ${report.semanticDurableRecall.toFixed(6)}`);
+    write(`Result                        ${report.status.toUpperCase()}`);
+  }
+  return report.status === "pass" ? 0 : 1;
 }
 
 export async function runQualityEval(

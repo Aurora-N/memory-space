@@ -1777,10 +1777,11 @@ test("semantic extraction eval CLI is daemon-independent and supports human/JSON
       version: 1,
       fixtureVersion: 1,
       metrics: {
-        semanticDurablePrecision: 1,
-        semanticDurableRecall: 1,
-        fixtureDurableRecall: 1,
-        holdoutDurableRecall: 1,
+        pipelinePersistencePrecision: 1,
+        pipelineDurableAcceptanceRate: 1,
+        fixturePipelineDurableAcceptanceRate: 1,
+        holdoutPipelineDurableAcceptanceRate: 1,
+        groundingAcceptanceCorrectness: 1,
         unsupportedClaimPersistenceRate: 0,
         assistantOnlySemanticPersistenceRate: 0,
         transientSemanticPersistenceRate: 0,
@@ -1808,13 +1809,36 @@ test("semantic extraction eval CLI is daemon-independent and supports human/JSON
       },
     });
     assert.equal(human.code, 0);
-    assert.match(human.stdout, /P9 grounded semantic extraction eval/u);
+    assert.match(human.stdout, /P9 deterministic pipeline \/ admission eval/u);
 
     const json = await cli(["eval", "semantic-extraction", "--json"], {
       cwd: project,
       dependencies: { p9SemanticExtractionEvalRunner: async () => report },
     });
     assert.equal(JSON.parse(json.stdout).hardCorrectness, "pass");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("real semantic quality eval reports a blocked backend without fake precision claims", async () => {
+  const { directory, project } = temporaryProject("p9-real-quality-eval");
+  try {
+    const result = await cli(["eval", "semantic-quality"], {
+      cwd: project,
+      dependencies: {
+        p9RealSemanticQualityEvalRunner: async () => ({
+          status: "blocked" as const,
+          reason: "fixture backend unavailable",
+        }),
+        clientFactory: () => {
+          throw new Error("P9 quality eval must not construct a daemon client");
+        },
+      },
+    });
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /REAL SEMANTIC QUALITY EVAL = BLOCKED/u);
+    assert.doesNotMatch(result.stdout, /Precision\s+1\.000000/u);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

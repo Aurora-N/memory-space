@@ -38,6 +38,8 @@ export type SemanticModelUnavailableReason =
   | "usage_limit"
   | "capability_blocked"
   | "capability_unsupported"
+  | "capability_unverified"
+  | "provider_not_installed"
   | "provider_unavailable";
 
 /** Trusted runtime context used only to resolve the explicitly configured backend. */

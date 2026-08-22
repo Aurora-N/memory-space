@@ -13,6 +13,21 @@ JSON fixtures under `fixtures/` drive automated scenarios for the frozen MVP and
 
 Run them together with unit/integration tests using `pnpm test` or the complete quality gate with `pnpm run check`.
 
+## P9 semantic extraction
+
+P9 keeps deterministic pipeline/admission correctness separate from real-model quality:
+
+```bash
+pnpm memory-space eval semantic-extraction
+pnpm memory-space eval semantic-quality
+```
+
+The first command uses scripted oracle proposals and measures grounding, admission, replay,
+persistence, lifecycle, and recall contracts. It does not report semantic-model precision/recall.
+The second command uses a 20-positive/20-negative bilingual dataset and sends only raw conversation
+plus the extraction instruction/schema to the selected real backend. Without a configured reviewed
+backend it reports `REAL SEMANTIC QUALITY EVAL = BLOCKED`.
+
 ## P7 implicit prompt-time recall
 
 The frozen P7 fixture exercises active-Indexed-only prompt injection, bare and

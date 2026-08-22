@@ -42,6 +42,7 @@ function projectFixture(name: string): {
 function semanticResponse(candidate?: {
   content: string;
   eventId: string;
+  quote?: string;
 }): Response {
   return new Response(
     JSON.stringify({
@@ -58,13 +59,36 @@ function semanticResponse(candidate?: {
                       content: candidate.content,
                       assertion: "direct",
                       durability: "durable",
-                      evidence: [{ eventId: candidate.eventId, quote: candidate.content }],
+                      evidence: [
+                        { eventId: candidate.eventId, quote: candidate.quote ?? candidate.content },
+                      ],
                     },
                   ]
                 : [],
             }),
           },
         },
+      ],
+    }),
+    { status: 200 }
+  );
+}
+
+function semanticCandidatesResponse(
+  candidates: Array<{ content: string; eventId: string; quote?: string }>
+): Response {
+  const payload = candidates.map((candidate) => ({
+    family: "knowledge",
+    type: "fact",
+    content: candidate.content,
+    assertion: "direct",
+    durability: "durable",
+    evidence: [{ eventId: candidate.eventId, quote: candidate.quote ?? candidate.content }],
+  }));
+  return new Response(
+    JSON.stringify({
+      choices: [
+        { message: { content: JSON.stringify({ schemaVersion: 1, candidates: payload }) } },
       ],
     }),
     { status: 200 }
@@ -137,7 +161,10 @@ test("natural variant conversation becomes Indexed through the production P9/P8 
     assert.equal(memories.items[0]?.key, undefined);
     assert.equal(memories.items[0]?.content, source);
     assert.equal(memories.items[0]?.tier, "indexed");
-    assert.equal((await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId, undefined);
+    assert.equal(
+      (await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId,
+      undefined
+    );
     await assert.rejects(daemon.memorySpace.getLatestHandoff(session.spaceId), /not found/u);
   } finally {
     await daemon.close();
@@ -266,7 +293,10 @@ test("configured semantic checkpoint failure leaves boundary and Handoff unchang
       }),
       /Semantic extraction unavailable/u
     );
-    assert.equal((await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId, undefined);
+    assert.equal(
+      (await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId,
+      undefined
+    );
     await assert.rejects(daemon.memorySpace.getLatestHandoff(session.spaceId), /not found/u);
 
     fail = false;
@@ -275,12 +305,169 @@ test("configured semantic checkpoint failure leaves boundary and Handoff unchang
       idempotencyKey: "semantic-checkpoint",
     });
     assert.equal(retried.status, "completed");
-    assert.equal((await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId, user.event.id);
+    assert.equal(
+      (await daemon.memorySpace.getSession(session.id)).lastCheckpointEventId,
+      user.event.id
+    );
     assert.equal(userEventId, user.event.id);
     const memories = await daemon.memorySpace.browseMemories({ spaceId: session.spaceId });
     assert.equal(memories.items.length, 1);
     assert.equal(memories.items[0]?.content, source);
     assert.equal(memories.items[0]?.tier, "indexed");
+  } finally {
+    await daemon.close();
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("alternate semantic substrings at later Stop reuse one durable identity", async () => {
+  const fixture = projectFixture("alternate-stop");
+  const source = "现在 variant 一共有 a、b、c 三种。";
+  let calls = 0;
+  const daemon = createMemorySpaceDaemon({
+    databasePath: fixture.databasePath,
+    mcpRuntime: { cwd: fixture.project },
+    semanticFetch: async (_url, init) => {
+      calls += 1;
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const input = JSON.parse(body.messages[1]?.content ?? "{}") as {
+        events: Array<{ id: string; role: string }>;
+      };
+      const eventId = input.events.find((event) => event.role === "user")?.id ?? "missing";
+      return semanticResponse({
+        content: calls === 1 ? "variant 一共有 a、b、c 三种" : "现在 variant 一共有 a、b、c 三种",
+        quote: source,
+        eventId,
+      });
+    },
+  });
+  try {
+    const session = await startSession(daemon, fixture.project, "alternate-stop");
+    await daemon.lifecycleHandler.handle({
+      type: "user_prompt",
+      provider: "fake",
+      externalSessionId: "native-alternate-stop",
+      cwd: fixture.project,
+      content: source,
+    });
+    await daemon.lifecycleHandler.handle({
+      type: "assistant_turn",
+      provider: "fake",
+      externalSessionId: "native-alternate-stop",
+      cwd: fixture.project,
+      content: "收到。",
+    });
+    const first = (await daemon.memorySpace.browseMemories({ spaceId: session.spaceId })).items[0];
+    await daemon.lifecycleHandler.handle({
+      type: "assistant_turn",
+      provider: "fake",
+      externalSessionId: "native-alternate-stop",
+      cwd: fixture.project,
+      content: "继续。",
+    });
+    const memories = (await daemon.memorySpace.browseMemories({ spaceId: session.spaceId })).items;
+    assert.equal(memories.length, 1);
+    assert.equal(memories[0]?.id, first?.id);
+    assert.equal(memories[0]?.version, first?.version);
+  } finally {
+    await daemon.close();
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("alternate semantic substring at checkpoint converges without version inflation", async () => {
+  const fixture = projectFixture("alternate-checkpoint");
+  const source = "现在 variant 一共有 a、b、c 三种。";
+  let calls = 0;
+  const daemon = createMemorySpaceDaemon({
+    databasePath: fixture.databasePath,
+    mcpRuntime: { cwd: fixture.project },
+    semanticFetch: async (_url, init) => {
+      calls += 1;
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const input = JSON.parse(body.messages[1]?.content ?? "{}") as {
+        events: Array<{ id: string; role: string }>;
+      };
+      const eventId = input.events.find((event) => event.role === "user")?.id ?? "missing";
+      return semanticResponse({
+        content: calls === 1 ? "variant 一共有 a、b、c 三种" : "现在 variant 一共有 a、b、c 三种",
+        quote: source,
+        eventId,
+      });
+    },
+  });
+  try {
+    const session = await startSession(daemon, fixture.project, "alternate-checkpoint");
+    await daemon.lifecycleHandler.handle({
+      type: "user_prompt",
+      provider: "fake",
+      externalSessionId: "native-alternate-checkpoint",
+      cwd: fixture.project,
+      content: source,
+    });
+    await daemon.lifecycleHandler.handle({
+      type: "assistant_turn",
+      provider: "fake",
+      externalSessionId: "native-alternate-checkpoint",
+      cwd: fixture.project,
+      content: "收到。",
+    });
+    const before = (await daemon.memorySpace.browseMemories({ spaceId: session.spaceId })).items[0];
+    const checkpoint = await daemon.memorySpace.checkpoint({
+      sessionId: session.id,
+      idempotencyKey: "alternate-checkpoint",
+    });
+    assert.equal(checkpoint.status, "completed");
+    const memories = (await daemon.memorySpace.browseMemories({ spaceId: session.spaceId })).items;
+    assert.equal(memories.length, 1);
+    assert.equal(memories[0]?.id, before?.id);
+    assert.equal(memories[0]?.version, before?.version);
+  } finally {
+    await daemon.close();
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+});
+
+test("two semantic facts in separate clauses of one event remain distinct", async () => {
+  const fixture = projectFixture("two-facts");
+  const source = "项目数据库使用 PostgreSQL，缓存使用 Redis。";
+  const daemon = createMemorySpaceDaemon({
+    databasePath: fixture.databasePath,
+    mcpRuntime: { cwd: fixture.project },
+    semanticFetch: async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const input = JSON.parse(body.messages[1]?.content ?? "{}") as {
+        events: Array<{ id: string; role: string }>;
+      };
+      const eventId = input.events.find((event) => event.role === "user")?.id ?? "missing";
+      return semanticCandidatesResponse([
+        { content: "项目数据库使用 PostgreSQL", quote: source, eventId },
+        { content: "缓存使用 Redis", quote: source, eventId },
+      ]);
+    },
+  });
+  try {
+    const session = await startSession(daemon, fixture.project, "two-facts");
+    await daemon.lifecycleHandler.handle({
+      type: "user_prompt",
+      provider: "fake",
+      externalSessionId: "native-two-facts",
+      cwd: fixture.project,
+      content: source,
+    });
+    await daemon.lifecycleHandler.handle({
+      type: "assistant_turn",
+      provider: "fake",
+      externalSessionId: "native-two-facts",
+      cwd: fixture.project,
+      content: "收到。",
+    });
+    const memories = (await daemon.memorySpace.browseMemories({ spaceId: session.spaceId })).items;
+    assert.equal(memories.length, 2);
+    assert.deepEqual(
+      memories.map((memory) => memory.content).sort(),
+      ["缓存使用 Redis", "项目数据库使用 PostgreSQL"].sort()
+    );
   } finally {
     await daemon.close();
     rmSync(fixture.directory, { recursive: true, force: true });

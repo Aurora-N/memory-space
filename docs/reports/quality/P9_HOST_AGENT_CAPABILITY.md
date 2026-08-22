@@ -13,6 +13,15 @@
 | Claude Code | 2.1.112 | PASS | Real isolated structured extraction and production pipeline smoke passed |
 | Codex | 0.147.0 | UNSUPPORTED | CLI contract does not expose a reviewed way to disable all tools, MCP, and hooks |
 
+Runtime reporting now verifies the installed CLI before declaring the backend available. Doctor and
+setup use a no-model-call `--version`/`--help` probe and report one of `REVIEWED`, `UNVERIFIED`,
+`UNSUPPORTED`, or `NOT_INSTALLED`. Claude Code is `REVIEWED` only when the runtime matches the
+reviewed 2.1.112 evidence and exposes every required isolation flag. Other versions are not silently
+treated as having passed this historical gate.
+
+The 2026-08-22 hardening environment did not have `claude` installed, so the historical smoke below
+was not rerun and current runtime status was `NOT INSTALLED`.
+
 ## Claude Code
 
 The reviewed invocation uses:

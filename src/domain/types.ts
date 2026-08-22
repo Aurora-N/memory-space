@@ -78,6 +78,8 @@ export interface MemoryCandidate {
   sourceEventIds: string[];
   operation: CandidateOperation;
   targetMemoryId?: string;
+  /** Trusted extractor-derived replay identity; never accepted from model output directly. */
+  replayIdentity?: string;
 }
 
 /** Idempotent durable boundary covering a contiguous range of Session events. */

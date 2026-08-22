@@ -433,6 +433,11 @@ Exact constants may differ slightly if tests prove equivalent bounded behavior, 
 
 The P8 source SessionEvents remain unmodified. P9 model-input truncation is a derived view only.
 
+Input construction must be computationally linear in inspected content (or `O(n log n)` when final
+ordering is required). Truncation must use a direct UTF-16-safe suffix operation; repeated whole-string
+joins/shifts or equivalent quadratic rebuilding is forbidden. A bounded model payload does not excuse
+unbounded preprocessing work.
+
 ---
 
 # 9. Untrusted semantic proposal schema
@@ -607,6 +612,11 @@ A candidate requires at least one valid user evidence item.
 Grounding MUST use the authoritative persisted SessionEvent, not a bounded/truncated model-input copy.
 
 This preserves the P8 control invariant already established for opt-out.
+
+When semantic extraction is configured, `ExtractionContext.sourceEvents` is required and authoritative.
+The semantic branch must fail closed if it is absent; it must never fall back to the derived `events`
+view. Implicit lifecycle handling remains fail-open around that branch, while checkpoint failure keeps
+the existing checkpoint-significant semantics.
 
 ## 11.2 Quote matching
 
@@ -864,21 +874,28 @@ Do not silently advance a checkpoint boundary after discarding a configured sema
 
 # 17. Receipt and idempotency compatibility
 
-P9 MUST reuse the frozen P8 candidate fingerprint and receipt semantics.
+P9 MUST reuse the frozen P8 receipt table and commit semantics. Deterministic extractor candidates keep
+the frozen `p8:v1` candidate fingerprint unchanged.
 
 Do not introduce a second semantic receipt table.
 
-A validated semantic proposal becomes an ordinary `MemoryCandidate`, therefore:
+A validated semantic proposal additionally receives a trusted deterministic replay identity derived
+from exact grounded source evidence. The model cannot supply this identity. P9 v1 derives it from:
 
 ```text
-same candidate content
-+ same Session
-+ same sourceEventIds
+same Session
++ same family/type
++ same source event
++ same deterministic source clause containing candidate content
         ↓
-existing p8:v1 fingerprint
+P9 evidence replay fingerprint
         ↓
 existing MemoryCandidateCommitReceipt
 ```
+
+This identity deliberately ignores benign expansion/contraction of an exact candidate substring within
+the same clause. Distinct clauses in one event remain distinct, so multiple facts from one event are not
+collapsed merely because they share `sourceEventIds`.
 
 This preserves:
 
@@ -888,6 +905,9 @@ This preserves:
 - checkpoint historical replay protection.
 
 If future P9.x changes canonical semantic identity, it must explicitly review fingerprint compatibility rather than silently changing P8 receipt meaning.
+
+This is evidence replay convergence, not general semantic identity. It does not merge paraphrases from
+different source events or define update semantics for changed facts.
 
 ---
 
@@ -1198,6 +1218,10 @@ This validates composition with P7; it does not authorize changes to P7 ranking.
 
 # 21. Quality evaluation
 
+P9 evaluation has two independent layers.
+
+## 21.1 Layer A — deterministic pipeline / admission correctness
+
 Create a dedicated deterministic P9 evaluator, for example:
 
 ```text
@@ -1207,9 +1231,22 @@ eval/fixtures/p9-semantic-extraction.json
 
 Tests MUST use a deterministic fake `SemanticExtractionModel` so CI does not require network credentials.
 
-The fake model returns scripted structured proposals and failure modes; application validation must still prove/reject them exactly as production would.
+The fake model returns scripted structured proposals and failure modes; application validation must
+still prove/reject them exactly as production would. Because this fake may consume fixture labels, its
+metrics must be named for grounding, admission, persistence, replay, and lifecycle correctness. They
+must not be reported as semantic-model precision or recall.
 
-## 21.1 Required dataset classes
+## 21.2 Layer B — real semantic-model quality
+
+The real model receives only raw event conversation and the P9 extraction instruction/schema. Expected
+content, type, assertion, durability, persistence, or other answer labels remain scorer-only.
+
+The first reviewed gate requires at least 20 durable positive and 20 negative/should-not-persist cases,
+including Chinese and English and a genuine holdout wording split. If credentials, quota, runtime, or a
+reviewed capability is unavailable, report `REAL SEMANTIC QUALITY EVAL = BLOCKED`; never substitute a
+Layer A fake-model result.
+
+## 21.3 Required dataset classes
 
 Positive durable fixtures should include at minimum:
 
@@ -1241,7 +1278,7 @@ opted-out evidence
 cross-turn opted-out evidence
 ```
 
-## 21.2 Primary metrics
+## 21.4 Primary metrics
 
 P9 quality is precision-first.
 
@@ -1278,6 +1315,9 @@ Implicit lifecycle blocking failure     = 0.0
 ```
 
 Hard correctness MUST fail if any safety/persistence rate expected at zero becomes non-zero, even if aggregate recall improves.
+
+`Semantic Durable Precision` and `Semantic Durable Recall` apply only to Layer B. Layer A keeps the
+zero-rate safety gates and deterministic closure metrics under pipeline/admission names.
 
 Precision is more important than recall:
 

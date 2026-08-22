@@ -52,10 +52,11 @@ export interface P9SemanticExtractionReport {
   version: 1;
   fixtureVersion: 1;
   metrics: {
-    semanticDurablePrecision: number;
-    semanticDurableRecall: number;
-    fixtureDurableRecall: number;
-    holdoutDurableRecall: number;
+    pipelinePersistencePrecision: number;
+    pipelineDurableAcceptanceRate: number;
+    fixturePipelineDurableAcceptanceRate: number;
+    holdoutPipelineDurableAcceptanceRate: number;
+    groundingAcceptanceCorrectness: number;
     unsupportedClaimPersistenceRate: number;
     assistantOnlySemanticPersistenceRate: number;
     transientSemanticPersistenceRate: number;
@@ -357,6 +358,7 @@ async function runClosureChecks(): Promise<{
   const variant =
     "上传组件是通过 variant 来判断是否使用新版样式的，现在 variant 一共有 a、b、c 三种。";
   let failSemantic = false;
+  let variantRequests = 0;
   const daemon = createMemorySpaceDaemon({
     databasePath: join(root, "memory.db"),
     mcpRuntime: { cwd: project },
@@ -366,12 +368,16 @@ async function runClosureChecks(): Promise<{
       const user = events.find(
         (event) => event.role === "user" && event.content.includes("variant")
       );
+      if (user) variantRequests += 1;
       return response(
         user
           ? {
               family: "knowledge",
               type: "fact",
-              content: variant,
+              content:
+                variantRequests % 2 === 1
+                  ? "variant 一共有 a、b、c 三种"
+                  : "现在 variant 一共有 a、b、c 三种",
               assertion: "direct",
               durability: "durable",
               evidence: [{ eventId: user.id, quote: variant }],
@@ -485,18 +491,25 @@ export async function runP9SemanticExtractionEval(
   const holdoutDurable = durable.filter((item) => item.split === "holdout");
   const closure = await runClosureChecks();
   const metrics: P9SemanticExtractionReport["metrics"] = {
-    semanticDurablePrecision: ratio(
+    pipelinePersistencePrecision: ratio(
       persisted.filter((item) => item.expectedPersistence).length,
       persisted.length
     ),
-    semanticDurableRecall: ratio(durable.filter((item) => item.persisted).length, durable.length),
-    fixtureDurableRecall: ratio(
+    pipelineDurableAcceptanceRate: ratio(
+      durable.filter((item) => item.persisted).length,
+      durable.length
+    ),
+    fixturePipelineDurableAcceptanceRate: ratio(
       fixtureDurable.filter((item) => item.persisted).length,
       fixtureDurable.length
     ),
-    holdoutDurableRecall: ratio(
+    holdoutPipelineDurableAcceptanceRate: ratio(
       holdoutDurable.filter((item) => item.persisted).length,
       holdoutDurable.length
+    ),
+    groundingAcceptanceCorrectness: ratio(
+      scenarios.filter((item) => item.passed).length,
+      scenarios.length
     ),
     unsupportedClaimPersistenceRate: persistenceRate(scenarios, "unsupported"),
     assistantOnlySemanticPersistenceRate: persistenceRate(scenarios, "assistant-only"),
@@ -519,8 +532,9 @@ export async function runP9SemanticExtractionEval(
     crossSessionRecallSuccessRate: closure.crossSessionRecallSuccessRate,
   };
   const hardCorrectness =
-    metrics.semanticDurablePrecision >= 0.95 &&
-    metrics.semanticDurableRecall >= 0.75 &&
+    metrics.pipelinePersistencePrecision === 1 &&
+    metrics.pipelineDurableAcceptanceRate === 1 &&
+    metrics.groundingAcceptanceCorrectness === 1 &&
     metrics.unsupportedClaimPersistenceRate === 0 &&
     metrics.assistantOnlySemanticPersistenceRate === 0 &&
     metrics.transientSemanticPersistenceRate === 0 &&

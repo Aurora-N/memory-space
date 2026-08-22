@@ -10,6 +10,10 @@ import type {
   SemanticModelResolutionContext,
   SemanticModelResolver,
 } from "../ports/semantic-extraction-model.ts";
+import {
+  probeHostAgentCapability,
+  type HostAgentCapabilityProbe,
+} from "./host-agent-capability.ts";
 
 /** Capability-gated provider-specific factory; unsupported providers must not fallback. */
 export interface HostAgentSemanticModelFactory {
@@ -22,9 +26,13 @@ export interface HostAgentSemanticModelFactory {
 /** Resolves only host-agent providers with a completed real isolation capability gate. */
 export class ReviewedHostAgentSemanticModelFactory implements HostAgentSemanticModelFactory {
   readonly env: NodeJS.ProcessEnv;
+  readonly capabilityProbe: HostAgentCapabilityProbe;
 
-  constructor(options: { env?: NodeJS.ProcessEnv } = {}) {
+  constructor(
+    options: { env?: NodeJS.ProcessEnv; capabilityProbe?: HostAgentCapabilityProbe } = {}
+  ) {
     this.env = options.env ?? process.env;
+    this.capabilityProbe = options.capabilityProbe ?? probeHostAgentCapability;
   }
 
   async resolve(
@@ -37,6 +45,20 @@ export class ReviewedHostAgentSemanticModelFactory implements HostAgentSemanticM
         backend: "host-agent",
         provider,
         reason: "capability_unsupported",
+      };
+    }
+    const capability = await this.capabilityProbe(provider);
+    if (capability.status !== "reviewed") {
+      return {
+        available: false,
+        backend: "host-agent",
+        provider,
+        reason:
+          capability.status === "not_installed"
+            ? "provider_not_installed"
+            : capability.status === "unsupported"
+              ? "capability_unsupported"
+              : "capability_unverified",
       };
     }
     return {

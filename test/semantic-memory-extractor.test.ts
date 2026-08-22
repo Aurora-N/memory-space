@@ -167,6 +167,8 @@ test("mandatory natural variant fact becomes one grounded unkeyed Indexed candid
       recommendedTier: "indexed",
       sourceEventIds: ["u1"],
       operation: "create",
+      replayIdentity:
+        "u1\0上传组件是通过 variant 来判断是否使用新版样式的,现在 variant 一共有 a、b、c 三种。",
     },
   ]);
   assert.equal(model.calls.length, 1);
@@ -308,6 +310,51 @@ test("semantic input remains bounded and retains latest user evidence", () => {
     const last = event.content.charCodeAt(event.content.length - 1);
     assert.ok(!(last >= 0xd800 && last <= 0xdbff));
   }
+});
+
+test("semantic input truncation is linear-safe for large ASCII, Chinese, and surrogate boundaries", () => {
+  const original = `未修改-${"界".repeat(100_000)}😀tail`;
+  const ascii = buildSemanticModelEvents([message("u1", 1, "user", "a".repeat(200_000))], 101);
+  const chinese = buildSemanticModelEvents([message("u2", 2, "user", original)], 103);
+  const splitSurrogate = buildSemanticModelEvents(
+    [message("u3", 3, "user", `${"x".repeat(100)}😀tail`)],
+    5
+  );
+  assert.equal(ascii[0]?.content.length, 101);
+  assert.equal(chinese[0]?.content.length, 103);
+  assert.equal(splitSurrogate[0]?.content, "tail");
+  assert.equal(message("u2", 2, "user", original).payload.content, original);
+  for (const events of [ascii, chinese, splitSurrogate]) {
+    assert.ok(events.reduce((sum, event) => sum + event.content.length, 0) <= 103);
+    const first = events[0]?.content.charCodeAt(0) ?? 0;
+    assert.ok(!(first >= 0xdc00 && first <= 0xdfff));
+  }
+});
+
+test("semantic extraction never treats a derived event view as grounding authority", async () => {
+  const full = message("u1", 1, "user", "数据库使用 PostgreSQL。");
+  const derived = message("u1", 1, "user", "PostgreSQL");
+  const model = new ScriptedSemanticExtractionModel(() => ({
+    schemaVersion: 1,
+    candidates: [
+      {
+        family: "knowledge",
+        type: "fact",
+        content: "PostgreSQL",
+        assertion: "direct",
+        durability: "durable",
+        evidence: [{ eventId: "u1", quote: "PostgreSQL" }],
+      },
+    ],
+  }));
+  const missingAuthority = { ...context([full]), sourceEvents: undefined };
+  assert.deepEqual(await extractor(model).extract([derived], missingAuthority), []);
+  await assert.rejects(
+    extractor(model).extract([derived], { ...missingAuthority, trigger: "checkpoint" }),
+    (error: unknown) =>
+      error instanceof SemanticExtractionError &&
+      error.code === "authoritative_source_events_missing"
+  );
 });
 
 test("semantic failure is optional for implicit extraction and fatal for configured checkpoint", async () => {

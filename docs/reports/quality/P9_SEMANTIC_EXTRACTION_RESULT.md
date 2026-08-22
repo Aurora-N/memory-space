@@ -1,143 +1,43 @@
 # P9 Grounded Semantic Memory Extraction Result
 
-**Date:** 2026-08-21
+**Date:** 2026-08-22
 
 **P9 semantic extraction spec:** `dee763a1df265b3a93809bb2ce4edf129fa52fe1`
 
 **P9 backend amendment:** `cc8c86930cc4a729772534448f3d0ceabf24518d`
 
-**Implementation commit:** `8f5f6001bbdc376cefb75d6428765ae239760f07`
+**Hardening review:** `docs/reviews/CR-PHASE13-P9-HARDENING.md`
 
-**External compatibility fix:** `8350d6db78e1bb1d5c02bfd22b1d005bc9cb9a1a`
+**Status:** IMPLEMENTATION COMPLETE / REVIEW CHANGES REQUIRED / REAL QUALITY EVAL BLOCKED
 
-**Self-review:** `docs/reviews/CR-PHASE12-P9.md`
+## Result separation
 
-**Status:** IMPLEMENTATION COMPLETE / REVIEW PASS / CLAUDE HOST PASS / EXTERNAL PASS / LOCAL BLOCKED / CODEX UNSUPPORTED
+P9 evidence is reported in three independent layers. A PASS in one layer does not imply a PASS in
+another.
 
-## Implemented architecture
-
-P9 adds a provider-neutral `SemanticExtractionModel` capability behind
-`MemoryExtractor`:
-
-```text
-persisted SessionEvents
-  -> one bounded semantic model request
-  -> strict versioned proposal parsing
-  -> full persisted user-event quote grounding
-  -> deterministic durability/safety validation
-  -> existing P8 admission
-  -> receipt-aware Indexed commit
-  -> later P7 lexical recall
-```
-
-The model cannot select Memory identity, key, operation, tier, promotion,
-checkpoint, or Handoff. Accepted P9 v1 candidates are unkeyed, create-only, and
-Indexed-recommended. P8 still forces every implicit commit to Indexed.
-
-Existing projects without `semanticExtraction` remain off. Enabling P8
-conservative implicit remember does not enable P9 or cause a model request.
-
-## Backend status
-
-| Backend | Status | Evidence |
+| Layer | Current result | What it proves |
 |---|---|---|
-| external / openai-compatible | PASS | Third-party OpenAI-compatible route with `gpt-5.6-sol` passed the production pipeline smoke |
-| local / Ollama | BLOCKED | Production loopback adapter and tests pass; Ollama runtime/model not installed |
-| host-agent / Claude Code | PASS | Claude Code 2.1.112 real isolated production smoke passed |
-| host-agent / Codex | UNSUPPORTED | Codex 0.147.0 cannot prove all-tools/MCP/hooks isolation |
+| Pipeline / Admission Correctness | PASS | Oracle proposal parsing, exact grounding, policy, replay convergence, persistence, and recall |
+| Real Semantic Model Quality | BLOCKED | No reviewed real backend is available in this environment; no precision/recall result is claimed |
+| Backend Capability Smoke | Historical external and Claude PASS | A previously tested route/runtime could execute the production pipeline |
 
-The Claude backend requires no additional model API key but may consume the
-user's existing Claude Code account quota. No automatic fallback occurs among
-backend classes or providers.
+## Pipeline / admission correctness
 
-The external smoke used an explicitly configured third-party
-OpenAI-compatible endpoint. The route accepts JSON mode but hangs when
-`temperature: 0` is sent, so the reference adapter omits that optional field
-while retaining `response_format: { "type": "json_object" }`, strict schema
-validation, grounding, and deterministic admission.
-
-## Mandatory scenario
-
-Session A used ordinary natural language:
+Command:
 
 ```text
-上传组件是通过 variant 来判断是否使用新版样式的，
-现在 variant 一共有 a、b、c 三种。
+node --experimental-strip-types src/cli/main.ts eval semantic-extraction --json
 ```
 
-The real Claude host semantic child proposed exact user substrings. The normal
-P9/P8 path grounded and admitted two Indexed facts without any
-`memory_remember`, `memory_search`, or `memory_context` call.
-
-Session B asked:
-
-```text
-上传模块的 variant 有什么类型？
-```
-
-P7 lexical recall injected Indexed Memory containing `a、b、c`. No semantic
-child Session was persisted; only the two expected coding Sessions existed.
-
-The same scenario passed through the external backend using:
-
-```text
-set -a
-source .env
-set +a
-node scripts/p9-real-smoke.mjs --backend external
-```
-
-Observed external result:
-
-```json
-{
-  "backend": "external",
-  "provider": "codex",
-  "status": "PASS",
-  "semanticMemoryRows": 1,
-  "indexedOnly": true,
-  "crossSessionRecall": true
-}
-```
-
-## Deterministic evaluation
-
-`pnpm memory-space eval semantic-extraction` covers durable Chinese and English
-facts, decisions, constraints, conventions, durable state, holdout phrasing,
-transient narration, test results, speculation, hypotheses, temporary
-experiments, assistant-only claims, generic acknowledgements, credentials,
-invalid quotes, unknown event IDs, current-turn opt-out, cross-turn opt-out,
-deterministic fallback, replay, checkpoint convergence, and P7 cross-session
-recall.
-
-Targets:
-
-| Metric | Required |
-|---|---:|
-| Semantic Durable Precision | >= 0.95 |
-| Semantic Durable Recall | >= 0.75 |
-| Unsupported Claim Persistence Rate | 0.0 |
-| Assistant-Only Persistence Rate | 0.0 |
-| Transient Persistence Rate | 0.0 |
-| Speculative Persistence Rate | 0.0 |
-| Sensitive Persistence Rate | 0.0 |
-| Opt-Out Violation Rate | 0.0 |
-| Cross-Turn Opt-Out Violation Rate | 0.0 |
-| Implicit Core Write Rate | 0.0 |
-| Same-Evidence Duplicate Rate | 0.0 |
-| Checkpoint Historical Replay Count | 0 |
-| Deterministic Fallback Success Rate | 1.0 |
-| Lifecycle Blocking Failure Rate | 0.0 |
-| Cross-Session Recall Success Rate | 1.0 |
-
-Measured deterministic results:
+Observed on 2026-08-22:
 
 | Metric | Result |
 |---|---:|
-| Semantic Durable Precision | 1.000000 |
-| Semantic Durable Recall | 1.000000 |
-| Fixture Durable Recall | 1.000000 |
-| Holdout Durable Recall | 1.000000 |
+| Pipeline Persistence Precision | 1.000000 |
+| Pipeline Durable Acceptance Rate | 1.000000 |
+| Fixture Pipeline Durable Acceptance Rate | 1.000000 |
+| Holdout Pipeline Durable Acceptance Rate | 1.000000 |
+| Grounding Acceptance Correctness | 1.000000 |
 | Unsupported Claim Persistence Rate | 0.000000 |
 | Assistant-Only Persistence Rate | 0.000000 |
 | Transient Persistence Rate | 0.000000 |
@@ -153,45 +53,78 @@ Measured deterministic results:
 | Cross-Session Recall Success Rate | 1.000000 |
 | Hard correctness | PASS |
 
-## Safety and lifecycle
+These are deliberately not named Semantic Durable Precision/Recall. The deterministic fake backend
+uses fixture labels to construct oracle proposals, so this layer measures the pipeline after proposal
+construction, not natural-language extraction quality.
 
-- model input is bounded to 12,000 UTF-16 characters;
-- output is limited to eight proposals, three quotes per proposal, 500 quote
-  characters, and 1,000 content characters;
-- grounding uses raw exact substrings of full persisted user events;
-- fake event IDs, assistant evidence, paraphrased content, and unsupported
-  quotes fail closed;
-- current and historical opted-out evidence remains ineligible for implicit
-  remember through existing P8 full-source admission;
-- secret-shaped values are rejected without including them in diagnostics;
-- external requests have one attempt, bounded timeout, and 1 MiB response cap;
-- local configuration is loopback-only and never pulls a model automatically;
-- Claude host execution uses an empty cwd, strict empty MCP configuration,
-  disabled tools/settings/slash commands, no session persistence, bounded
-  process output, and a recursion marker;
-- semantic failure at Stop is fail-open and deterministic extraction remains
-  available;
-- configured checkpoint semantic failure remains checkpoint-significant and
-  does not advance the boundary.
+The replay fixture now alternates two exact grounded substrings for the same persisted event across
+Stop replay and checkpoint. Both converge on one durable Memory identity without version inflation.
+Two independent clauses in one event remain independently persistable.
 
-## Setup
+## Real semantic model quality
 
-`memory-space semantic setup [project]` supports interactive selection and
-deterministic non-interactive modes for host-agent, local, external, and off.
-It atomically updates only `semanticExtraction`, preserves Space/P7/P8 and
-unrelated configuration, rejects symlink/non-file targets, supports dry-run,
-and stores only an environment variable name for external credentials.
+Command:
 
-## Known limitations and deferred work
+```text
+node --experimental-strip-types src/cli/main.ts eval semantic-quality --json
+```
 
-- P9 v1 has no semantic canonical identity or semantic merge/update policy.
-- Unkeyed semantic facts may remain separate when wording changes.
-- No embedding, vector database, semantic retrieval, reranking, or verifier.
-- No automatic historical reprocessing or background extraction.
-- No durable never-persist watermark; checkpoint privacy semantics remain the
-  existing P8 v1 contract.
-- Sensitive-evidence detection is intentionally narrow and is not full DLP.
-- The local Ollama real-runtime gate remains blocked because no Ollama
-  runtime/model is installed.
-- Codex host-agent remains unsupported because its CLI cannot prove complete
-  tools/MCP/hooks isolation.
+The real-model dataset contains 20 durable positives and 20 negative/should-not-persist cases, split
+equally between fixture and holdout wording. It covers Chinese and English facts, decisions,
+constraints, conventions, goals/tasks/progress/blockers/questions, multi-clause language,
+speculation, temporary narration, requests, assistant-only claims, opt-out, and secret-like evidence.
+
+Only raw user/assistant events plus the P9 extraction instruction/schema are sent to the model.
+Expected durability and answer anchors remain in the scorer and are never included in model input.
+
+Observed on 2026-08-22:
+
+```text
+REAL SEMANTIC QUALITY EVAL = BLOCKED
+reason = no configured real quality backend; Claude Code CLI is not installed
+```
+
+Therefore no real Semantic Durable Precision or Semantic Durable Recall value is reported. The frozen
+thresholds remain:
+
+```text
+Semantic Durable Precision >= 0.95
+Semantic Durable Recall >= 0.75
+```
+
+Configure `MEMORY_SPACE_P9_QUALITY_BACKEND=host-agent` for a reviewed Claude runtime, or `external`
+with `MEMORY_SPACE_P9_QUALITY_BASE_URL`, `MEMORY_SPACE_P9_QUALITY_MODEL`, and optionally
+`MEMORY_SPACE_P9_QUALITY_API_KEY`.
+
+## Backend capability status
+
+| Backend | Status | Evidence |
+|---|---|---|
+| external / openai-compatible | Historical PASS | Third-party route smoke recorded by the prior review; not rerun in this hardening environment |
+| local / Ollama | BLOCKED | Runtime/model not installed |
+| host-agent / Claude Code | NOT INSTALLED here; historical 2.1.112 PASS | Runtime version/help is now probed before availability is reported |
+| host-agent / Codex | UNSUPPORTED | No reviewed all-tools/MCP/hooks isolation contract |
+
+Doctor and semantic setup distinguish `REVIEWED`, `UNVERIFIED`, `UNSUPPORTED`, and `NOT_INSTALLED`.
+The production resolver refuses unverified or missing Claude runtimes. The probe reads only CLI
+version/help and never performs a paid model call. Runtime extraction retains the isolated cwd,
+tools/MCP/settings/persistence controls, timeout, bounded output, and recursion marker.
+
+## Hardening behavior
+
+- semantic candidates receive a deterministic evidence-clause replay identity only after exact full
+  persisted-user grounding;
+- the existing P8 receipt fingerprint remains unchanged for deterministic extractors;
+- replay identity does not use an LLM-generated key and does not perform semantic similarity;
+- input suffix truncation is direct O(1) slicing after linear inspection and preserves UTF-16
+  surrogate boundaries;
+- event sequence lookup is precomputed before sorting;
+- missing authoritative `sourceEvents` fails the semantic branch closed before any model request;
+- implicit remember remains fail-open while a configured checkpoint still fails visibly.
+
+## Scope limitation
+
+Replay convergence covers benign alternate exact substrings that resolve to the same deterministic
+source clause, family, type, and source-event set. It does not claim general semantic equivalence.
+Different clauses from one event remain distinct. Updates such as `a,b,c -> a,b,c,d`, embeddings,
+semantic merge policy, and canonical stable keys remain deferred.

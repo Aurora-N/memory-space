@@ -6,13 +6,14 @@ import {
   validateP9Fixture,
 } from "./p9-semantic-extraction.ts";
 
-test("P9 deterministic semantic extraction eval meets precision-first gates", async () => {
+test("P9 deterministic pipeline and admission eval meets correctness gates", async () => {
   const first = await runP9SemanticExtractionEval();
   const second = await runP9SemanticExtractionEval();
   assert.deepEqual(second, first);
   assert.equal(first.hardCorrectness, "pass");
-  assert.ok(first.metrics.semanticDurablePrecision >= 0.95);
-  assert.ok(first.metrics.semanticDurableRecall >= 0.75);
+  assert.equal(first.metrics.pipelinePersistencePrecision, 1);
+  assert.equal(first.metrics.pipelineDurableAcceptanceRate, 1);
+  assert.equal(first.metrics.groundingAcceptanceCorrectness, 1);
   assert.equal(first.metrics.unsupportedClaimPersistenceRate, 0);
   assert.equal(first.metrics.assistantOnlySemanticPersistenceRate, 0);
   assert.equal(first.metrics.transientSemanticPersistenceRate, 0);

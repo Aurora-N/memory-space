@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import type { P7ImplicitRecallReport } from "../../eval/p7-implicit-recall.ts";
 import type { P8ImplicitRememberReport } from "../../eval/p8-implicit-remember.ts";
 import type { P9SemanticExtractionReport } from "../../eval/p9-semantic-extraction.ts";
+import type { P9RealSemanticQualityReport } from "../../eval/p9-real-semantic-quality.ts";
 import type { StageB1ComparisonReport } from "../../eval/quality/comparison.ts";
 import type { StageB3CoreHandoffComparisonReport } from "../../eval/quality/core-handoff-comparison.ts";
 import type { StageB2ExtractionComparisonReport } from "../../eval/quality/extraction-comparison.ts";
@@ -20,6 +21,7 @@ import {
   runInspect,
   runP7ImplicitRecallEvalCommand,
   runP8ImplicitRememberEvalCommand,
+  runP9RealSemanticQualityEvalCommand,
   runP9SemanticExtractionEvalCommand,
   runQualityComparison,
   runQualityCoreHandoffComparison,
@@ -94,6 +96,7 @@ export interface CliDependencies {
   p7ImplicitRecallEvalRunner?: () => Promise<P7ImplicitRecallReport>;
   p8ImplicitRememberEvalRunner?: () => Promise<P8ImplicitRememberReport>;
   p9SemanticExtractionEvalRunner?: () => Promise<P9SemanticExtractionReport>;
+  p9RealSemanticQualityEvalRunner?: () => Promise<P9RealSemanticQualityReport>;
   writeBinding?: (cwd: string, spaceId: string) => Promise<string>;
   openBrowser?: (url: string) => Promise<void>;
   installationRoot?: string;
@@ -114,6 +117,7 @@ Usage:
   memory-space eval implicit-recall [--json]
   memory-space eval implicit-remember [--json]
   memory-space eval semantic-extraction [--json]
+  memory-space eval semantic-quality [--json]
   memory-space eval quality [--json] [--compare-stage-a | --compare-stage-a-extraction | --compare-stage-b2-core-handoff]
 
 Development invocation:
@@ -219,6 +223,11 @@ async function defaultP9SemanticExtractionEvalRunner(): Promise<P9SemanticExtrac
   return module.runP9SemanticExtractionEval();
 }
 
+async function defaultP9RealSemanticQualityEvalRunner(): Promise<P9RealSemanticQualityReport> {
+  const module = await import("../../eval/p9-real-semantic-quality.ts");
+  return module.runConfiguredP9RealSemanticQualityEval();
+}
+
 export async function runCli(argv: string[], dependencies: CliDependencies = {}): Promise<number> {
   const write = dependencies.stdout ?? ((line: string) => console.log(line));
   const writeError = dependencies.stderr ?? ((line: string) => console.error(line));
@@ -239,15 +248,16 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
         target !== "quality" &&
         target !== "implicit-recall" &&
         target !== "implicit-remember" &&
-        target !== "semantic-extraction"
+        target !== "semantic-extraction" &&
+        target !== "semantic-quality"
       ) {
         throw new CliError(
           "USAGE_ERROR",
-          "eval requires the cross-session, quality, implicit-recall, implicit-remember, or semantic-extraction target.",
+          "eval requires the cross-session, quality, implicit-recall, implicit-remember, semantic-extraction, or semantic-quality target.",
           {
             exitCode: 2,
             remediation:
-              "Run: memory-space eval <cross-session|quality|implicit-recall|implicit-remember|semantic-extraction>",
+              "Run: memory-space eval <cross-session|quality|implicit-recall|implicit-remember|semantic-extraction|semantic-quality>",
           }
         );
       }
@@ -282,6 +292,13 @@ export async function runCli(argv: string[], dependencies: CliDependencies = {})
           options,
           write,
           dependencies.p9SemanticExtractionEvalRunner ?? defaultP9SemanticExtractionEvalRunner
+        );
+      }
+      if (target === "semantic-quality") {
+        return await runP9RealSemanticQualityEvalCommand(
+          options,
+          write,
+          dependencies.p9RealSemanticQualityEvalRunner ?? defaultP9RealSemanticQualityEvalRunner
         );
       }
       const comparisonModes = [

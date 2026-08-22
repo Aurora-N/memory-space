@@ -210,8 +210,16 @@ test("Claude host adapter uses isolated one-shot flags and returns structured ou
   assert.equal(calls[0]?.env.OPENAI_API_KEY, undefined);
 });
 
-test("reviewed host resolver supports Claude only and keeps Codex unsupported", async () => {
-  const factory = new ReviewedHostAgentSemanticModelFactory({ env: {} });
+test("reviewed host resolver supports only a runtime that passes the reviewed capability probe", async () => {
+  const factory = new ReviewedHostAgentSemanticModelFactory({
+    env: {},
+    capabilityProbe: async (provider) => ({
+      provider,
+      status: "reviewed",
+      version: "2.1.112",
+      reason: "fixture",
+    }),
+  });
   const claude = await factory.resolve("claude-code", { timeoutMs: 1_000 });
   assert.equal(claude.available, true);
   if (claude.available) assert.equal(claude.adapter, "claude-code-cli");
@@ -221,6 +229,23 @@ test("reviewed host resolver supports Claude only and keeps Codex unsupported", 
     provider: "codex",
     reason: "capability_unsupported",
   });
+});
+
+test("host resolver distinguishes unverified and missing Claude runtimes", async () => {
+  for (const [status, reason] of [
+    ["unverified", "capability_unverified"],
+    ["not_installed", "provider_not_installed"],
+  ] as const) {
+    const factory = new ReviewedHostAgentSemanticModelFactory({
+      capabilityProbe: async (provider) => ({ provider, status, reason: "fixture" }),
+    });
+    assert.deepEqual(await factory.resolve("claude-code", { timeoutMs: 1_000 }), {
+      available: false,
+      backend: "host-agent",
+      provider: "claude-code",
+      reason,
+    });
+  }
 });
 
 test("host process timeout completes even when the child has not closed", async () => {

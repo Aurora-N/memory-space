@@ -656,3 +656,48 @@ Use this CR as the source of truth for the hardening task.
 Start by reproducing the three P1 findings before editing production behavior. Then implement the smallest architecture-consistent fixes, run the full validation matrix, run at least one real semantic quality evaluation if a reviewed backend is available, and perform a fresh independent self-review before updating the result status.
 
 Do not ask for clarification for ordinary implementation choices that are already constrained by this CR and the frozen P9/P8 specs. If a necessary fix would change a product invariant or require implementing deferred Semantic Identity, stop and surface that as a design blocker instead of silently expanding scope.
+
+---
+
+# 14. Post-fix implementation record
+
+**Fix date:** 2026-08-22
+**Disposition:** IMPLEMENTATION COMPLETE / REVIEW CHANGES REQUIRED / REAL QUALITY EVAL BLOCKED
+
+Implemented fixes:
+
+- CR13-01: semantic candidates now receive a deterministic, grounded source-clause replay identity.
+  Alternate exact substrings from the same evidence clause converge through the existing durable
+  receipt path. Deterministic P8 fingerprints are unchanged. Stop replay, Stop-to-checkpoint replay,
+  no-version-inflation, and two-facts-in-one-event controls were added.
+- CR13-02: the deterministic evaluation is explicitly named Pipeline / Admission Correctness. A
+  separate 20-positive/20-negative real-model evaluation sends only raw conversation and the P9
+  instruction/schema to the model. Labels remain scorer-only.
+- CR13-03: repeated code-point array join/shift truncation was replaced by direct UTF-16-safe suffix
+  slicing, and sequence lookup is precomputed before sort. Large ASCII, Chinese, surrogate-boundary,
+  latest-user priority, exact bound, and source immutability regressions were added.
+- CR13-04: configured semantic extraction requires authoritative `sourceEvents` before resolving or
+  invoking a model. Stop skips fail-open; checkpoint fails visibly.
+- CR13-05: Claude host availability now requires a lightweight version/help capability probe. Doctor
+  and setup distinguish reviewed, unverified, unsupported, and not-installed states; Codex remains
+  unsupported.
+
+Measured deterministic pipeline result:
+
+```text
+Hard correctness = PASS
+Same-Evidence Duplicate Rate = 0.0 (alternate-proposal replay included)
+Checkpoint Historical Replay Count = 0
+```
+
+Real semantic quality result:
+
+```text
+REAL SEMANTIC QUALITY EVAL = BLOCKED
+Claude Code CLI = NOT INSTALLED
+external quality backend = NOT CONFIGURED
+```
+
+No real Semantic Durable Precision/Recall value is claimed. P9 remains REVIEW CHANGES REQUIRED until
+the Layer B threshold is demonstrated on a reviewed real backend and a fresh reviewer accepts the
+complete hardening diff. Closing this implementation record does not mark P9 FROZEN.

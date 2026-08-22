@@ -1326,6 +1326,7 @@ export class MemorySpace {
       sourceEventIds: [...new Set(candidate.sourceEventIds)],
       targetMemoryId: optionalString(candidate.targetMemoryId, "candidate.targetMemoryId"),
       promoteReason: optionalString(candidate.promoteReason, "candidate.promoteReason"),
+      replayIdentity: optionalString(candidate.replayIdentity, "candidate.replayIdentity"),
     };
   }
 

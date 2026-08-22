@@ -1,5 +1,6 @@
 import { isTransientExtractionEvidence } from "./extraction-policy.ts";
 import type { MemoryCandidate, MemoryFamily, SessionEvent } from "../domain/types.ts";
+import { normalizeLexicalText } from "./lexical-retrieval.ts";
 
 export const semanticExtractionLimits = Object.freeze({
   maxInputChars: 12_000,
@@ -155,9 +156,37 @@ export function parseSemanticExtractionResponse(
   return { schemaVersion: 1, candidates };
 }
 
-function messageContent(event: SessionEvent): string | undefined {
+function messageContent(event: SessionEvent | undefined): string | undefined {
+  if (!event) return undefined;
   const content = event.payload.content ?? event.payload.text;
   return typeof content === "string" ? content : undefined;
+}
+
+const semanticEvidenceClauseBoundary = /[\n\r,，;；。.!！?？]/u;
+
+function evidenceClause(value: string, content: string): string | undefined {
+  const contentStart = value.indexOf(content);
+  if (contentStart < 0) return undefined;
+  const contentEnd = contentStart + content.length;
+  let start = contentStart;
+  while (start > 0 && !semanticEvidenceClauseBoundary.test(value[start - 1] ?? "")) start -= 1;
+  let end = contentEnd;
+  while (end < value.length && !semanticEvidenceClauseBoundary.test(value[end] ?? "")) end += 1;
+  return normalizeLexicalText(value.slice(start, end));
+}
+
+function semanticReplayIdentity(
+  proposal: SemanticCandidateProposalV1,
+  sourceEventsById: ReadonlyMap<string, SessionEvent>
+): string | undefined {
+  const anchors = proposal.evidence.flatMap((evidence) => {
+    const source = messageContent(sourceEventsById.get(evidence.eventId));
+    if (!source) return [];
+    const clause = evidenceClause(source, proposal.content);
+    return clause ? [`${evidence.eventId}\0${clause}`] : [];
+  });
+  if (anchors.length === 0) return undefined;
+  return [...new Set(anchors)].sort().join("\0");
 }
 
 const speculativePatterns = [
@@ -298,6 +327,7 @@ export function validateSemanticProposal(input: {
       recommendedTier: "indexed",
       sourceEventIds,
       operation: "create",
+      replayIdentity: semanticReplayIdentity(input.proposal, input.sourceEventsById),
     },
   };
 }

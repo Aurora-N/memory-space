@@ -85,17 +85,18 @@ function messageRole(event: SessionEvent): "user" | "assistant" | undefined {
     : undefined;
 }
 
-function suffixByCodePoint(value: string, maximum: number): string {
+function suffixWithoutBrokenSurrogate(value: string, maximum: number): string {
   if (value.length <= maximum) return value;
-  const points = [...value];
-  while (points.join("").length > maximum) points.shift();
-  return points.join("");
+  let start = value.length - maximum;
+  const first = value.charCodeAt(start);
+  if (first >= 0xdc00 && first <= 0xdfff) start += 1;
+  return value.slice(start);
 }
 
 /** Builds one deterministic bounded model view without mutating persisted events. */
 export function buildSemanticModelEvents(
   events: readonly SessionEvent[],
-  maximum = semanticExtractionLimits.maxInputChars
+  maximum: number = semanticExtractionLimits.maxInputChars
 ): SemanticExtractionModelEvent[] {
   const messages = events.flatMap((event) => {
     const content = eventContent(event);
@@ -110,18 +111,19 @@ export function buildSemanticModelEvents(
     (item): item is (typeof messages)[number] => item !== undefined
   );
   const selected = new Map<string, SemanticExtractionModelEvent>();
+  const sequences = new Map(messages.map((item) => [item.event.id, item.event.sequence]));
   let chars = 0;
   for (const item of priority) {
     if (selected.has(item.event.id)) continue;
     const remaining = maximum - chars;
     if (remaining <= 0) break;
-    const content = suffixByCodePoint(item.content, remaining);
+    const content = suffixWithoutBrokenSurrogate(item.content, remaining);
     selected.set(item.event.id, { id: item.event.id, role: item.role, content });
     chars += content.length;
   }
   return [...selected.values()].sort((left, right) => {
-    const leftSequence = messages.find((item) => item.event.id === left.id)?.event.sequence ?? 0;
-    const rightSequence = messages.find((item) => item.event.id === right.id)?.event.sequence ?? 0;
+    const leftSequence = sequences.get(left.id) ?? 0;
+    const rightSequence = sequences.get(right.id) ?? 0;
     return leftSequence - rightSequence;
   });
 }
@@ -177,6 +179,20 @@ export class SemanticMemoryExtractor implements MemoryExtractor {
         rejected: [],
       });
       return [];
+    }
+    if (!context.sourceEvents) {
+      this.record({
+        operationId: context.operationId,
+        status: "failed",
+        backend: configuration.model.backend,
+        reason: "authoritative_source_events_missing",
+        inputChars: 0,
+        proposedCount: 0,
+        groundedCount: 0,
+        durationMs: this.now() - startedAt,
+        rejected: [],
+      });
+      return this.failOrSkip(context, "authoritative_source_events_missing");
     }
     const modelEvents = buildSemanticModelEvents(events);
     const inputChars = modelEvents.reduce((total, event) => total + event.content.length, 0);
@@ -265,7 +281,7 @@ export class SemanticMemoryExtractor implements MemoryExtractor {
     }
 
     const allowedEventIds = new Set(events.map((event) => event.id));
-    const sourceEvents = context.sourceEvents ?? events;
+    const sourceEvents = context.sourceEvents;
     const sourceEventsById = new Map(sourceEvents.map((event) => [event.id, event]));
     const candidates: MemoryCandidate[] = [];
     const rejected: SemanticExtractionRejectedItem[] = [];
