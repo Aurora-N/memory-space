@@ -11,3 +11,6 @@ apps/*/dist/
 
 # Test Local Memory Space Files
 .memory-space/
+
+# Ignore environment variable files
+.env
